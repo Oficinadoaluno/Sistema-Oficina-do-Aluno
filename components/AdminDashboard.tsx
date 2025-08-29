@@ -6,8 +6,9 @@ import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
 import FinancialView from './FinancialView';
 import { Collaborator, Transaction } from '../types'; 
-import { db } from '../firebase';
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { collection, onSnapshot, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { 
     LogoPlaceholder, UserIcon, ChevronDownIcon, BirthdayIcon, AlertIcon, BookOpenIcon, UsersIcon, 
     CurrencyDollarIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserPlusIcon, 
@@ -36,33 +37,57 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Collaborator }> = ({ isOpen, onClose, user }) => {
+    const [name, setName] = useState(user.name);
+    const [email, setEmail] = useState(user.email || '');
+    const [phone, setPhone] = useState(user.phone || '');
+    const [address, setAddress] = useState(user.address || '');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        try {
+            const userRef = doc(db, "collaborators", user.id);
+            await updateDoc(userRef, { name, email, phone, address });
+            alert('Dados atualizados com sucesso!');
+            onClose();
+        } catch (error) {
+            console.error("Error updating user profile:", error);
+            alert("Ocorreu um erro ao salvar os dados.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     if (!isOpen) return null;
-    // TODO: Implement update logic with Firestore
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
-            <form className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); alert('Dados salvos! (Simulação)'); onClose(); }}>
+            <form className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()} onSubmit={handleSave}>
                 <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Dados</h3>
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="admin-name" className={labelStyle}>Nome</label>
-                        <input id="admin-name" type="text" className={inputStyle} defaultValue={user.name} />
+                        <input id="admin-name" type="text" className={inputStyle} value={name} onChange={e => setName(e.target.value)} />
                     </div>
                     <div>
                         <label htmlFor="admin-email" className={labelStyle}>Email</label>
-                        <input id="admin-email" type="email" className={inputStyle} defaultValue={user.email} />
+                        <input id="admin-email" type="email" className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                     <div>
                         <label htmlFor="admin-phone" className={labelStyle}>Telefone</label>
-                        <input id="admin-phone" type="tel" className={inputStyle} defaultValue={user.phone} />
+                        <input id="admin-phone" type="tel" className={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} />
                     </div>
                     <div>
                         <label htmlFor="admin-address" className={labelStyle}>Endereço</label>
-                        <input id="admin-address" type="text" className={inputStyle} defaultValue={user.address} />
+                        <input id="admin-address" type="text" className={inputStyle} value={address} onChange={e => setAddress(e.target.value)} />
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Salvar</button>
+                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark" disabled={isSaving}>
+                        {isSaving ? 'Salvando...' : 'Salvar'}
+                    </button>
                 </div>
             </form>
         </div>
@@ -70,29 +95,73 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (newPassword !== confirmPassword) {
+            setError('A nova senha e a confirmação não correspondem.');
+            return;
+        }
+        if (newPassword.length < 6) {
+            setError('A nova senha deve ter pelo menos 6 caracteres.');
+            return;
+        }
+
+        setIsLoading(true);
+        const user = auth.currentUser;
+        if (user && user.email) {
+            try {
+                const credential = EmailAuthProvider.credential(user.email, currentPassword);
+                await reauthenticateWithCredential(user, credential);
+                await updatePassword(user, newPassword);
+                alert('Senha alterada com sucesso!');
+                onClose();
+            } catch (error: any) {
+                console.error("Password change error:", error);
+                if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    setError('A senha atual está incorreta.');
+                } else {
+                    setError('Ocorreu um erro ao alterar a senha. Tente novamente.');
+                }
+            }
+        } else {
+            setError('Usuário não encontrado. Por favor, faça login novamente.');
+        }
+        setIsLoading(false);
+    };
+
+
     if (!isOpen) return null;
-     // TODO: Implement Firebase Auth password change
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
-            <form className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); alert('Senha alterada! (Simulação)'); onClose(); }}>
+            <form className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()} onSubmit={handleChangePassword}>
                 <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Senha</h3>
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="current-password" className={labelStyle}>Senha Atual</label>
-                        <input id="current-password" type="password" className={inputStyle} required />
+                        <input id="current-password" type="password" className={inputStyle} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="new-password" className={labelStyle}>Nova Senha</label>
-                        <input id="new-password" type="password" className={inputStyle} required />
+                        <input id="new-password" type="password" className={inputStyle} value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="confirm-password" className={labelStyle}>Confirmar Nova Senha</label>
-                        <input id="confirm-password" type="password" className={inputStyle} required />
+                        <input id="confirm-password" type="password" className={inputStyle} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
                     </div>
                 </div>
+                 {error && <p className="text-sm text-red-600 text-center mt-4">{error}</p>}
                 <div className="mt-6 flex justify-end gap-3">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Salvar</button>
+                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark" disabled={isLoading}>
+                        {isLoading ? 'Salvando...' : 'Salvar'}
+                    </button>
                 </div>
             </form>
         </div>

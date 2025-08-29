@@ -5,7 +5,7 @@ import { XMarkIcon } from './Icons';
 interface AddCollaboratorFormProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (collaboratorData: Omit<Collaborator, 'id'>) => void;
+    onSave: (collaboratorData: Omit<Collaborator, 'id'>, password?: string) => void;
     collaboratorToEdit: Collaborator | null;
 }
 
@@ -30,6 +30,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
     const [name, setName] = useState('');
     const [role, setRole] = useState('');
     const [login, setLogin] = useState('');
+    const [password, setPassword] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
@@ -62,6 +63,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
             setName(collaboratorToEdit.name);
             setRole(collaboratorToEdit.role);
             setLogin(collaboratorToEdit.login);
+            setPassword('');
             setPhone(collaboratorToEdit.phone || '');
             setEmail(collaboratorToEdit.email || '');
             setAddress(collaboratorToEdit.address || '');
@@ -81,6 +83,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
             setName('');
             setRole('');
             setLogin('');
+            setPassword('');
             setPhone('');
             setEmail('');
             setAddress('');
@@ -130,8 +133,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
             remunerationType,
             fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,
             commissionPercentage: remunerationType === 'commission' ? Number(commissionPercentage) : undefined,
-        });
-        onClose();
+        }, password);
     };
 
     if (!isOpen) return null;
@@ -186,11 +188,11 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label htmlFor="collaboratorLogin" className={labelStyle}>Login de Acesso <span className="text-red-500">*</span></label>
-                                <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required />
+                                <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`} required readOnly={isEditing}/>
                             </div>
                             <div>
-                                <label htmlFor="collaboratorPassword" className={labelStyle}>Senha Temporária</label>
-                                <input id="collaboratorPassword" type="text" className={inputStyle} placeholder={isEditing ? 'Deixe em branco para não alterar' : ''} />
+                                <label htmlFor="collaboratorPassword" className={labelStyle}>{isEditing ? 'Nova Senha' : 'Senha Temporária'}</label>
+                                <input id="collaboratorPassword" type="text" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} placeholder={isEditing ? 'Deixe em branco para não alterar' : 'Mínimo 6 caracteres'} />
                             </div>
                         </div>
                         <div className="space-y-2 p-3 bg-zinc-50 rounded-lg">

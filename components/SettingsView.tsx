@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Collaborator, Student, Professional } from '../types';
 import AddCollaboratorForm from './AddCollaboratorForm';
-// FIX: Remove mock data import and add firebase imports
-import { db } from '../firebase';
-import { collection, onSnapshot, query, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { collection, onSnapshot, query, doc, addDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, PhoneIcon, CheckCircleIcon } from './Icons';
 
 // --- Reusable Components ---
@@ -192,14 +191,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         setIsModalOpen(true);
     };
 
-    const handleSaveCollaborator = async (data: Omit<Collaborator, 'id'>) => {
-        if (collaboratorToEdit) {
+    const handleSaveCollaborator = async (data: Omit<Collaborator, 'id'>, password?: string) => {
+        if (collaboratorToEdit) { // Editing existing collaborator
             const collabRef = doc(db, "collaborators", collaboratorToEdit.id);
             await updateDoc(collabRef, data);
-        } else {
-            await addDoc(collection(db, "collaborators"), data);
+            if (password) {
+                alert("A senha de outros usuários não pode ser alterada a partir deste painel por motivos de segurança. Peça para o colaborador redefinir a própria senha se necessário.");
+            }
+            alert("Dados do colaborador atualizados com sucesso!");
+        } else { // Creating new collaborator
+            if (!password || password.length < 6) {
+                alert("Por favor, forneça uma senha temporária com pelo menos 6 caracteres para o novo colaborador.");
+                return;
+            }
+            try {
+                const email = data.login.includes('@') ? data.login : `${data.login}@sistema-oficinadoaluno.com`;
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const uid = userCredential.user.uid;
+                await setDoc(doc(db, "collaborators", uid), data);
+                alert("Colaborador criado com sucesso!");
+            } catch (error: any) {
+                console.error("Error creating collaborator:", error);
+                if (error.code === 'auth/email-already-in-use') {
+                    alert('Erro: O login (email) já está em uso.');
+                } else if (error.code === 'auth/weak-password') {
+                    alert('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.');
+                } else {
+                    alert("Ocorreu um erro ao criar o colaborador.");
+                }
+                return; // Do not close modal on error
+            }
         }
         setIsModalOpen(false);
+        setCollaboratorToEdit(null);
     };
 
     return (
@@ -240,7 +264,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
             <AddCollaboratorForm
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setCollaboratorToEdit(null); }}
                 onSave={handleSaveCollaborator}
                 collaboratorToEdit={collaboratorToEdit}
             />

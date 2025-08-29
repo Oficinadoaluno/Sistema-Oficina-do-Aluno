@@ -84,7 +84,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <div>
           <label htmlFor="login" className="block text-base font-medium text-zinc-600 mb-1">
-            Login (Email)
+            Login
           </label>
           <input
             type="text"
@@ -92,7 +92,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             className={`w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 ${theme.focusRingColor} ${theme.focusBorderColor} transition-shadow duration-200`}
-            placeholder="seu.login@email.com"
+            placeholder="seu.login"
             required
             disabled={isLoading}
           />

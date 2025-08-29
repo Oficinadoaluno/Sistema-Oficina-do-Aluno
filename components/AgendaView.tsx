@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
 // FIX: Remove mock data import and add firebase imports
@@ -8,8 +9,6 @@ import {
     ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon 
 } from './Icons';
 
-// FIX: Fetch disciplines from professionals data instead of mock data
-const allDisciplines = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia', 'Outro'];
 const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); // 08:00 to 20:00
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
@@ -37,7 +36,8 @@ const ScheduleClassModal: React.FC<{
     classToEdit: ScheduledClass | null;
     students: Student[];
     professionals: Professional[];
-}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals }) => {
+    allDisciplines: string[];
+}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines }) => {
     
     const [date, setDate] = useState(classToEdit?.date || new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState(classToEdit?.time || '');
@@ -289,6 +289,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         return () => { unsubStudents(); unsubProfessionals(); unsubClasses(); unsubGroups(); };
     }, []);
 
+    const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
+
     const handleDateChange = (amount: number) => {
         const newDate = new Date(currentDate);
         newDate.setDate(currentDate.getDate() + amount);
@@ -527,6 +529,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 classToEdit={classToEdit}
                 students={students}
                 professionals={professionals}
+                allDisciplines={allDisciplines}
             />
         </div>
     );

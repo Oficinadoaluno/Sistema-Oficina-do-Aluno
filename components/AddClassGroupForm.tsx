@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ClassGroup, Student, Professional, DayOfWeek } from '../types';
 import { XMarkIcon, ExclamationTriangleIcon, CheckIcon } from './Icons';
@@ -57,7 +58,8 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setName(groupToEdit.name);
             setDescription(groupToEdit.description);
             setSelectedStudentIds(groupToEdit.studentIds);
-            setProfessionalId(groupToEdit.professionalId.toString());
+            // FIX: Remove redundant .toString() as ID is already a string
+            setProfessionalId(groupToEdit.professionalId);
             setDiscipline(groupToEdit.discipline || '');
             setCreditsToDeduct(groupToEdit.creditsToDeduct);
             setScheduleType(groupToEdit.schedule.type);

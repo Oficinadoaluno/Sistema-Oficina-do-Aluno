@@ -1,3 +1,4 @@
+// FIX: Use a named import for `initializeApp` as per Firebase v9+ modular SDK conventions.
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -8,14 +9,13 @@ const firebaseConfig = {
   authDomain: "sistema-oficinadoaluno.firebaseapp.com",
   projectId: "sistema-oficinadoaluno",
   storageBucket: "sistema-oficinadoaluno.firebasestorage.app",
-  messagingSenderId: "296393709615",
-  appId: "1:296393709615:web:1c37f1867522b51f3b8eda",
-  measurementId: "G-V66GW4L7ZV"
+  messagingSenderId: "203303746274",
+  appId: "1:203303746274:web:e394f5a30e637c35314818"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
 
-export { db, auth };
+// Export db and auth instances
+export const db = getFirestore(app);
+export const auth = getAuth(app);

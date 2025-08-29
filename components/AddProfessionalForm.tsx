@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
+import { db, auth } from '../firebase';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface AddProfessionalFormProps {
     onBack: () => void;
@@ -14,12 +17,15 @@ const disciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Po
 
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
     const isEditing = !!professionalToEdit;
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [fullName, setFullName] = useState(professionalToEdit?.name || '');
     const [email, setEmail] = useState(professionalToEdit?.email || '');
     const [phone, setPhone] = useState(professionalToEdit?.phone || '');
     const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>(professionalToEdit?.disciplines || []);
     const [otherDiscipline, setOtherDiscipline] = useState('');
+    const [login, setLogin] = useState(professionalToEdit?.login || '');
+    const [password, setPassword] = useState('');
 
     const handleDisciplineChange = (discipline: string, isChecked: boolean) => {
         if (isChecked) {
@@ -36,17 +42,74 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
         setOtherDiscipline('');
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!fullName.trim() || !phone.trim()) {
-            alert('Por favor, preencha os campos obrigatórios: Nome Completo e Celular.');
+        if (!fullName.trim() || !phone.trim() || (!isEditing && !login.trim())) {
+            alert('Por favor, preencha todos os campos obrigatórios (*).');
             return;
         }
+
+        if (!isEditing && password.length < 6) {
+            alert('A senha temporária deve ter pelo menos 6 caracteres.');
+            return;
+        }
+        
+        setIsSubmitting(true);
         const formData = new FormData(e.target as HTMLFormElement);
-        const data = Object.fromEntries(formData.entries());
-        console.log("Form Data:", { ...data, disciplines: selectedDisciplines });
-        alert(isEditing ? 'Dados do profissional atualizados com sucesso! (Simulação)' : 'Profissional cadastrado com sucesso! (Simulação)');
-        onBack();
+        const formProps = Object.fromEntries(formData.entries());
+
+        const professionalData = {
+            name: formProps.fullName as string,
+            disciplines: selectedDisciplines,
+            birthDate: formProps.birthDate as string,
+            cpf: formProps.cpf as string,
+            address: formProps.address as string,
+            phone: formProps.phone as string,
+            email: formProps.email as string,
+            currentSchool: formProps.currentSchool as string,
+            education: formProps.education as string,
+            certifications: formProps.certifications as string,
+            pixKey: formProps.pixKey as string,
+            bank: formProps.bank as string,
+            agency: formProps.agency as string,
+            account: formProps.account as string,
+            hourlyRateIndividual: Number(formProps.hourlyRateIndividual) || 0,
+            hourlyRateGroup: Number(formProps.hourlyRateGroup) || 0,
+            login: formProps.login as string,
+            availability: professionalToEdit?.availability || {},
+        };
+
+        try {
+            if (isEditing) {
+                const profRef = doc(db, "professionals", professionalToEdit.id);
+                await updateDoc(profRef, professionalData);
+                alert('Dados do profissional atualizados com sucesso!');
+            } else {
+                const emailForAuth = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
+                const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
+                const uid = userCredential.user.uid;
+
+                const newProfessionalData = {
+                    ...professionalData,
+                    status: 'ativo' as const,
+                };
+                
+                await setDoc(doc(db, "professionals", uid), newProfessionalData);
+                alert('Profissional cadastrado com sucesso!');
+            }
+            onBack();
+        } catch (error: any) {
+            console.error("Error saving professional:", error);
+             if (error.code === 'auth/email-already-in-use') {
+                alert('Erro: O login (email) já está em uso.');
+            } else if (error.code === 'auth/weak-password') {
+                alert('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.');
+            } else {
+                alert("Ocorreu um erro ao salvar o profissional. Verifique o console para mais detalhes.");
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -157,17 +220,55 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         </div>
                     </div>
                  </fieldset>
+                 
+                 {/* System Access Section */}
+                <fieldset>
+                    <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Acesso ao Sistema</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <div>
+                            <label htmlFor="login" className={labelStyle}>Login <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                id="login"
+                                name="login"
+                                className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`}
+                                required
+                                value={login}
+                                onChange={e => setLogin(e.target.value)}
+                                readOnly={isEditing}
+                            />
+                             {!isEditing && <p className="text-xs text-zinc-500 mt-1">Será convertido para o email: {login}@sistema-oficinadoaluno.com</p>}
+                        </div>
+                        {!isEditing && (
+                             <div className="animate-fade-in-fast">
+                                <label htmlFor="password" className={labelStyle}>Senha Temporária <span className="text-red-500">*</span></label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    className={inputStyle}
+                                    required
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    placeholder="Mínimo 6 caracteres"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </fieldset>
+
 
                 {/* Action Buttons */}
                 <div className="flex justify-end items-center gap-4 pt-4 border-t">
-                    <button type="button" onClick={onBack} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">
+                    <button type="button" onClick={onBack} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">
                         Cancelar
                     </button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">
-                        {isEditing ? 'Salvar Alterações' : 'Salvar Profissional'}
+                    <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">
+                        {isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Profissional')}
                     </button>
                 </div>
             </form>
+             <style>{`.animate-fade-in-fast { animation: fadeIn 0.2s ease-out; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );
 };

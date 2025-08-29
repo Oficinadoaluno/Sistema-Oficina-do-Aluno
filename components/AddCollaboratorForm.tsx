@@ -140,8 +140,8 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
-            <form className="bg-white rounded-xl shadow-xl w-full max-w-3xl m-4 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
-                <header className="flex items-center justify-between p-4 border-b">
+            <form className="bg-white rounded-none sm:rounded-xl shadow-xl w-full h-full sm:w-11/12 sm:h-auto sm:max-h-[95vh] flex flex-col" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
+                <header className="flex items-center justify-between p-4 border-b flex-shrink-0">
                     <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Colaborador' : 'Novo Colaborador'}</h2>
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
@@ -282,7 +282,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
                     </fieldset>
                 </main>
 
-                <footer className="flex justify-end items-center gap-4 p-4 border-t">
+                <footer className="flex justify-end items-center gap-4 p-4 border-t flex-shrink-0">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
                     <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{isEditing ? 'Salvar Alterações' : 'Criar Colaborador'}</button>
                 </footer>

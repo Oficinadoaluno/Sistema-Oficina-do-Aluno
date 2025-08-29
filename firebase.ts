@@ -1,5 +1,8 @@
-// FIX: Use a named import for `initializeApp` as per Firebase v9+ modular SDK conventions.
-import { initializeApp } from "firebase/app";
+// FIX: The original import for `initializeApp` was causing an error. This can happen
+// with project setups that have conflicting Firebase versions. Switched to `firebase/compat/app`
+// which provides a compatible `initializeApp` function. The rest of the app can
+// continue to use the v9 modular SDK with the app instance created here.
+import firebase from "firebase/compat/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
@@ -13,8 +16,8 @@ const firebaseConfig = {
   appId: "1:203303746274:web:e394f5a30e637c35314818"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase, preventing re-initialization
+const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
 
 // Export db and auth instances
 export const db = getFirestore(app);

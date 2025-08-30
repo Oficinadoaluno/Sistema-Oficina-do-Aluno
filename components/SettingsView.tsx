@@ -175,7 +175,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [view, setView] = useState<'list' | 'form'>('list');
     const [collaboratorToEdit, setCollaboratorToEdit] = useState<Collaborator | null>(null);
     const [activeTab, setActiveTab] = useState<'collaborators' | 'prospects' | 'metrics'>('collaborators');
 
@@ -186,23 +186,31 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         return () => { unsubCollaborators(); unsubStudents(); unsubProfessionals(); };
     }, []);
 
-    const handleOpenModal = (collaborator: Collaborator | null = null) => {
+    const handleOpenForm = (collaborator: Collaborator | null = null) => {
         setCollaboratorToEdit(collaborator);
-        setIsModalOpen(true);
+        setView('form');
     };
 
     const handleSaveCollaborator = async (data: Omit<Collaborator, 'id'>, password?: string) => {
         if (collaboratorToEdit) { // Editing existing collaborator
-            const collabRef = doc(db, "collaborators", collaboratorToEdit.id);
-            await updateDoc(collabRef, data);
-            if (password) {
-                alert("A senha de outros usuários não pode ser alterada a partir deste painel por motivos de segurança. Peça para o colaborador redefinir a própria senha se necessário.");
+            try {
+                const collabRef = doc(db, "collaborators", collaboratorToEdit.id);
+                await updateDoc(collabRef, data);
+                if (password) {
+                    alert("A senha de outros usuários não pode ser alterada a partir deste painel por motivos de segurança. Peça para o colaborador redefinir a própria senha se necessário.");
+                }
+                alert("Dados do colaborador atualizados com sucesso!");
+                setView('list');
+                setCollaboratorToEdit(null);
+            } catch (error) {
+                console.error("Error updating collaborator:", error);
+                alert("Ocorreu um erro ao atualizar o colaborador.");
+                throw error;
             }
-            alert("Dados do colaborador atualizados com sucesso!");
         } else { // Creating new collaborator
             if (!password || password.length < 6) {
                 alert("Por favor, forneça uma senha temporária com pelo menos 6 caracteres para o novo colaborador.");
-                return;
+                throw new Error("Weak password");
             }
             try {
                 const email = data.login.includes('@') ? data.login : `${data.login}@sistema-oficinadoaluno.com`;
@@ -210,6 +218,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 const uid = userCredential.user.uid;
                 await setDoc(doc(db, "collaborators", uid), data);
                 alert("Colaborador criado com sucesso!");
+                setView('list');
+                setCollaboratorToEdit(null);
             } catch (error: any) {
                 console.error("Error creating collaborator:", error);
                 if (error.code === 'auth/email-already-in-use') {
@@ -219,12 +229,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 } else {
                     alert("Ocorreu um erro ao criar o colaborador.");
                 }
-                return; // Do not close modal on error
+                throw error;
             }
         }
-        setIsModalOpen(false);
-        setCollaboratorToEdit(null);
     };
+
+    const handleBackToList = () => {
+        setView('list');
+        setCollaboratorToEdit(null);
+    }
+
+    if (view === 'form') {
+        return (
+            <AddCollaboratorForm
+                onBack={handleBackToList}
+                onSave={handleSaveCollaborator}
+                collaboratorToEdit={collaboratorToEdit}
+            />
+        );
+    }
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
@@ -239,7 +262,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                     </h2>
                 </div>
                  {activeTab === 'collaborators' && (
-                    <button onClick={() => handleOpenModal()} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105">
+                    <button onClick={() => handleOpenForm()} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105">
                         <PlusIcon className="h-5 w-5" />
                         <span>Novo Colaborador</span>
                     </button>
@@ -257,17 +280,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
             {/* Content */}
             <main className="flex-grow overflow-y-auto pt-4">
-                {activeTab === 'collaborators' && <CollaboratorsView collaborators={collaborators} onEdit={handleOpenModal} />}
+                {activeTab === 'collaborators' && <CollaboratorsView collaborators={collaborators} onEdit={handleOpenForm} />}
                 {activeTab === 'prospects' && <ProspectsView students={students} />}
                 {activeTab === 'metrics' && <MetricsView students={students} professionals={professionals} />}
             </main>
 
-            <AddCollaboratorForm
-                isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setCollaboratorToEdit(null); }}
-                onSave={handleSaveCollaborator}
-                collaboratorToEdit={collaboratorToEdit}
-            />
              <style>{`.animate-fade-in-fast { animation: fadeIn 0.2s ease-out; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );

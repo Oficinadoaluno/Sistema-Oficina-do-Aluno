@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
-import { XMarkIcon } from './Icons';
+import { ArrowLeftIcon } from './Icons';
 
 interface AddCollaboratorFormProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (collaboratorData: Omit<Collaborator, 'id'>, password?: string) => void;
+    onBack: () => void;
+    onSave: (collaboratorData: Omit<Collaborator, 'id'>, password?: string) => Promise<void>;
     collaboratorToEdit: Collaborator | null;
 }
 
@@ -23,8 +22,9 @@ const allAdminPermissions: { key: keyof AdminPermissions; label: string }[] = [
     { key: 'canAccessSettings', label: 'Configurações' },
 ];
 
-const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClose, onSave, collaboratorToEdit }) => {
+const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form State
     const [name, setName] = useState('');
@@ -99,7 +99,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
             setFixedSalary('');
             setCommissionPercentage('');
         }
-    }, [collaboratorToEdit, isOpen]);
+    }, [collaboratorToEdit]);
 
     const handleSystemAccessChange = (panel: SystemPanel) => {
         setSystemAccess(prev =>
@@ -113,40 +113,48 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
         setAdminPermissions(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({
-            name,
-            role,
-            login,
-            phone,
-            email,
-            address,
-            cpf,
-            birthDate,
-            pixKey,
-            bank,
-            agency,
-            account,
-            systemAccess,
-            adminPermissions: systemAccess.includes('admin') ? adminPermissions : undefined,
-            remunerationType,
-            fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,
-            commissionPercentage: remunerationType === 'commission' ? Number(commissionPercentage) : undefined,
-        }, password);
+        setIsSubmitting(true);
+        try {
+            await onSave({
+                name,
+                role,
+                login,
+                phone,
+                email,
+                address,
+                cpf,
+                birthDate,
+                pixKey,
+                bank,
+                agency,
+                account,
+                systemAccess,
+                adminPermissions: systemAccess.includes('admin') ? adminPermissions : undefined,
+                remunerationType,
+                fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,
+                commissionPercentage: remunerationType === 'commission' ? Number(commissionPercentage) : undefined,
+            }, password);
+        } catch (error) {
+            // Error is handled by parent, this just catches the promise rejection
+            console.error("Save operation failed.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
-            <form className="bg-white rounded-none sm:rounded-xl shadow-xl w-full h-full sm:w-11/12 sm:h-auto sm:max-h-[95vh] flex flex-col" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
-                <header className="flex items-center justify-between p-4 border-b flex-shrink-0">
-                    <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Colaborador' : 'Novo Colaborador'}</h2>
-                    <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
-                </header>
+        <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
+            <header className="flex items-center gap-4 mb-6 flex-shrink-0">
+                <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors">
+                    <ArrowLeftIcon className="h-6 w-6" />
+                </button>
+                <h2 className="text-2xl font-bold text-zinc-800">{isEditing ? 'Editar Colaborador' : 'Novo Colaborador'}</h2>
+            </header>
 
-                <main className="flex-grow overflow-y-auto p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex-grow flex flex-col overflow-hidden">
+                <main className="flex-grow overflow-y-auto pr-2 space-y-6">
                     {/* Basic Info */}
                     <fieldset>
                         <legend className="text-lg font-semibold text-zinc-700 mb-2">Informações do Colaborador</legend>
@@ -191,8 +199,8 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
                                 <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`} required readOnly={isEditing}/>
                             </div>
                             <div>
-                                <label htmlFor="collaboratorPassword" className={labelStyle}>{isEditing ? 'Nova Senha' : 'Senha Temporária'}</label>
-                                <input id="collaboratorPassword" type="text" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} placeholder={isEditing ? 'Deixe em branco para não alterar' : 'Mínimo 6 caracteres'} />
+                                <label htmlFor="collaboratorPassword" className={labelStyle}>{isEditing ? 'Nova Senha (Opcional)' : 'Senha Temporária *'}</label>
+                                <input id="collaboratorPassword" type="password" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} placeholder={isEditing ? 'Deixe em branco para não alterar' : 'Mínimo 6 caracteres'} />
                             </div>
                         </div>
                         <div className="space-y-2 p-3 bg-zinc-50 rounded-lg">
@@ -224,14 +232,13 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
                                             checked={adminPermissions[key]}
                                             onChange={() => handleAdminPermissionChange(key)}
                                             className={checkboxInputStyle}
-                                            // Ensure only the "Diretor" can grant settings access
-                                            disabled={key === 'canAccessSettings' && collaboratorToEdit?.role !== 'Diretor(a)'}
+                                            disabled={key === 'canAccessSettings' && collaboratorToEdit?.role.toLowerCase() !== 'diretor(a)'}
                                         />
                                         <span>{label}</span>
                                     </label>
                                 ))}
                             </div>
-                            <p className="text-xs text-zinc-500 mt-2">A permissão de "Configurações" só pode ser gerenciada por um Diretor(a).</p>
+                             <p className="text-xs text-zinc-500 mt-2">A permissão de "Configurações" só pode ser gerenciada por um(a) Diretor(a).</p>
                         </fieldset>
                     )}
                     
@@ -281,10 +288,11 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ isOpen, onClo
                         </div>
                     </fieldset>
                 </main>
-
-                <footer className="flex justify-end items-center gap-4 p-4 border-t flex-shrink-0">
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{isEditing ? 'Salvar Alterações' : 'Criar Colaborador'}</button>
+                <footer className="flex justify-end items-center gap-4 pt-4 border-t flex-shrink-0">
+                    <button type="button" onClick={onBack} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
+                    <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:cursor-not-allowed">
+                        {isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Criar Colaborador')}
+                    </button>
                 </footer>
             </form>
              <style>{`

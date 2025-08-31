@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import AddStudentForm from './AddStudentForm';
 import StudentDetail from './StudentDetail';
 import { Student, Collaborator } from '../types';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon } from './Icons';
+import { ToastContext } from '../App';
 
 interface StudentListProps {
     onBack: () => void;
@@ -20,6 +21,7 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
     const [selectedSchool, setSelectedSchool] = useState('');
     const [selectedGrade, setSelectedGrade] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('');
+    const { showToast } = useContext(ToastContext);
 
     useEffect(() => {
         setLoading(true);
@@ -31,9 +33,24 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
             })) as Student[];
             setStudents(studentsData);
             setLoading(false);
+        }, (error) => {
+            console.error("Firestore (StudentList) Error:", error);
+            setLoading(false);
+            if (error.code === 'permission-denied') {
+                console.error("Erro de Permissão: Verifique as regras de segurança do Firestore para a coleção 'students'.");
+                showToast("Você não tem permissão para listar os alunos.", "error");
+            } else if (error.code === 'failed-precondition') {
+                console.error("Erro de Pré-condição: Um índice para a query de alunos está faltando. Verifique o console para o link de criação do índice.");
+                showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+            } else if (error.code === 'unavailable') {
+                console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            } else {
+                showToast("Ocorreu um erro ao buscar os alunos.", "error");
+            }
         });
         return () => unsubscribe();
-    }, []);
+    }, [showToast]);
 
     const schools = useMemo(() => [...new Set(students.map(s => s.school))].sort(), [students]);
     const grades = useMemo(() => [...new Set(students.map(s => s.grade))].sort(), [students]);

@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useContext } from 'react';
 import { ClassGroup, Student, Professional } from '../types';
 import AddClassGroupForm from './AddClassGroupForm';
 import ClassGroupDetail from './ClassGroupDetail';
@@ -7,6 +8,7 @@ import ClassGroupDetail from './ClassGroupDetail';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { ArrowLeftIcon, PlusIcon, UsersIcon } from './Icons';
+import { ToastContext } from '../App';
 
 const pastelColorStyles = [
   { name: 'sky', bg: 'bg-sky-50', border: 'border-sky-200', hoverBorder: 'hover:border-sky-400', text: 'text-sky-800' },
@@ -44,7 +46,7 @@ interface ClassGroupViewProps {
 }
 
 const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
-    // FIX: Add states for firestore data
+    const { showToast } = useContext(ToastContext);
     const [groups, setGroups] = useState<ClassGroup[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -54,13 +56,21 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     const [groupToEdit, setGroupToEdit] = useState<ClassGroup | null>(null);
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
-    // FIX: Fetch data from Firestore
     useEffect(() => {
-        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]));
-        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]));
-        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]));
+        const createErrorHandler = (context: string) => (error: any) => {
+            console.error(`Firestore (ClassGroupView - ${context}) Error:`, error);
+            if (error.code === 'permission-denied') {
+                showToast(`Você não tem permissão para carregar dados de ${context}.`, "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            }
+        };
+
+        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
+        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
+        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
         return () => { unsubGroups(); unsubStudents(); unsubProfessionals(); };
-    }, []);
+    }, [showToast]);
 
     const handleOpenModal = (group: ClassGroup | null = null) => {
         setGroupToEdit(group);
@@ -68,30 +78,48 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     };
 
     const handleSaveGroup = async (groupData: Omit<ClassGroup, 'id' | 'status'>) => {
-        if (groupToEdit) {
-            // Editing existing group
-            const groupRef = doc(db, 'classGroups', groupToEdit.id);
-            await updateDoc(groupRef, groupData);
-        } else {
-            // Creating new group
-            const newGroup = {
-                status: 'active',
-                ...groupData,
-            };
-            await addDoc(collection(db, 'classGroups'), newGroup);
+        try {
+            if (groupToEdit) {
+                const groupRef = doc(db, 'classGroups', groupToEdit.id);
+                await updateDoc(groupRef, groupData as any);
+                showToast('Turma atualizada com sucesso!', 'success');
+            } else {
+                const newGroup = { status: 'active', ...groupData };
+                await addDoc(collection(db, 'classGroups'), newGroup);
+                showToast('Turma criada com sucesso!', 'success');
+            }
+        } catch (error: any) {
+            console.error("Error saving class group:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para salvar esta turma.", "error");
+            } else {
+                showToast("Ocorreu um erro ao salvar a turma.", "error");
+            }
         }
     };
 
     const handleArchiveGroup = async (groupId: string) => {
-        const groupRef = doc(db, 'classGroups', groupId);
-        await updateDoc(groupRef, { status: 'archived' });
-        setSelectedGroup(null); // Close detail view after archiving
+        try {
+            const groupRef = doc(db, 'classGroups', groupId);
+            await updateDoc(groupRef, { status: 'archived' });
+            showToast('Turma arquivada com sucesso.', 'success');
+            setSelectedGroup(null);
+        } catch (error: any) {
+            console.error("Error archiving group:", error);
+            showToast("Ocorreu um erro ao arquivar a turma.", "error");
+        }
     };
     
     const handleReactivateGroup = async (groupId: string) => {
-        const groupRef = doc(db, 'classGroups', groupId);
-        await updateDoc(groupRef, { status: 'active' });
-        setSelectedGroup(null);
+        try {
+            const groupRef = doc(db, 'classGroups', groupId);
+            await updateDoc(groupRef, { status: 'active' });
+            showToast('Turma reativada com sucesso.', 'success');
+            setSelectedGroup(null);
+        } catch (error: any) {
+            console.error("Error reactivating group:", error);
+            showToast("Ocorreu um erro ao reativar a turma.", "error");
+        }
     };
 
     if (selectedGroup) {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
 import { ArrowLeftIcon } from './Icons';
@@ -21,6 +22,59 @@ const allAdminPermissions: { key: keyof AdminPermissions; label: string }[] = [
     { key: 'canAccessFinancial', label: 'Financeiro' },
     { key: 'canAccessSettings', label: 'Configurações' },
 ];
+
+const validateCPF = (cpf: string): boolean => {
+    if (!cpf) return true; // Optional field is valid if empty
+    const cpfClean = cpf.replace(/[^\d]/g, '');
+
+    if (cpfClean.length !== 11 || /^(\d)\1{10}$/.test(cpfClean)) {
+        return false;
+    }
+
+    let sum = 0;
+    let remainder;
+
+    for (let i = 1; i <= 9; i++) {
+        sum += parseInt(cpfClean.substring(i - 1, i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) {
+        remainder = 0;
+    }
+    if (remainder !== parseInt(cpfClean.substring(9, 10))) {
+        return false;
+    }
+
+    sum = 0;
+    for (let i = 1; i <= 10; i++) {
+        sum += parseInt(cpfClean.substring(i - 1, i)) * (12 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) {
+        remainder = 0;
+    }
+    if (remainder !== parseInt(cpfClean.substring(10, 11))) {
+        return false;
+    }
+
+    return true;
+};
+
+const phoneMask = (v: string): string => {
+  if (!v) return "";
+  v = v.replace(/\D/g, '');
+  v = v.substring(0, 11);
+  if (v.length > 10) {
+    v = v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  } else if (v.length > 6) {
+    v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else if (v.length > 2) {
+    v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else {
+    v = v.replace(/^(\d*)/, '($1');
+  }
+  return v;
+};
 
 const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
@@ -52,6 +106,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
     const [remunerationType, setRemunerationType] = useState<'fixed' | 'commission' | undefined>(undefined);
     const [fixedSalary, setFixedSalary] = useState<number | ''>('');
     const [commissionPercentage, setCommissionPercentage] = useState<number | ''>('');
+    const [cpfError, setCpfError] = useState('');
 
     const emptyPermissions = {
         canAccessStudents: false, canAccessProfessionals: false, canAccessClassGroups: false,
@@ -115,13 +170,20 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setCpfError('');
+
+        if (cpf && !validateCPF(cpf)) {
+            setCpfError('CPF inválido.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             await onSave({
                 name,
                 role,
                 login,
-                phone,
+                phone: phone.replace(/\D/g, ''),
                 email,
                 address,
                 cpf,
@@ -169,7 +231,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             </div>
                              <div>
                                 <label htmlFor="collaboratorPhone" className={labelStyle}>Telefone</label>
-                                <input id="collaboratorPhone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={inputStyle} />
+                                <input id="collaboratorPhone" type="tel" value={phoneMask(phone)} onChange={e => setPhone(e.target.value)} className={inputStyle} />
                             </div>
                              <div>
                                 <label htmlFor="collaboratorEmail" className={labelStyle}>Email</label>
@@ -182,6 +244,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             <div>
                                 <label htmlFor="collaboratorCpf" className={labelStyle}>CPF</label>
                                 <input id="collaboratorCpf" type="text" value={cpf} onChange={e => setCpf(e.target.value)} className={inputStyle} />
+                                {cpfError && <p className="text-sm text-red-600 mt-1">{cpfError}</p>}
                             </div>
                             <div>
                                 <label htmlFor="collaboratorBirthDate" className={labelStyle}>Data de Nascimento</label>

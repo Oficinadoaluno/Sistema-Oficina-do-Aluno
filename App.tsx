@@ -76,29 +76,47 @@ const AppContent: React.FC = () => {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<Collaborator | Professional | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const { showToast } = useContext(ToastContext);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoadingAuth(true);
       setAuthUser(user);
       if (user) {
-        let userDocRef = doc(db, "collaborators", user.uid);
-        let userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-            setUserData({ id: userDoc.id, ...userDoc.data() } as Collaborator);
-            setSelectedRole(UserRole.Admin);
-        } else {
-            userDocRef = doc(db, "professionals", user.uid);
-            userDoc = await getDoc(userDocRef);
+        try {
+            let userDocRef = doc(db, "collaborators", user.uid);
+            let userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
-                setUserData({ id: userDoc.id, ...userDoc.data() } as Professional);
-                setSelectedRole(UserRole.Teacher);
+                setUserData({ id: userDoc.id, ...userDoc.data() } as Collaborator);
+                setSelectedRole(UserRole.Admin);
             } else {
-                console.error("User document not found in 'collaborators' or 'professionals' collections.");
-                await signOut(auth);
-                setUserData(null);
-                setSelectedRole(null);
+                userDocRef = doc(db, "professionals", user.uid);
+                userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    setUserData({ id: userDoc.id, ...userDoc.data() } as Professional);
+                    setSelectedRole(UserRole.Teacher);
+                } else {
+                    console.error("User document not found in 'collaborators' or 'professionals' collections.");
+                    showToast("Sua conta não foi encontrada. Entre em contato com o suporte.", "error");
+                    await signOut(auth);
+                    setUserData(null);
+                    setSelectedRole(null);
+                }
             }
+        } catch (error: any) {
+            console.error("Firestore Get User Error:", error);
+            if (error.code === 'permission-denied') {
+                console.error("Erro de Permissão: Verifique as regras de segurança do Firestore para 'collaborators' e 'professionals'.");
+                showToast("Você não tem permissão para acessar os dados de usuário.", "error");
+            } else if (error.code === 'unavailable') {
+                console.error("Erro de Rede: Não foi possível conectar ao Firestore. Verifique sua conexão com a internet.");
+                showToast("Erro de conexão. Verifique sua internet e tente novamente.", "error");
+            } else {
+                showToast("Ocorreu um erro ao buscar seus dados de usuário.", "error");
+            }
+            await signOut(auth); // Log out user on error
+            setUserData(null);
+            setSelectedRole(null);
         }
       } else {
         setUserData(null);
@@ -108,7 +126,7 @@ const AppContent: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [showToast]);
   
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);

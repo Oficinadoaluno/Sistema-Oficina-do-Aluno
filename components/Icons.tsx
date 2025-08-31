@@ -54,7 +54,7 @@ export const CalendarIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ classNam
 
 export const CurrencyDollarIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 11.21 12.77 10.5 12 10.5s-1.536.71-2.121 1.259c-1.171.879-1.171 2.303 0 3.182S10.83 16.5 12 16.5c.099 0 .198 0 .297-.005.445-.015m0 0a2.25 2.25 0 0 1-2.25 2.25c-1.356 0-2.7-1.356-2.7-3s1.344-3 2.7-3c1.356 0 2.7 1.356 2.7 3Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 11.21 12.77 10.5 12 10.5s-1.536.71-2.121 1.259c-1.171.879-1.171 2.303 0 3.182S10.83 16.5 12 16.5c.77 0 1.536-.71 2.121-1.259" />
     </svg>
 );
 
@@ -262,7 +262,7 @@ export const ArrowUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className
 
 export const ArrowDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m0 0-6.75-6.75M12 19.5l6.75-6.75" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m0 0-6.75-6.75M12 19.5l6.75 6.75" />
   </svg>
 );
 

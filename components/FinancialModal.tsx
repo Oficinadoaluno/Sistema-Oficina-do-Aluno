@@ -29,13 +29,30 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
         if (!isOpen) return;
 
         const q = query(collection(db, "transactions"), where("studentId", "==", student.id));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-            setTransactions(txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        });
+        const unsubscribe = onSnapshot(q, 
+            (snapshot) => {
+                const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+                setTransactions(txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            },
+            (error) => {
+                console.error("Firestore (FinancialModal) Error:", error);
+                if (error.code === 'permission-denied') {
+                    console.error("Erro de Permissão: Verifique as regras para a coleção 'transactions'.");
+                    showToast("Você não tem permissão para ver o histórico financeiro.", "error");
+                } else if (error.code === 'failed-precondition') {
+                    console.error("Erro de Pré-condição: Índice ausente para a consulta de transações. Verifique o console.");
+                    showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+                } else if (error.code === 'unavailable') {
+                    console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                    showToast("Erro de conexão. Verifique sua internet.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao buscar o histórico financeiro.", "error");
+                }
+            }
+        );
 
         return () => unsubscribe();
-    }, [isOpen, student.id]);
+    }, [isOpen, student.id, showToast]);
 
     const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -69,9 +86,15 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
             }
             showToast('Registro salvo com sucesso!', 'success');
             setActiveTab('historico');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving transaction:", error);
-            showToast("Falha ao salvar registro.", 'error');
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para salvar esta transação.", "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet e tente novamente.", "error");
+            } else {
+                showToast("Falha ao salvar registro.", 'error');
+            }
         }
     };
 

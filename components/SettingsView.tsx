@@ -93,9 +93,18 @@ const ProspectsView: React.FC<{students: Student[]}> = ({ students }) => {
     
     const handleConvert = async (student: Student) => {
         if(window.confirm(`Tem certeza que deseja converter ${student.name} para matrícula?`)) {
-            const studentRef = doc(db, 'students', student.id);
-            await updateDoc(studentRef, { status: 'matricula' });
-            showToast(`${student.name} convertido para matrícula com sucesso!`, 'success');
+            try {
+                const studentRef = doc(db, 'students', student.id);
+                await updateDoc(studentRef, { status: 'matricula' });
+                showToast(`${student.name} convertido para matrícula com sucesso!`, 'success');
+            } catch (error: any) {
+                console.error("Error converting prospect:", error);
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para alterar o status do aluno.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao converter o aluno.", "error");
+                }
+            }
         }
     };
 
@@ -184,11 +193,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const [activeTab, setActiveTab] = useState<'collaborators' | 'prospects' | 'metrics'>('collaborators');
 
     useEffect(() => {
-        const unsubCollaborators = onSnapshot(query(collection(db, "collaborators")), snap => setCollaborators(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Collaborator[]));
-        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]));
-        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]));
+        const createErrorHandler = (context: string) => (error: any) => {
+            console.error(`Firestore (SettingsView - ${context}) Error:`, error);
+            if (error.code === 'permission-denied') {
+                showToast(`Você não tem permissão para carregar dados de ${context}.`, "error");
+            }
+        };
+        const unsubCollaborators = onSnapshot(query(collection(db, "collaborators")), snap => setCollaborators(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Collaborator[]), createErrorHandler("Colaboradores"));
+        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]), createErrorHandler("Alunos"));
+        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]), createErrorHandler("Profissionais"));
         return () => { unsubCollaborators(); unsubStudents(); unsubProfessionals(); };
-    }, []);
+    }, [showToast]);
 
     const handleOpenForm = (collaborator: Collaborator | null = null) => {
         setCollaboratorToEdit(collaborator);
@@ -200,16 +215,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             try {
                 const { login, ...updateData } = data; // FIX: Do not include login in the update payload
                 const collabRef = doc(db, "collaborators", collaboratorToEdit.id);
-                await updateDoc(collabRef, updateData);
+                await updateDoc(collabRef, updateData as any);
                 if (password) {
                     showToast("Senha de outros usuários não pode ser alterada aqui.", 'info');
                 }
                 showToast("Dados do colaborador atualizados com sucesso!", 'success');
                 setView('list');
                 setCollaboratorToEdit(null);
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error updating collaborator:", error);
-                showToast("Ocorreu um erro ao atualizar o colaborador.", 'error');
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para atualizar colaboradores.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao atualizar o colaborador.", 'error');
+                }
                 throw error;
             }
         } else { // Creating new collaborator
@@ -231,6 +250,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                     showToast('Erro: O login (email) já está em uso.', 'error');
                 } else if (error.code === 'auth/weak-password') {
                     showToast('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.', 'error');
+                } else if (error.code === 'permission-denied') {
+                     showToast('Você não tem permissão para criar novos colaboradores.', 'error');
                 } else {
                     showToast("Ocorreu um erro ao criar o colaborador.", 'error');
                 }

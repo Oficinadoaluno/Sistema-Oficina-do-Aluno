@@ -11,6 +11,18 @@ import {
     UserPlusIcon, PencilIcon, XMarkIcon
 } from './Icons';
 
+const formatPhoneForDisplay = (phone?: string): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+};
+
 const InfoItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => {
     if (value === undefined || value === null || value === '') return null;
     return (<div><p className="text-xs text-zinc-500 font-medium uppercase">{label}</p><p className="text-zinc-800">{value}</p></div>);
@@ -46,23 +58,52 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
 
     useEffect(() => {
+        const createErrorHandler = (context: string) => (error: any) => {
+            console.error(`Firestore (${context}) Error:`, error);
+            if (error.code === 'permission-denied') {
+                showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
+            } else if (error.code === 'failed-precondition') {
+                showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            }
+        };
+
         const qClasses = query(collection(db, "scheduledClasses"), where("professionalId", "==", professional.id));
         const qGroups = query(collection(db, "classGroups"), where("professionalId", "==", professional.id));
-        const unsubClasses = onSnapshot(qClasses, snap => setScheduledClasses(snap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]));
-        const unsubGroups = onSnapshot(qGroups, snap => setClassGroups(snap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]));
+        const unsubClasses = onSnapshot(qClasses, snap => setScheduledClasses(snap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas agendadas"));
+        const unsubGroups = onSnapshot(qGroups, snap => setClassGroups(snap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("turmas"));
         return () => { unsubClasses(); unsubGroups(); };
-    }, [professional.id]);
+    }, [professional.id, showToast]);
 
     const updateStatus = async (newStatus: Professional['status']) => {
-        const profRef = doc(db, "professionals", professional.id);
-        await updateDoc(profRef, { status: newStatus });
-        showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
+        try {
+            const profRef = doc(db, "professionals", professional.id);
+            await updateDoc(profRef, { status: newStatus });
+            showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
+        } catch (error: any) {
+            console.error("Error updating professional status:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para alterar o status do profissional.", "error");
+            } else {
+                showToast("Ocorreu um erro ao atualizar o status.", "error");
+            }
+        }
     };
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
-        const profRef = doc(db, "professionals", professional.id);
-        await updateDoc(profRef, { availability: newAvailability });
-        showToast('Disponibilidade salva com sucesso!', 'success');
+        try {
+            const profRef = doc(db, "professionals", professional.id);
+            await updateDoc(profRef, { availability: newAvailability });
+            showToast('Disponibilidade salva com sucesso!', 'success');
+        } catch (error: any) {
+            console.error("Error saving availability:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para salvar a disponibilidade.", "error");
+            } else {
+                showToast("Ocorreu um erro ao salvar a disponibilidade.", "error");
+            }
+        }
     };
 
     const getStatusStyles = (status: Professional['status']) => ({ ativo: 'bg-green-100 text-green-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
@@ -99,7 +140,7 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
                     <div className="flex items-center justify-around gap-4 p-2 sm:border-l sm:pl-4"><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Individual</h3><p className="text-xl font-bold text-zinc-700">{individualHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Turma</h3><p className="text-xl font-bold text-zinc-700">{groupHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Total</h3><p className="text-xl font-bold text-zinc-700">{totalHours.toFixed(1)}h</p></div></div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><button onClick={() => setIsFinancialModalOpen(true)} className="flex-1 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Financeiro</button><button onClick={() => setShowAllInfo(!showAllInfo)} className="flex-1 py-2 px-4 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300">{showAllInfo ? 'Ocultar' : 'Mostrar'} Detalhes</button></div>
                 </section>
-                {showAllInfo && (<section className="animate-fade-in-fast space-y-6"><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Pessoais e Contato</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Nome Completo" value={professional.name} /><InfoItem label="Email" value={professional.email} /><InfoItem label="Celular" value={professional.phone} /><InfoItem label="Endereço" value={professional.address} /><InfoItem label="CPF" value={professional.cpf} /><InfoItem label="Data de Nascimento" value={professional.birthDate ? new Date(professional.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined} /></div></fieldset><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Acadêmicos e Financeiros</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Formação" value={professional.education} /><InfoItem label="Colégio Atual" value={professional.currentSchool} /><InfoItem label="Valor Hora/Aula Individual" value={professional.hourlyRateIndividual?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Valor Hora/Aula Turma" value={professional.hourlyRateGroup?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Certificações" value={professional.certifications} /><InfoItem label="Chave PIX" value={professional.pixKey} /><InfoItem label="Banco" value={professional.bank} /><InfoItem label="Agência" value={professional.agency} /><InfoItem label="Conta" value={professional.account} /></div></fieldset></section>)}
+                {showAllInfo && (<section className="animate-fade-in-fast space-y-6"><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Pessoais e Contato</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Nome Completo" value={professional.name} /><InfoItem label="Email" value={professional.email} /><InfoItem label="Celular" value={formatPhoneForDisplay(professional.phone)} /><InfoItem label="Endereço" value={professional.address} /><InfoItem label="CPF" value={professional.cpf} /><InfoItem label="Data de Nascimento" value={professional.birthDate ? new Date(professional.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined} /></div></fieldset><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Acadêmicos e Financeiros</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Formação" value={professional.education} /><InfoItem label="Colégio Atual" value={professional.currentSchool} /><InfoItem label="Valor Hora/Aula Individual" value={professional.hourlyRateIndividual?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Valor Hora/Aula Turma" value={professional.hourlyRateGroup?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Certificações" value={professional.certifications} /><InfoItem label="Chave PIX" value={professional.pixKey} /><InfoItem label="Banco" value={professional.bank} /><InfoItem label="Agência" value={professional.agency} /><InfoItem label="Conta" value={professional.account} /></div></fieldset></section>)}
                 <section><div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Disponibilidade Semanal</h3></div><WeeklyAvailabilityComponent initialAvailability={professional.availability || {}} onSave={handleSaveAvailability} /></section>
             </main>
         </div>

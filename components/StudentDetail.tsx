@@ -11,6 +11,18 @@ import {
 } from './Icons';
 import InfoItem from './InfoItem';
 
+const formatPhoneForDisplay = (phone?: string): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+};
+
 // --- Helper Modals and Components ---
 
 interface ManageStudentModalProps {
@@ -144,7 +156,7 @@ const StudentInfoDisplay: React.FC<{student: Student; continuityItems: Continuit
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
                     <InfoItem label="Nome Completo" value={student.name} />
                     <InfoItem label="Data de Nascimento" value={age !== null && formattedBirthDate ? `${formattedBirthDate} (${age} anos)` : formattedBirthDate} />
-                    <InfoItem label="Colégio" value={student.school} /><InfoItem label="Unidade" value={student.schoolUnit} /><InfoItem label="Ano/Série" value={student.grade} /><InfoItem label="Principal Objetivo" value={student.objective} /><InfoItem label="Telefone" value={student.phone} /><InfoItem label="Email" value={student.email} /><CopyableInfoItem label="Login da Escola" value={student.schoolLogin} /><CopyableInfoItem label="Senha da Escola" value={student.schoolPassword} /><InfoItem label="Material Didático" value={student.didacticMaterial} /><InfoItem label="Neurodivergência/Limitações" value={student.neurodiversity} /><InfoItem label="Medicamentos e Instruções" value={student.medications} />
+                    <InfoItem label="Colégio" value={student.school} /><InfoItem label="Unidade" value={student.schoolUnit} /><InfoItem label="Ano/Série" value={student.grade} /><InfoItem label="Principal Objetivo" value={student.objective} /><InfoItem label="Telefone" value={formatPhoneForDisplay(student.phone)} /><InfoItem label="Email" value={student.email} /><CopyableInfoItem label="Login da Escola" value={student.schoolLogin} /><CopyableInfoItem label="Senha da Escola" value={student.schoolPassword} /><InfoItem label="Material Didático" value={student.didacticMaterial} /><InfoItem label="Neurodivergência/Limitações" value={student.neurodiversity} /><InfoItem label="Medicamentos e Instruções" value={student.medications} />
                 </div>
             </fieldset>
              <fieldset className="border-t pt-4">
@@ -154,7 +166,7 @@ const StudentInfoDisplay: React.FC<{student: Student; continuityItems: Continuit
              <fieldset className="border-t pt-4">
                 <legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados dos Responsáveis</legend>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                    <InfoItem label="Mãe" value={student.motherName} /><InfoItem label="Pai" value={student.fatherName} /><InfoItem label="Responsável Financeiro" value={student.financialGuardian === 'outro' ? student.otherGuardianName : student.financialGuardian} /><InfoItem label="Endereço" value={student.guardianAddress} /><InfoItem label="Telefone" value={student.guardianPhone} /><InfoItem label="Celular" value={student.guardianMobile ? (<a href={formatWhatsAppLink(student.guardianMobile)} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{student.guardianMobile}</a>) : undefined} /><InfoItem label="Email" value={student.guardianEmail} /><InfoItem label="CPF" value={student.guardianCpf} />
+                    <InfoItem label="Mãe" value={student.motherName} /><InfoItem label="Pai" value={student.fatherName} /><InfoItem label="Responsável Financeiro" value={student.financialGuardian === 'outro' ? student.otherGuardianName : student.financialGuardian} /><InfoItem label="Endereço" value={student.guardianAddress} /><InfoItem label="Telefone" value={formatPhoneForDisplay(student.guardianPhone)} /><InfoItem label="Celular" value={student.guardianMobile ? (<a href={formatWhatsAppLink(student.guardianMobile)} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{formatPhoneForDisplay(student.guardianMobile)}</a>) : undefined} /><InfoItem label="Email" value={student.guardianEmail} /><InfoItem label="CPF" value={student.guardianCpf} />
                 </div>
             </fieldset>
         </div>
@@ -175,6 +187,17 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [continuityItems, setContinuityItems] = useState<ContinuityItem[]>([]);
 
+    const createErrorHandler = (context: string) => (error: any) => {
+        console.error(`Firestore (${context}) Error:`, error);
+        if (error.code === 'permission-denied') {
+            showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
+        } else if (error.code === 'failed-precondition') {
+            showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
+        } else if (error.code === 'unavailable') {
+            showToast("Erro de conexão. Verifique sua internet.", "error");
+        }
+    };
+    
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         const qPast = query(collection(db, "scheduledClasses"), where("studentId", "==", student.id), where("date", "<", today), orderBy("date", "desc"));
@@ -182,22 +205,28 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         const qContinuity = query(collection(db, "continuityItems"), where("studentId", "==", student.id));
         const qProfessionals = query(collection(db, "professionals"));
 
-        const unsubPast = onSnapshot(qPast, snap => setPastClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]));
-        const unsubUpcoming = onSnapshot(qUpcoming, snap => setUpcomingClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]));
-        const unsubContinuity = onSnapshot(qContinuity, snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]));
-        const unsubProfessionals = onSnapshot(qProfessionals, snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]));
+        const unsubPast = onSnapshot(qPast, snap => setPastClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("Histórico de Aulas"));
+        const unsubUpcoming = onSnapshot(qUpcoming, snap => setUpcomingClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("Próximas Aulas"));
+        const unsubContinuity = onSnapshot(qContinuity, snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), createErrorHandler("Plano de Continuidade"));
+        const unsubProfessionals = onSnapshot(qProfessionals, snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
 
         return () => { unsubPast(); unsubUpcoming(); unsubContinuity(); unsubProfessionals(); };
-    }, [student.id]);
+    }, [student.id, showToast]);
     
     const updateStatus = async (newStatus: Student['status']) => {
         const studentRef = doc(db, "students", student.id);
         try {
             await updateDoc(studentRef, { status: newStatus });
             showToast(`Status do aluno atualizado para "${newStatus}"!`, 'success');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error updating student status: ", error);
-            showToast("Falha ao atualizar status.", 'error');
+             if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para alterar o status do aluno.", "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            } else {
+                showToast("Falha ao atualizar status.", 'error');
+            }
         }
     };
 

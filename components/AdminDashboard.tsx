@@ -34,6 +34,22 @@ const calculateAge = (birthDateString?: string): number | null => {
     }
 };
 
+const phoneMask = (v: string): string => {
+  if (!v) return "";
+  v = v.replace(/\D/g, '');
+  v = v.substring(0, 11);
+  if (v.length > 10) {
+    v = v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  } else if (v.length > 6) {
+    v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else if (v.length > 2) {
+    v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else {
+    v = v.replace(/^(\d*)/, '($1');
+  }
+  return v;
+};
+
 // --- Profile Modals ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
@@ -42,7 +58,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
     const { showToast } = useContext(ToastContext);
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
-    const [phone, setPhone] = useState(user.phone || '');
+    const [phone, setPhone] = useState(phoneMask(user.phone || ''));
     const [address, setAddress] = useState(user.address || '');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -51,12 +67,20 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
         setIsSaving(true);
         try {
             const userRef = doc(db, "collaborators", user.id);
-            await updateDoc(userRef, { name, email, phone, address });
+            await updateDoc(userRef, { name, email, phone: phone.replace(/\D/g, ''), address });
             showToast('Dados atualizados com sucesso!', 'success');
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error updating user profile:", error);
-            showToast("Ocorreu um erro ao salvar os dados.", 'error');
+            if (error.code === 'permission-denied') {
+                console.error("Erro de Permissão: Verifique as regras de segurança do Firestore.");
+                showToast("Você não tem permissão para salvar estes dados.", "error");
+            } else if (error.code === 'unavailable') {
+                 console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                 showToast("Erro de conexão. Verifique sua internet e tente novamente.", "error");
+            } else {
+                showToast("Ocorreu um erro ao salvar os dados.", 'error');
+            }
         } finally {
             setIsSaving(false);
         }
@@ -79,7 +103,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
                     </div>
                     <div>
                         <label htmlFor="admin-phone" className={labelStyle}>Telefone</label>
-                        <input id="admin-phone" type="tel" className={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} />
+                        <input id="admin-phone" type="tel" className={inputStyle} value={phone} onChange={e => setPhone(phoneMask(e.target.value))} />
                     </div>
                     <div>
                         <label htmlFor="admin-address" className={labelStyle}>Endereço</label>
@@ -174,18 +198,35 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
 
 const PaymentsHistoryModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Collaborator }> = ({ isOpen, onClose, user }) => {
     const [payments, setPayments] = useState<Transaction[]>([]);
+    const { showToast } = useContext(ToastContext);
 
     useEffect(() => {
         if (!isOpen || !user) return;
-        // This logic is complex; a simple fetch for now.
-        // A better approach would be a Cloud Function that aggregates this.
+        
         const q = query(collection(db, "transactions"), where("type", "==", "payment"), where("registeredById", "==", user.id));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-            setPayments(paymentsData);
-        });
+        const unsubscribe = onSnapshot(q, 
+            (snapshot) => {
+                const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+                setPayments(paymentsData);
+            },
+            (error) => {
+                console.error("Firestore (PaymentsHistory) Error:", error);
+                if (error.code === 'permission-denied') {
+                    console.error("Erro de Permissão: Verifique as regras para a coleção 'transactions'.");
+                    showToast("Você não tem permissão para ver o histórico de pagamentos.", "error");
+                } else if (error.code === 'failed-precondition') {
+                    console.error("Erro de Pré-condição: Índice ausente para a consulta de pagamentos. Verifique o console.");
+                    showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+                } else if (error.code === 'unavailable') {
+                    console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                    showToast("Erro de conexão. Verifique sua internet.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao buscar o histórico de pagamentos.", "error");
+                }
+            }
+        );
         return () => unsubscribe();
-    }, [isOpen, user]);
+    }, [isOpen, user, showToast]);
 
     if (!isOpen) return null;
     return (
@@ -281,7 +322,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isPaymentsModalOpen, setIsPaymentsModalOpen] = useState(false);
-
+    
+    const { showToast } = useContext(ToastContext);
     const menuRef = useRef<HTMLDivElement>(null);
     const notificationsRef = useRef<HTMLDivElement>(null);
     const birthdaysRef = useRef<HTMLDivElement>(null);
@@ -290,25 +332,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const canAccessFinancial = currentUser?.adminPermissions?.canAccessFinancial ?? false;
 
     useEffect(() => {
-        // Fetch notifications
-        const unsubNotifications = onSnapshot(collection(db, "notifications"), (snapshot) => {
-            setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
+        const unsubNotifications = onSnapshot(collection(db, "notifications"), 
+            (snapshot) => {
+                setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+                console.error("Firestore (Notifications) Error:", error);
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para ver as notificações.", "error");
+                }
+            }
+        );
         
-        // Fetch birthdays (this is complex, simplified for now)
-        // In a real app, a daily Cloud Function would populate a 'birthdaysToday' collection.
-        // Here we simulate by fetching all students/professionals.
         const fetchBirthdays = async () => {
-            const studentsSnap = await getDocs(collection(db, "students"));
-            const professionalsSnap = await getDocs(collection(db, "professionals"));
-            const today = new Date();
-            const todayStr = `${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-            const allPeople = [
-                ...studentsSnap.docs.map(d => ({...d.data(), type: 'student'})),
-                ...professionalsSnap.docs.map(d => ({...d.data(), type: 'professional'}))
-            ];
-            const todayBirthdays = allPeople.filter(p => p.birthDate && p.birthDate.substring(5) === todayStr);
-            setBirthdays(todayBirthdays.map(p => ({...p, date: 'Hoje'})));
+            try {
+                const studentsSnap = await getDocs(collection(db, "students"));
+                const professionalsSnap = await getDocs(collection(db, "professionals"));
+                const today = new Date();
+                const todayStr = `${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                const allPeople = [
+                    ...studentsSnap.docs.map(d => ({...d.data(), type: 'student'})),
+                    ...professionalsSnap.docs.map(d => ({...d.data(), type: 'professional'}))
+                ];
+                const todayBirthdays = allPeople.filter(p => p.birthDate && p.birthDate.substring(5) === todayStr);
+                setBirthdays(todayBirthdays.map(p => ({...p, date: 'Hoje'})));
+            } catch (error: any) {
+                console.error("Firestore (Birthdays) Error:", error);
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para ver os aniversariantes.", "error");
+                }
+            }
         };
         fetchBirthdays();
 
@@ -323,7 +376,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             unsubNotifications();
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, []);
+    }, [showToast]);
 
     const unreadNotificationsCount = notifications.filter(n => !n.read).length;
     const hasBirthdayToday = birthdays.length > 0;

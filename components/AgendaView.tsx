@@ -1,6 +1,7 @@
 
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+
+import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
 // FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
@@ -8,6 +9,7 @@ import { collection, onSnapshot, query, doc, addDoc, updateDoc } from 'firebase/
 import { 
     ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon 
 } from './Icons';
+import { ToastContext } from '../App';
 
 const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); // 08:00 to 20:00
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
@@ -32,7 +34,7 @@ type DisplayClass = DisplayIndividualClass | DisplayGroupClass;
 const ScheduleClassModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report' | 'diagnosticReport'>) => void;
+    onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report' | 'diagnosticReport'>) => Promise<void>;
     classToEdit: ScheduledClass | null;
     students: Student[];
     professionals: Professional[];
@@ -99,14 +101,13 @@ const ScheduleClassModal: React.FC<{
         );
     }, [studentSearch, students]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (creditWarning && !awareOfNoCredits) {
             alert('Por favor, confirme que está ciente da falta de créditos do aluno.');
             return;
         }
-        // FIX: Ensure studentId and professionalId are passed as strings, not numbers
-        onSchedule({
+        await onSchedule({
             date, time, studentId, professionalId,
             type, discipline: finalDiscipline, content, duration, creditsConsumed: creditsNeeded,
             reportRegistered: classToEdit?.reportRegistered || false,
@@ -273,21 +274,29 @@ interface AgendaViewProps {
 const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
-    // FIX: Add states for firestore data
+    const { showToast } = useContext(ToastContext);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
     const [classToEdit, setClassToEdit] = useState<ScheduledClass | null>(null);
 
-    // FIX: Fetch data from firestore
     useEffect(() => {
-        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]));
-        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]));
-        const unsubClasses = onSnapshot(query(collection(db, "scheduledClasses")), snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]));
-        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]));
+        const createErrorHandler = (context: string) => (error: any) => {
+            console.error(`Firestore (AgendaView - ${context}) Error:`, error);
+            if (error.code === 'permission-denied') {
+                showToast(`Você não tem permissão para carregar dados de ${context}.`, "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            }
+        };
+
+        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
+        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
+        const unsubClasses = onSnapshot(query(collection(db, "scheduledClasses")), snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("Aulas"));
+        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
         return () => { unsubStudents(); unsubProfessionals(); unsubClasses(); unsubGroups(); };
-    }, []);
+    }, [showToast]);
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
 
@@ -298,11 +307,22 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     };
 
     const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
-        if (classToEdit) {
-            const classRef = doc(db, 'scheduledClasses', classToEdit.id);
-            await updateDoc(classRef, newClassData);
-        } else {
-            await addDoc(collection(db, 'scheduledClasses'), newClassData);
+        try {
+            if (classToEdit) {
+                const classRef = doc(db, 'scheduledClasses', classToEdit.id);
+                await updateDoc(classRef, newClassData as any);
+                showToast('Aula atualizada com sucesso!', 'success');
+            } else {
+                await addDoc(collection(db, 'scheduledClasses'), newClassData);
+                showToast('Aula agendada com sucesso!', 'success');
+            }
+        } catch (error: any) {
+            console.error("Error scheduling class:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para agendar aulas.", "error");
+            } else {
+                showToast("Ocorreu um erro ao agendar a aula.", "error");
+            }
         }
     };
     

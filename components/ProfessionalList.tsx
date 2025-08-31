@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import AddProfessionalForm from './AddProfessionalForm';
 import ProfessionalDetail from './ProfessionalDetail';
 import { Professional } from '../types';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon } from './Icons';
+import { ToastContext } from '../App';
 
 interface ProfessionalListProps {
     onBack: () => void;
@@ -18,6 +19,7 @@ const ProfessionalList: React.FC<ProfessionalListProps> = ({ onBack: onBackToDas
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDiscipline, setSelectedDiscipline] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<'ativo' | 'inativo' | ''>('ativo');
+    const { showToast } = useContext(ToastContext);
 
     useEffect(() => {
         setLoading(true);
@@ -26,9 +28,24 @@ const ProfessionalList: React.FC<ProfessionalListProps> = ({ onBack: onBackToDas
             const profsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[];
             setProfessionals(profsData);
             setLoading(false);
+        }, (error) => {
+            console.error("Firestore (ProfessionalList) Error:", error);
+            setLoading(false);
+            if (error.code === 'permission-denied') {
+                console.error("Erro de Permissão: Verifique as regras para a coleção 'professionals'.");
+                showToast("Você não tem permissão para listar os profissionais.", "error");
+            } else if (error.code === 'failed-precondition') {
+                console.error("Erro de Pré-condição: Um índice para a query de profissionais está faltando. Verifique o console.");
+                showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+            } else if (error.code === 'unavailable') {
+                console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                showToast("Erro de conexão. Verifique sua internet.", "error");
+            } else {
+                showToast("Ocorreu um erro ao buscar os profissionais.", "error");
+            }
         });
         return () => unsubscribe();
-    }, []);
+    }, [showToast]);
     
     const allDisciplines = useMemo(() => [...new Set(professionals.flatMap(p => p.disciplines))].sort(), [professionals]);
 

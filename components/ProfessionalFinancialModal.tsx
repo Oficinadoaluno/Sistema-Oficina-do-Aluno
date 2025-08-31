@@ -32,15 +32,28 @@ const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({
     useEffect(() => {
         if (!isOpen) return;
 
-        // Assuming transactions for professionals have a 'professionalId' field and type 'payment'
         const q = query(collection(db, "transactions"), where("type", "==", "payment"), where("professionalId", "==", professional.id));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-            setTransactions(paymentsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        });
+        const unsubscribe = onSnapshot(q, 
+            (snapshot) => {
+                const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+                setTransactions(paymentsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            },
+            (error) => {
+                console.error("Firestore (ProfessionalPayments) Error:", error);
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para ver este histórico de pagamentos.", "error");
+                } else if (error.code === 'failed-precondition') {
+                    showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+                } else if (error.code === 'unavailable') {
+                    showToast("Erro de conexão. Verifique sua internet.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao buscar os pagamentos.", "error");
+                }
+            }
+        );
 
         return () => unsubscribe();
-    }, [isOpen, professional.id]);
+    }, [isOpen, professional.id, showToast]);
 
 
     if (!isOpen) return null;

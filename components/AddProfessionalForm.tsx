@@ -17,6 +17,59 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const disciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
 
+const validateCPF = (cpf: string): boolean => {
+    if (!cpf) return true; // Optional field is valid if empty
+    const cpfClean = cpf.replace(/[^\d]/g, '');
+
+    if (cpfClean.length !== 11 || /^(\d)\1{10}$/.test(cpfClean)) {
+        return false;
+    }
+
+    let sum = 0;
+    let remainder;
+
+    for (let i = 1; i <= 9; i++) {
+        sum += parseInt(cpfClean.substring(i - 1, i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) {
+        remainder = 0;
+    }
+    if (remainder !== parseInt(cpfClean.substring(9, 10))) {
+        return false;
+    }
+
+    sum = 0;
+    for (let i = 1; i <= 10; i++) {
+        sum += parseInt(cpfClean.substring(i - 1, i)) * (12 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) {
+        remainder = 0;
+    }
+    if (remainder !== parseInt(cpfClean.substring(10, 11))) {
+        return false;
+    }
+
+    return true;
+};
+
+const phoneMask = (v: string): string => {
+  if (!v) return "";
+  v = v.replace(/\D/g, '');
+  v = v.substring(0, 11);
+  if (v.length > 10) {
+    v = v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  } else if (v.length > 6) {
+    v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else if (v.length > 2) {
+    v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else {
+    v = v.replace(/^(\d*)/, '($1');
+  }
+  return v;
+};
+
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
     const { showToast } = useContext(ToastContext);
     const isEditing = !!professionalToEdit;
@@ -29,6 +82,8 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     const [otherDiscipline, setOtherDiscipline] = useState('');
     const [login, setLogin] = useState(professionalToEdit?.login || '');
     const [password, setPassword] = useState('');
+    const [cpf, setCpf] = useState(professionalToEdit?.cpf || '');
+    const [cpfError, setCpfError] = useState('');
 
     const handleDisciplineChange = (discipline: string, isChecked: boolean) => {
         if (isChecked) {
@@ -47,6 +102,14 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setCpfError('');
+
+        if (cpf && !validateCPF(cpf)) {
+            setCpfError('CPF inválido.');
+            showToast('O CPF informado é inválido.', 'error');
+            return;
+        }
+
         if (!fullName.trim() || !phone.trim() || (!isEditing && !login.trim())) {
             showToast('Por favor, preencha todos os campos obrigatórios (*).', 'error');
             return;
@@ -65,9 +128,9 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             name: formProps.fullName as string,
             disciplines: selectedDisciplines,
             birthDate: formProps.birthDate as string,
-            cpf: formProps.cpf as string,
+            cpf: (formProps.cpf as string).replace(/\D/g, ''),
             address: formProps.address as string,
-            phone: formProps.phone as string,
+            phone: (formProps.phone as string).replace(/\D/g, ''),
             email: formProps.email as string,
             currentSchool: formProps.currentSchool as string,
             education: formProps.education as string,
@@ -103,10 +166,14 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             onBack();
         } catch (error: any) {
             console.error("Error saving professional:", error);
-             if (error.code === 'auth/email-already-in-use') {
+            if (error.code === 'auth/email-already-in-use') {
                 showToast('Erro: O login (email) já está em uso.', 'error');
             } else if (error.code === 'auth/weak-password') {
                 showToast('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.', 'error');
+            } else if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para salvar este profissional.", "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão. Verifique sua internet.", "error");
             } else {
                 showToast("Ocorreu um erro ao salvar o profissional.", 'error');
             }
@@ -142,7 +209,8 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         </div>
                          <div>
                             <label htmlFor="cpf" className={labelStyle}>CPF</label>
-                            <input type="text" id="cpf" name="cpf" className={inputStyle} defaultValue={professionalToEdit?.cpf}/>
+                            <input type="text" id="cpf" name="cpf" className={inputStyle} value={cpf} onChange={e => setCpf(e.target.value)}/>
+                            {cpfError && <p className="text-sm text-red-600 mt-1">{cpfError}</p>}
                         </div>
                          <div className="md:col-span-2">
                             <label htmlFor="address" className={labelStyle}>Endereço</label>
@@ -150,7 +218,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         </div>
                         <div>
                             <label htmlFor="phone" className={labelStyle}>Celular <span className="text-red-500">*</span></label>
-                            <input type="tel" id="phone" name="phone" className={inputStyle} required value={phone} onChange={e => setPhone(e.target.value)} />
+                            <input type="tel" id="phone" name="phone" className={inputStyle} required value={phoneMask(phone)} onChange={e => setPhone(e.target.value)} />
                         </div>
                         <div>
                             <label htmlFor="email" className={labelStyle}>Email</label>

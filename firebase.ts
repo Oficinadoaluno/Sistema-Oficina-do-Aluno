@@ -1,10 +1,6 @@
-// FIX: The original import for `initializeApp` was causing an error. This can happen
-// with project setups that have conflicting Firebase versions. Switched to `firebase/compat/app`
-// which provides a compatible `initializeApp` function. The rest of the app can
-// continue to use the v9 modular SDK with the app instance created here.
-import firebase from "firebase/compat/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApp, getApps } from "firebase/app";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -17,8 +13,24 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase, preventing re-initialization
-const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+const auth = getAuth(app);
 
-// Export db and auth instances
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+// --- EMULATOR CONNECTION (for local development) ---
+// To use the local Firebase emulators, uncomment the following lines.
+// Make sure the emulators are running using `firebase emulators:start`.
+/*
+if (window.location.hostname === "localhost") {
+  try {
+    console.log("Connecting to Firebase emulators...");
+    connectFirestoreEmulator(db, 'localhost', 8080);
+    connectAuthEmulator(auth, 'http://localhost:9099');
+    console.log("Successfully connected to emulators.");
+  } catch (error) {
+    console.error("Error connecting to Firebase emulators:", error);
+  }
+}
+*/
+
+export { app, db, auth };

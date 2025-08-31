@@ -1,12 +1,14 @@
 
 
+
+
 import React, { useState, useEffect, useContext } from 'react';
 import { Student, Transaction, PaymentMethod, Collaborator } from '../types';
 import { db } from '../firebase';
-// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { XMarkIcon } from './Icons';
 import TransactionItem from './TransactionItem';
 import { ToastContext } from '../App';
+import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -21,7 +23,8 @@ interface FinancialModalProps {
 }
 
 const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, student, currentUser }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [activeTab, setActiveTab] = useState<'historico' | 'creditos' | 'mensalidade'>('historico');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -29,9 +32,7 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
     useEffect(() => {
         if (!isOpen) return;
 
-        // FIX: Changed from v9 'query(collection(...), where(...))' to v8 chained syntax.
         const q = db.collection("transactions").where("studentId", "==", student.id);
-        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
         const unsubscribe = q.onSnapshot(
             (snapshot) => {
                 const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
@@ -40,13 +41,10 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
             (error) => {
                 console.error("Firestore (FinancialModal) Error:", error);
                 if (error.code === 'permission-denied') {
-                    console.error("Erro de Permissão: Verifique as regras para a coleção 'transactions'.");
                     showToast("Você não tem permissão para ver o histórico financeiro.", "error");
                 } else if (error.code === 'failed-precondition') {
-                    console.error("Erro de Pré-condição: Índice ausente para a consulta de transações. Verifique o console.");
                     showToast("Erro de configuração do banco de dados (índice ausente).", "error");
                 } else if (error.code === 'unavailable') {
-                    console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
                     showToast("Erro de conexão. Verifique sua internet.", "error");
                 } else {
                     showToast("Ocorreu um erro ao buscar o histórico financeiro.", "error");
@@ -80,14 +78,14 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
             studentId: student.id,
         };
 
+        const sanitizedTransaction = sanitizeFirestore(transactionData);
+
         try {
-            // FIX: Changed from v9 'addDoc(collection(...))' to v8 'db.collection.add()'.
-            await db.collection("transactions").add(transactionData);
-            if (activeTab === 'creditos') {
-                // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+            await db.collection("transactions").add(sanitizedTransaction);
+            if (activeTab === 'creditos' && transactionData.credits) {
                 const studentRef = db.collection("students").doc(student.id);
-                const newCredits = (student.credits || 0) + (transactionData.credits || 0);
-                await studentRef.update({ credits: newCredits });
+                const newCredits = (student.credits || 0) + transactionData.credits;
+                await studentRef.update(sanitizeFirestore({ credits: newCredits }));
             }
             showToast('Registro salvo com sucesso!', 'success');
             setActiveTab('historico');

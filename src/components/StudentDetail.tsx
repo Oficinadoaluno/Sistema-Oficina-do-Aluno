@@ -1,5 +1,3 @@
-
-// FIX: O arquivo foi completamente reescrito para otimizar o carregamento de dados e aumentar a robustez.
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Student, Collaborator, ScheduledClass, ContinuityItem, Professional } from '../types';
 import FinancialModal from './FinancialModal';
@@ -10,6 +8,7 @@ import {
     UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon
 } from './Icons';
 import InfoItem from './InfoItem';
+import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Funções Auxiliares ---
 
@@ -172,55 +171,62 @@ interface StudentDetailProps { student: Student; onBack: () => void; onEdit: () 
 const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, currentUser }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
 
-    // Estados da UI
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
     const [selectedClassReport, setSelectedClassReport] = useState<ScheduledClass | null>(null);
-
-    // Estados de dados
     const [allScheduledClasses, setAllScheduledClasses] = useState<ScheduledClass[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [continuityItems, setContinuityItems] = useState<ContinuityItem[]>([]);
 
-    // Hook de Efeito para Carregar Dados
     useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
+        const createSpecificErrorHandler = (context: string) => (error: any) => {
             console.error(`Firestore (${context}) Error:`, error);
-            if (error.code === 'permission-denied') showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
-            else if (error.code === 'failed-precondition') showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
-            else if (error.code === 'unavailable') showToast("Erro de conexão. Verifique sua internet.", "error");
+            if (error.code === 'permission-denied') {
+                showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
+            } else if (error.code === 'failed-precondition') {
+                showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
+            } else if (error.code === 'unavailable') {
+                showToast(`Erro de conexão ao buscar ${context.toLowerCase()}. Verifique sua internet.`, "error");
+            } else {
+                showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
+            }
         };
         
-        // Listener único para todas as aulas do aluno, ordenado por data
         const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id).orderBy("date", "asc");
-        const unsubClasses = qClasses.onSnapshot(snap => setAllScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas agendadas"));
+        const unsubClasses = qClasses.onSnapshot(
+            snap => setAllScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), 
+            createSpecificErrorHandler("aulas agendadas")
+        );
         
-        // Listeners para dados de apoio
         const qContinuity = db.collection("continuityItems").where("studentId", "==", student.id);
-        const unsubContinuity = qContinuity.onSnapshot(snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), createErrorHandler("plano de continuidade"));
+        const unsubContinuity = qContinuity.onSnapshot(
+            snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), 
+            createSpecificErrorHandler("plano de continuidade")
+        );
         
         const qProfessionals = db.collection("professionals");
-        const unsubProfessionals = qProfessionals.onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("profissionais"));
+        const unsubProfessionals = qProfessionals.onSnapshot(
+            snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), 
+            createSpecificErrorHandler("profissionais")
+        );
 
         return () => { unsubClasses(); unsubContinuity(); unsubProfessionals(); };
     }, [student.id, showToast]);
     
-    // Separação das aulas em futuras e passadas usando useMemo para eficiência
     const { upcomingClasses, pastClasses } = useMemo(() => {
         const todayStr = new Date().toISOString().split('T')[0];
         const upcoming = allScheduledClasses.filter(c => c.date >= todayStr);
         const past = allScheduledClasses
             .filter(c => c.date < todayStr)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Mais recentes primeiro
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return { upcomingClasses: upcoming, pastClasses: past };
     }, [allScheduledClasses]);
 
-    // Função para atualizar o status do aluno
     const updateStatus = async (newStatus: Student['status']) => {
         const studentRef = db.collection("students").doc(student.id);
         try {
-            await studentRef.update({ status: newStatus });
+            await studentRef.update(sanitizeFirestore({ status: newStatus }));
             showToast(`Status do aluno atualizado para "${newStatus}"!`, 'success');
         } catch (error: any) {
             console.error("Error updating student status: ", error);
@@ -289,5 +295,4 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     );
 }
 
-// FIX: Added default export to make the file a module.
 export default StudentDetail;

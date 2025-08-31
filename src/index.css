@@ -1,0 +1,19 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+:root {
+  --color-primary: #F39B53;
+  --color-primary-dark: #E68A40;
+  --color-secondary: #549DA0;
+  --color-secondary-dark: #4A8C8E;
+  --color-neutral: #F4F4F9;
+}

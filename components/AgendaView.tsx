@@ -1,21 +1,16 @@
-
-
-
 import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
-// FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
-import { collection, onSnapshot, query, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon 
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon
 } from './Icons';
 import { ToastContext } from '../App';
 
+// --- Constants & Types ---
 const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); // 08:00 to 20:00
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
-// --- Types for Agenda Display ---
 interface DisplayIndividualClass extends ScheduledClass {
     classType: 'individual';
 }
@@ -272,111 +267,95 @@ interface AgendaViewProps {
 }
 
 const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentDate, setCurrentDate] = useState(new Date());
     const { showToast } = useContext(ToastContext);
+
+    // State Management
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
+    
+    // UI State
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [classToEdit, setClassToEdit] = useState<ScheduledClass | null>(null);
 
     useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (AgendaView - ${context}) Error:`, error);
-            if (error.code === 'permission-denied') {
-                showToast(`Você não tem permissão para carregar dados de ${context}.`, "error");
-            } else if (error.code === 'unavailable') {
-                showToast("Erro de conexão. Verifique sua internet.", "error");
+        const subscriptions: (() => void)[] = [];
+        const dataLoaded = { students: false, professionals: false, classes: false, groups: false };
+
+        const checkAllDataLoaded = () => {
+            if (Object.values(dataLoaded).every(Boolean)) {
+                setLoading(false);
             }
         };
 
-        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
-        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
-        const unsubClasses = onSnapshot(query(collection(db, "scheduledClasses")), snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("Aulas"));
-        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
-        return () => { unsubStudents(); unsubProfessionals(); unsubClasses(); unsubGroups(); };
+        const createErrorHandler = (context: string) => (err: any) => {
+            console.error(`Firestore Error (AgendaView - ${context}):`, err);
+            let message = `Ocorreu um erro ao carregar dados de ${context}.`;
+            if (err.code === 'permission-denied') {
+                message = `Você não tem permissão para acessar os dados de ${context}. Verifique as regras do Firestore.`;
+            } else if (err.code === 'failed-precondition') {
+                message = `Erro de configuração do banco de dados para ${context} (índice ausente). Consulte o administrador.`;
+            } else if (err.code === 'unavailable') {
+                message = `Erro de conexão. Não foi possível carregar os dados de ${context}. Verifique sua internet.`;
+            }
+            showToast(message, "error");
+            setError(message);
+            setLoading(false);
+        };
+
+        const qClasses = db.collection("scheduledClasses").orderBy("date", "asc");
+        subscriptions.push(qClasses.onSnapshot(snap => {
+            setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
+            dataLoaded.classes = true; checkAllDataLoaded();
+        }, createErrorHandler("aulas")));
+
+        subscriptions.push(db.collection("students").onSnapshot(snap => {
+            setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
+            dataLoaded.students = true; checkAllDataLoaded();
+        }, createErrorHandler("alunos")));
+
+        subscriptions.push(db.collection("professionals").onSnapshot(snap => {
+            setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
+            dataLoaded.professionals = true; checkAllDataLoaded();
+        }, createErrorHandler("profissionais")));
+        
+        subscriptions.push(db.collection("classGroups").onSnapshot(snap => {
+            setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
+            dataLoaded.groups = true; checkAllDataLoaded();
+        }, createErrorHandler("turmas")));
+
+        return () => {
+            subscriptions.forEach(unsub => unsub());
+        };
     }, [showToast]);
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
-
-    const handleDateChange = (amount: number) => {
-        const newDate = new Date(currentDate);
-        newDate.setDate(currentDate.getDate() + amount);
-        setCurrentDate(newDate);
-    };
-
-    const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
-        try {
-            if (classToEdit) {
-                const classRef = doc(db, 'scheduledClasses', classToEdit.id);
-                await updateDoc(classRef, newClassData as any);
-                showToast('Aula atualizada com sucesso!', 'success');
-            } else {
-                await addDoc(collection(db, 'scheduledClasses'), newClassData);
-                showToast('Aula agendada com sucesso!', 'success');
-            }
-        } catch (error: any) {
-            console.error("Error scheduling class:", error);
-            if (error.code === 'permission-denied') {
-                showToast("Você não tem permissão para agendar aulas.", "error");
-            } else {
-                showToast("Ocorreu um erro ao agendar a aula.", "error");
-            }
-        }
-    };
-    
-    const openScheduleModal = (classData: ScheduledClass | null = null) => {
-        setClassToEdit(classData);
-        setIsModalOpen(true);
-    };
     
     const allDisplayClasses = useMemo((): DisplayClass[] => {
-        const individualClasses: DisplayIndividualClass[] = scheduledClasses.map(c => ({
-            ...c,
-            classType: 'individual'
-        }));
-        
+        const individualClasses: DisplayIndividualClass[] = scheduledClasses.map(c => ({ ...c, classType: 'individual' }));
         const groupClassInstances: DisplayGroupClass[] = [];
         
         classGroups.forEach(group => {
             if (group.status !== 'active') return;
 
             if (group.schedule.type === 'recurring' && group.schedule.days) {
-                // To display recurring classes, we'll check a window around the current date
-                // A more performant approach would be to calculate only the visible month
-                const startDate = new Date(currentDate);
-                startDate.setMonth(currentDate.getMonth() - 1); // check 1 month before
-                const endDate = new Date(currentDate);
-                endDate.setMonth(currentDate.getMonth() + 1); // and 1 month after
+                const startDate = new Date(currentDate); startDate.setMonth(currentDate.getMonth() - 1);
+                const endDate = new Date(currentDate); endDate.setMonth(currentDate.getMonth() + 1);
                 
-                let tempDate = new Date(startDate);
-                while(tempDate <= endDate) {
-                    const dayOfWeek = tempDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
+                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                    const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
                     const time = group.schedule.days[dayOfWeek];
-
                     if (time) {
-                        const dateStr = tempDate.toISOString().split('T')[0];
-                        groupClassInstances.push({
-                            id: `group-${group.id}-${dateStr}`,
-                            classType: 'group',
-                            group,
-                            date: dateStr,
-                            time: time,
-                            professionalId: group.professionalId
-                        });
+                        const dateStr = d.toISOString().split('T')[0];
+                        groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time, professionalId: group.professionalId });
                     }
-                    tempDate.setDate(tempDate.getDate() + 1);
                 }
             } else if (group.schedule.type === 'single' && group.schedule.date && group.schedule.time) {
-                 groupClassInstances.push({
-                    id: `group-${group.id}-${group.schedule.date}`,
-                    classType: 'group',
-                    group,
-                    date: group.schedule.date,
-                    time: group.schedule.time,
-                    professionalId: group.professionalId
-                });
+                 groupClassInstances.push({ id: `group-${group.id}-${group.schedule.date}`, classType: 'group', group, date: group.schedule.date, time: group.schedule.time, professionalId: group.professionalId });
             }
         });
 
@@ -402,6 +381,52 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         return professionals.filter(p => p.status === 'ativo' && professionalIdsWithClasses.has(p.id));
     }, [dailyClasses, professionals]);
 
+    const handleDateChange = (amount: number) => {
+        const newDate = new Date(currentDate);
+        newDate.setDate(currentDate.getDate() + amount);
+        setCurrentDate(newDate);
+    };
+
+    const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
+        try {
+            if (classToEdit) {
+                const classRef = db.collection('scheduledClasses').doc(classToEdit.id);
+                await classRef.update(newClassData as any);
+                showToast('Aula atualizada com sucesso!', 'success');
+            } else {
+                await db.collection('scheduledClasses').add(newClassData);
+                showToast('Aula agendada com sucesso!', 'success');
+            }
+        } catch (error: any) {
+            console.error("Error scheduling class:", error);
+            showToast("Ocorreu um erro ao agendar a aula.", "error");
+        }
+    };
+    
+    const openScheduleModal = (classData: ScheduledClass | null = null) => {
+        setClassToEdit(classData);
+        setIsModalOpen(true);
+    };
+
+    if (loading) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col items-center justify-center animate-fade-in-view">
+                <p className="text-zinc-500 font-semibold">Carregando dados da agenda...</p>
+            </div>
+        );
+    }
+    
+    if (error) {
+        return (
+            <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col items-center justify-center animate-fade-in-view">
+                <ExclamationTriangleIcon className="h-12 w-12 text-red-400 mb-4" />
+                <h3 className="text-xl font-bold text-red-600">Erro ao Carregar a Agenda</h3>
+                <p className="text-zinc-600 mt-2 max-w-md text-center">{error}</p>
+                <button onClick={onBack} className="mt-6 py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Voltar ao Painel</button>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view space-y-6">
             <header className="flex items-center justify-between flex-wrap gap-2">
@@ -416,7 +441,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             </header>
             
             <main className="flex-grow overflow-y-auto space-y-8 pr-2">
-                {/* Daily View */}
                 <section>
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold text-zinc-700">Agenda do Dia</h3>
@@ -442,30 +466,24 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                             <td className="p-2 border-b text-sm font-medium text-zinc-800 text-left sticky left-0 bg-white">{prof.name}</td>
                                             {timeSlots.map(time => {
                                                 const cls = dailyClasses.find(c => c.professionalId === prof.id && c.time === time);
-                                                if (!cls) {
-                                                    return <td key={time} className="border p-0 align-top"><div className="h-12 w-full">&nbsp;</div></td>;
-                                                }
-
+                                                if (!cls) return <td key={time} className="border p-0 align-top"><div className="h-12 w-full">&nbsp;</div></td>;
                                                 if (cls.classType === 'group') {
                                                     return (
                                                         <td key={time} className="border p-0 align-top">
                                                             <div className="w-full h-full p-2 text-left bg-primary/10 rounded-sm">
                                                                 <p className="text-xs font-bold text-primary-dark truncate">{cls.group.name}</p>
-                                                                <p className="text-xs text-zinc-600 truncate">{cls.group.studentIds.length} alunos</p>
+                                                                <p className="text-xs text-zinc-600 truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
                                                             </div>
                                                         </td>
                                                     );
                                                 }
-                                                
-                                                const student = students.find(s => s.id === (cls as DisplayIndividualClass).studentId);
+                                                const student = students.find(s => s.id === cls.studentId);
                                                 return (
                                                     <td key={time} className="border p-0 align-top">
-                                                        {student ? (
-                                                            <button onClick={() => openScheduleModal(cls as ScheduledClass)} className="w-full h-full p-2 text-left bg-secondary/10 hover:bg-secondary/20 rounded-sm">
-                                                                <p className="text-xs font-bold text-secondary-dark truncate">{student.name}</p>
-                                                                <p className="text-xs text-zinc-600 truncate">{(cls as DisplayIndividualClass).discipline}</p>
-                                                            </button>
-                                                        ) : <div className="h-12 w-full">&nbsp;</div>}
+                                                        <button onClick={() => openScheduleModal(cls)} className="w-full h-full p-2 text-left bg-secondary/10 hover:bg-secondary/20 rounded-sm">
+                                                            <p className="text-xs font-bold text-secondary-dark truncate">{student?.name || 'Aluno não encontrado'}</p>
+                                                            <p className="text-xs text-zinc-600 truncate">{cls.discipline}</p>
+                                                        </button>
                                                     </td>
                                                 );
                                             })}
@@ -481,70 +499,65 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                     </div>
                 </section>
                 
-                {/* Monthly List */}
                 <section>
-                     <h3 className="text-xl font-semibold text-zinc-700 mb-4">
-                        Aulas Agendadas no Mês 
-                        <span className="text-lg font-normal text-zinc-500 ml-2">({monthlyClasses.length} total)</span>
-                    </h3>
+                     <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({monthlyClasses.length} total)</h3>
                     <div className="border rounded-lg overflow-hidden">
-                        <table className="min-w-full divide-y divide-zinc-200">
-                             <thead className="bg-zinc-50">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Detalhe</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status Relatório</th>
-                                    <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-zinc-200">
-                                {monthlyClasses.map(cls => {
-                                     const professional = professionals.find(p => p.id === cls.professionalId);
-                                     if (cls.classType === 'group') {
-                                         return (
+                        {monthlyClasses.length > 0 ? (
+                            <table className="min-w-full divide-y divide-zinc-200">
+                                <thead className="bg-zinc-50">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Detalhe</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status Relatório</th>
+                                        <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-zinc-200">
+                                    {monthlyClasses.map(cls => {
+                                        const professional = professionals.find(p => p.id === cls.professionalId);
+                                        if (cls.classType === 'group') {
+                                            return (
+                                                <tr key={cls.id}>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary-dark">Turma</span></td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{cls.group.name}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-400">N/A</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm"></td>
+                                                </tr>
+                                            )
+                                        }
+                                        const student = students.find(s => s.id === cls.studentId);
+                                        return (
                                             <tr key={cls.id}>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary-dark">Turma</span></td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{cls.group.name}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">Individual</span></td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-400">N/A</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right text-sm"></td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${cls.reportRegistered ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                        {cls.reportRegistered ? 'Registrado' : 'Pendente'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+                                                    <button onClick={() => openScheduleModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>
+                                                </td>
                                             </tr>
-                                         )
-                                     }
-
-                                     const student = students.find(s => s.id === (cls as DisplayIndividualClass).studentId);
-                                     return (
-                                        <tr key={cls.id}>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">Individual</span></td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'N/A'}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${(cls as DisplayIndividualClass).reportRegistered ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                    {(cls as DisplayIndividualClass).reportRegistered ? 'Registrado' : 'Pendente'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
-                                                <button onClick={() => openScheduleModal(cls as ScheduledClass)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>
-                                            </td>
-                                        </tr>
-                                     )
-                                })}
-                            </tbody>
-                        </table>
-                        {monthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula agendada para este mês.</p>}
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        ) : (
+                           <p className="p-6 text-center text-zinc-500">Nenhuma aula agendada para este mês.</p>
+                        )}
                     </div>
                 </section>
             </main>
             <ScheduleClassModal 
                 isOpen={isModalOpen}
-                onClose={() => {
-                    setIsModalOpen(false);
-                    setClassToEdit(null);
-                }}
+                onClose={() => { setIsModalOpen(false); setClassToEdit(null); }}
                 onSchedule={handleScheduleClass}
                 classToEdit={classToEdit}
                 students={students}

@@ -1,9 +1,10 @@
 
 
+
+
 import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ContinuityItem, ClassReport, DiagnosticReport } from '../types';
 import { db, auth } from '../firebase';
-// FIX: Import firebase compat to access namespaces like 'firebase.auth' and 'firebase.firestore'.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -15,6 +16,7 @@ import {
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
     LockClosedIcon, BanknotesIcon, ClockIcon, DocumentTextIcon, UsersIcon
 } from './Icons';
+import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Tipos e Interfaces ---
 type DisplayClass = 
@@ -26,7 +28,8 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Professional }> = ({ isOpen, onClose, user }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
     const [phone, setPhone] = useState(user.phone || '');
@@ -37,7 +40,8 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
         setIsSaving(true);
         try {
             const userRef = db.collection("professionals").doc(user.id);
-            await userRef.update({ name, email, phone });
+            const dataToUpdate = { name, email, phone };
+            await userRef.update(sanitizeFirestore(dataToUpdate));
             showToast('Dados atualizados com sucesso!', 'success');
             onClose();
         } catch (error) {
@@ -67,7 +71,8 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [error, setError] = useState('');
@@ -81,7 +86,6 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
         const user = auth.currentUser;
         if (user && user.email) {
             try {
-                // FIX: Use 'firebase.auth.EmailAuthProvider' for v8 compat syntax.
                 const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
                 await user.reauthenticateWithCredential(credential);
                 await user.updatePassword(newPassword);
@@ -117,7 +121,8 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [view, setView] = useState<'dashboard' | 'availability'>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -133,20 +138,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     
     const menuRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (${context}) Error:`, error);
-            showToast(`Erro ao carregar dados de ${context}.`, "error");
-        };
+    const createSpecificErrorHandler = (context: string) => (error: any) => {
+        console.error(`Firestore (${context}) Error:`, error);
+        if (error.code === 'permission-denied') {
+            showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
+        } else if (error.code === 'failed-precondition') {
+            showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
+        } else if (error.code === 'unavailable') {
+            showToast("Erro de conexão. Verifique sua internet.", "error");
+        } else {
+            showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
+        }
+    };
 
+    useEffect(() => {
         const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
-        const unsubClasses = qClasses.onSnapshot(snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas"));
+        const unsubClasses = qClasses.onSnapshot(
+            snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), 
+            createSpecificErrorHandler("aulas")
+        );
 
         const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
-        const unsubGroups = qGroups.onSnapshot(snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("turmas"));
+        const unsubGroups = qGroups.onSnapshot(
+            snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), 
+            createSpecificErrorHandler("turmas")
+        );
 
         return () => { unsubClasses(); unsubGroups(); };
-    }, [currentUser.id, showToast]);
+    }, [currentUser.id]);
 
     useEffect(() => {
         const studentIds = new Set([
@@ -160,26 +179,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             return;
         }
 
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (${context}) Error:`, error);
-            showToast(`Erro ao carregar dados de ${context}.`, "error");
-        };
-
         const studentIdArray = Array.from(studentIds);
-        // FIX: Use 'firebase.firestore.FieldPath.documentId()' for 'in' queries on document IDs.
         const qStudents = db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", studentIdArray);
-        const unsubStudents = qStudents.onSnapshot(snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("alunos"));
+        const unsubStudents = qStudents.onSnapshot(
+            snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), 
+            createSpecificErrorHandler("alunos")
+        );
 
         const qContinuity = db.collection("continuityItems").where("studentId", "in", studentIdArray);
-        const unsubContinuity = qContinuity.onSnapshot(snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), createErrorHandler("continuidade"));
+        const unsubContinuity = qContinuity.onSnapshot(
+            snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), 
+            createSpecificErrorHandler("continuidade")
+        );
 
         return () => { unsubStudents(); unsubContinuity(); };
-    }, [scheduledClasses, classGroups, showToast]);
+    }, [scheduledClasses, classGroups]);
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         try {
             const profRef = db.collection("professionals").doc(currentUser.id);
-            await profRef.update({ availability: newAvailability });
+            await profRef.update(sanitizeFirestore({ availability: newAvailability }));
             showToast('Disponibilidade salva com sucesso!', 'success');
         } catch (error) {
             showToast("Ocorreu um erro ao salvar.", "error");
@@ -189,16 +208,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const handleSaveDiagnosticReport = async (context: any, reportData: DiagnosticReport) => {
         try {
             const classRef = db.collection('scheduledClasses').doc(context.id);
-            await classRef.update({ diagnosticReport: reportData, reportRegistered: true, status: 'completed' });
+            const dataToUpdate = { diagnosticReport: reportData, reportRegistered: true, status: 'completed' as const };
+            await classRef.update(sanitizeFirestore(dataToUpdate));
             
             if(reportData.actionPlan.initialContinuityPlan) {
                 for (const item of reportData.actionPlan.initialContinuityPlan) {
                     if (item.description.trim()) {
-                        await db.collection('continuityItems').add({
-                            description: item.description, status: 'nao_iniciado',
+                        const newItem = {
+                            description: item.description, status: 'nao_iniciado' as const,
                             studentId: context.studentId, createdBy: currentUser.id,
                             createdAt: new Date().toISOString().split('T')[0]
-                        });
+                        };
+                        await db.collection('continuityItems').add(sanitizeFirestore(newItem));
                     }
                 }
             }

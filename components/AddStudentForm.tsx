@@ -3,7 +3,7 @@ import React, { useState, useContext } from 'react';
 import { Student } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { db } from '../firebase';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ToastContext } from '../App';
 
 // FIX: Create a utility function to recursively remove undefined keys from an object.
@@ -197,10 +197,12 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
 
         try {
             if (isEditing) {
-                const studentRef = doc(db, "students", studentToEdit.id);
-                await updateDoc(studentRef, sanitizedData);
+                // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+                const studentRef = db.collection("students").doc(studentToEdit.id);
+                await studentRef.update(sanitizedData);
             } else {
-                await addDoc(collection(db, "students"), sanitizedData);
+                // FIX: Changed from v9 'addDoc(collection(...))' to v8 'db.collection.add()'.
+                await db.collection("students").add(sanitizedData);
             }
             showToast(isEditing ? 'Dados do aluno atualizados com sucesso!' : 'Aluno cadastrado com sucesso!', 'success');
             onBack();

@@ -1,11 +1,27 @@
 {
   "indexes": [
     {
+      "collectionGroup": "scheduledClasses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scheduledClasses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "professionalId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "registeredById", "order": "ASCENDING" }
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
       ]
     },
     {
@@ -17,35 +33,11 @@
       ]
     },
     {
-      "collectionGroup": "scheduledClasses",
+      "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "studentId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "scheduledClasses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "studentId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "students",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "professionals",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        { "fieldPath": "recipientUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

@@ -3,7 +3,7 @@ import AddStudentForm from './AddStudentForm';
 import StudentDetail from './StudentDetail';
 import { Student, Collaborator } from '../types';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon } from './Icons';
 import { ToastContext } from '../App';
 
@@ -25,8 +25,10 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
 
     useEffect(() => {
         setLoading(true);
-        const q = query(collection(db, "students"), orderBy("name"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        // FIX: Changed from v9 'query(collection(...), orderBy(...))' to v8 chained syntax.
+        const q = db.collection("students").orderBy("name");
+        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
+        const unsubscribe = q.onSnapshot((snapshot) => {
             const studentsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()

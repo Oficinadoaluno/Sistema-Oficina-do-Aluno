@@ -1,13 +1,18 @@
 
+
 import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { UserRole, Collaborator, Professional } from './types';
 import LoginForm from './components/LoginForm';
 import AdminDashboard from './components/AdminDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+// FIX: Import firebase compat to access User type and switch to v8 compat syntax for auth functions.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { CheckCircleIcon, ExclamationTriangleIcon, XMarkIcon, InformationCircleIcon } from './components/Icons';
+
+// --- Type Alias for Firebase User ---
+type User = firebase.User;
 
 // --- Toast Notification System ---
 type ToastType = 'success' | 'error' | 'info';
@@ -79,26 +84,29 @@ const AppContent: React.FC = () => {
   const { showToast } = useContext(ToastContext);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // FIX: Changed from v9 'onAuthStateChanged(auth, ...)' to v8 'auth.onAuthStateChanged(...)'.
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setLoadingAuth(true);
       setAuthUser(user);
       if (user) {
         try {
-            let userDocRef = doc(db, "collaborators", user.uid);
-            let userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
+            // FIX: Changed from v9 'doc(db,...)' and 'getDoc(...)' to v8 'db.collection(...).doc(...).get()'.
+            let userDocRef = db.collection("collaborators").doc(user.uid);
+            let userDoc = await userDocRef.get();
+            if (userDoc.exists) {
                 setUserData({ id: userDoc.id, ...userDoc.data() } as Collaborator);
                 setSelectedRole(UserRole.Admin);
             } else {
-                userDocRef = doc(db, "professionals", user.uid);
-                userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
+                userDocRef = db.collection("professionals").doc(user.uid);
+                userDoc = await userDocRef.get();
+                if (userDoc.exists) {
                     setUserData({ id: userDoc.id, ...userDoc.data() } as Professional);
                     setSelectedRole(UserRole.Teacher);
                 } else {
                     console.error("User document not found in 'collaborators' or 'professionals' collections.");
                     showToast("Sua conta não foi encontrada. Entre em contato com o suporte.", "error");
-                    await signOut(auth);
+                    // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
+                    await auth.signOut();
                     setUserData(null);
                     setSelectedRole(null);
                 }
@@ -114,7 +122,8 @@ const AppContent: React.FC = () => {
             } else {
                 showToast("Ocorreu um erro ao buscar seus dados de usuário.", "error");
             }
-            await signOut(auth); // Log out user on error
+            // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
+            await auth.signOut(); // Log out user on error
             setUserData(null);
             setSelectedRole(null);
         }
@@ -141,7 +150,8 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
+    await auth.signOut();
   };
 
   if (loadingAuth) {

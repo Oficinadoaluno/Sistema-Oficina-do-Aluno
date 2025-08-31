@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect, useContext } from 'react';
 import { Professional, WeeklyAvailability, DayOfWeek, PastClassForProfessional, ScheduledClass, ClassGroup } from '../types';
 import ProfessionalFinancialModal from './ProfessionalFinancialModal';
 import WeeklyAvailabilityComponent from './WeeklyAvailability';
 import { db } from '../firebase';
-import { doc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ToastContext } from '../App';
 import { 
     ArrowLeftIcon, CurrencyDollarIcon, KeyIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon, 
@@ -69,17 +70,21 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
             }
         };
 
-        const qClasses = query(collection(db, "scheduledClasses"), where("professionalId", "==", professional.id));
-        const qGroups = query(collection(db, "classGroups"), where("professionalId", "==", professional.id));
-        const unsubClasses = onSnapshot(qClasses, snap => setScheduledClasses(snap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas agendadas"));
-        const unsubGroups = onSnapshot(qGroups, snap => setClassGroups(snap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("turmas"));
+        // FIX: Changed from v9 'query', 'collection', 'where' to v8 chained syntax.
+        const qClasses = db.collection("scheduledClasses").where("professionalId", "==", professional.id);
+        const qGroups = db.collection("classGroups").where("professionalId", "==", professional.id);
+        
+        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
+        const unsubClasses = qClasses.onSnapshot(snap => setScheduledClasses(snap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas agendadas"));
+        const unsubGroups = qGroups.onSnapshot(snap => setClassGroups(snap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("turmas"));
         return () => { unsubClasses(); unsubGroups(); };
     }, [professional.id, showToast]);
 
     const updateStatus = async (newStatus: Professional['status']) => {
         try {
-            const profRef = doc(db, "professionals", professional.id);
-            await updateDoc(profRef, { status: newStatus });
+            // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+            const profRef = db.collection("professionals").doc(professional.id);
+            await profRef.update({ status: newStatus });
             showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
         } catch (error: any) {
             console.error("Error updating professional status:", error);
@@ -93,8 +98,9 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         try {
-            const profRef = doc(db, "professionals", professional.id);
-            await updateDoc(profRef, { availability: newAvailability });
+            // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+            const profRef = db.collection("professionals").doc(professional.id);
+            await profRef.update({ availability: newAvailability });
             showToast('Disponibilidade salva com sucesso!', 'success');
         } catch (error: any) {
             console.error("Error saving availability:", error);

@@ -6,7 +6,7 @@ import AddClassGroupForm from './AddClassGroupForm';
 import ClassGroupDetail from './ClassGroupDetail';
 // FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
-import { collection, onSnapshot, query, doc, addDoc, updateDoc } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ArrowLeftIcon, PlusIcon, UsersIcon } from './Icons';
 import { ToastContext } from '../App';
 
@@ -66,9 +66,10 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
             }
         };
 
-        const unsubGroups = onSnapshot(query(collection(db, "classGroups")), snap => setGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
-        const unsubStudents = onSnapshot(query(collection(db, "students")), snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
-        const unsubProfessionals = onSnapshot(query(collection(db, "professionals")), snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
+        // FIX: Changed from v9 'query(collection(...))' and 'onSnapshot(q, ...)' to v8 'db.collection(...).onSnapshot(...)'.
+        const unsubGroups = db.collection("classGroups").onSnapshot(snap => setGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
+        const unsubStudents = db.collection("students").onSnapshot(snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
+        const unsubProfessionals = db.collection("professionals").onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
         return () => { unsubGroups(); unsubStudents(); unsubProfessionals(); };
     }, [showToast]);
 
@@ -80,12 +81,14 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     const handleSaveGroup = async (groupData: Omit<ClassGroup, 'id' | 'status'>) => {
         try {
             if (groupToEdit) {
-                const groupRef = doc(db, 'classGroups', groupToEdit.id);
-                await updateDoc(groupRef, groupData as any);
+                // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+                const groupRef = db.collection('classGroups').doc(groupToEdit.id);
+                await groupRef.update(groupData as any);
                 showToast('Turma atualizada com sucesso!', 'success');
             } else {
                 const newGroup = { status: 'active', ...groupData };
-                await addDoc(collection(db, 'classGroups'), newGroup);
+                // FIX: Changed from v9 'addDoc(collection(...))' to v8 'db.collection.add()'.
+                await db.collection('classGroups').add(newGroup);
                 showToast('Turma criada com sucesso!', 'success');
             }
         } catch (error: any) {
@@ -100,8 +103,9 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
 
     const handleArchiveGroup = async (groupId: string) => {
         try {
-            const groupRef = doc(db, 'classGroups', groupId);
-            await updateDoc(groupRef, { status: 'archived' });
+            // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+            const groupRef = db.collection('classGroups').doc(groupId);
+            await groupRef.update({ status: 'archived' });
             showToast('Turma arquivada com sucesso.', 'success');
             setSelectedGroup(null);
         } catch (error: any) {
@@ -112,8 +116,9 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     
     const handleReactivateGroup = async (groupId: string) => {
         try {
-            const groupRef = doc(db, 'classGroups', groupId);
-            await updateDoc(groupRef, { status: 'active' });
+            // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+            const groupRef = db.collection('classGroups').doc(groupId);
+            await groupRef.update({ status: 'active' });
             showToast('Turma reativada com sucesso.', 'success');
             setSelectedGroup(null);
         } catch (error: any) {

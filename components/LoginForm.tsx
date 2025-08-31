@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { auth } from '../firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// FIX: Removed v9 'signInWithEmailAndPassword' import as it's not available in the v8 SDK.
+// The function is now a method on the exported 'auth' instance.
 
 const LogoPlaceholder: React.FC = () => (
   <div className="mx-auto h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
@@ -49,7 +50,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
     const email = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // FIX: Changed Firebase call from v9 modular to v8 namespaced syntax.
+      await auth.signInWithEmailAndPassword(email, password);
       // onAuthStateChanged in App.tsx will handle the rest
     } catch (error: any) {
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {

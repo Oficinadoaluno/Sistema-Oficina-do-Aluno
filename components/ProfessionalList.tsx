@@ -3,7 +3,7 @@ import AddProfessionalForm from './AddProfessionalForm';
 import ProfessionalDetail from './ProfessionalDetail';
 import { Professional } from '../types';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon } from './Icons';
 import { ToastContext } from '../App';
 
@@ -23,8 +23,10 @@ const ProfessionalList: React.FC<ProfessionalListProps> = ({ onBack: onBackToDas
 
     useEffect(() => {
         setLoading(true);
-        const q = query(collection(db, "professionals"), orderBy("name"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        // FIX: Changed from v9 'query(collection(...), orderBy(...))' to v8 chained syntax.
+        const q = db.collection("professionals").orderBy("name");
+        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
+        const unsubscribe = q.onSnapshot((snapshot) => {
             const profsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[];
             setProfessionals(profsData);
             setLoading(false);

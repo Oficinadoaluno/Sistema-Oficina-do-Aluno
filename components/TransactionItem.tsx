@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, PaymentMethod, Collaborator } from '../types';
 import { db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { ChevronDownIcon } from './Icons';
 
 interface TransactionItemProps {
@@ -16,9 +16,10 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, type }) 
     useEffect(() => {
         const fetchCollaborator = async () => {
             if (transaction.registeredById) {
-                const docRef = doc(db, "collaborators", transaction.registeredById);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
+                // FIX: Changed from v9 'doc' and 'getDoc' to v8 'db.collection.doc.get'.
+                const docRef = db.collection("collaborators").doc(transaction.registeredById);
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
                     setCollaboratorName((docSnap.data() as Collaborator).name);
                 }
             }

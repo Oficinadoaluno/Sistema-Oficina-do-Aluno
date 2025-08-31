@@ -1,10 +1,10 @@
 
+
 import React, { useState, useContext } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { db, auth } from '../firebase';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore/Auth calls now use the 'db' and 'auth' instances.
 import { ToastContext } from '../App';
 
 interface AddProfessionalFormProps {
@@ -147,12 +147,14 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
 
         try {
             if (isEditing) {
-                const profRef = doc(db, "professionals", professionalToEdit.id);
-                await updateDoc(profRef, professionalData);
+                // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
+                const profRef = db.collection("professionals").doc(professionalToEdit.id);
+                await profRef.update(professionalData);
                 showToast('Dados do profissional atualizados com sucesso!', 'success');
             } else {
                 const emailForAuth = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
-                const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
+                // FIX: Changed from v9 'createUserWithEmailAndPassword(auth,...)' to v8 'auth.createUserWithEmailAndPassword(...)'.
+                const userCredential = await auth.createUserWithEmailAndPassword(emailForAuth, password);
                 const uid = userCredential.user.uid;
 
                 const newProfessionalData = {
@@ -160,7 +162,8 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     status: 'ativo' as const,
                 };
                 
-                await setDoc(doc(db, "professionals", uid), newProfessionalData);
+                // FIX: Changed from v9 'setDoc(doc(...))' to v8 'db.collection.doc.set()'.
+                await db.collection("professionals").doc(uid).set(newProfessionalData);
                 showToast('Profissional cadastrado com sucesso!', 'success');
             }
             onBack();

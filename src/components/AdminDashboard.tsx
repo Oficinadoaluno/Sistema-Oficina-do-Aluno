@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import StudentList from './StudentList';
 import ProfessionalList from './ProfessionalList';
@@ -7,7 +9,6 @@ import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
 import FinancialView from './FinancialView';
-// FIX: Import Student and Professional types to correctly type data from Firestore.
 import { Collaborator, Student, Professional } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -18,6 +19,7 @@ import {
     CurrencyDollarIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserPlusIcon, 
     DocumentTextIcon, IdentificationIcon, LockClosedIcon, BanknotesIcon, XMarkIcon, CalendarDaysIcon
 } from './Icons';
+import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Funções Auxiliares ---
 const calculateAge = (birthDateString?: string): number | null => {
@@ -49,7 +51,8 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Collaborator }> = ({ isOpen, onClose, user }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
     const [phone, setPhone] = useState(phoneMask(user.phone || ''));
@@ -61,7 +64,8 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
         setIsSaving(true);
         try {
             const userRef = db.collection("collaborators").doc(user.id);
-            await userRef.update({ name, email, phone: phone.replace(/\D/g, ''), address });
+            const dataToUpdate = { name, email, phone: phone.replace(/\D/g, ''), address };
+            await userRef.update(sanitizeFirestore(dataToUpdate));
             showToast('Dados atualizados com sucesso!', 'success');
             onClose();
         } catch (error: any) {
@@ -94,7 +98,8 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -169,23 +174,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     
-    const { showToast } = useContext(ToastContext);
+    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const menuRef = useRef<HTMLDivElement>(null);
 
     const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? false;
     const canAccessFinancial = currentUser?.adminPermissions?.canAccessFinancial ?? false;
 
     useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (${context}) Error:`, error);
-            if (error.code === 'permission-denied') {
-                showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
-            }
-        };
+        // Gate: Only fetch data if a user is logged in
+        if (!currentUser || !currentUser.id) return;
 
-        const unsubNotifications = db.collection("notifications").onSnapshot((snapshot) => {
+        const q = db.collection("notifications")
+                    .where("recipientUid", "==", currentUser.id)
+                    .orderBy("createdAt", "desc")
+                    .limit(10);
+
+        const unsubNotifications = q.onSnapshot((snapshot) => {
             setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }, createErrorHandler("notificações"));
+        }, (error) => {
+            console.error("Firestore (Notifications) Error:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para ver notificações.", "error");
+            } else if (error.code === 'failed-precondition') {
+                showToast("Erro de configuração do banco de dados (índice de notificações ausente).", "error");
+            } else if (error.code === 'unavailable') {
+                showToast("Erro de conexão ao buscar notificações.", "error");
+            }
+        });
         
         const fetchBirthdays = async () => {
             try {
@@ -196,15 +212,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                 const todayMonthDay = `${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
                 
                 const allPeople = [
-                    // FIX: Cast Firestore document data to the correct types to resolve property access errors.
                     ...studentsSnap.docs.map(d => ({...(d.data() as Student), type: 'student'})),
                     ...professionalsSnap.docs.map(d => ({...(d.data() as Professional), type: 'professional'}))
                 ];
                 
                 const todayBirthdays = allPeople.filter(p => p.birthDate && p.birthDate.substring(5) === todayMonthDay);
                 setBirthdays(todayBirthdays);
-            } catch (error) {
-                createErrorHandler("aniversariantes")(error);
+            } catch (error: any) {
+                 if (error.code === 'permission-denied') {
+                    console.warn("Permissão negada para buscar aniversariantes.");
+                } else {
+                    console.error("Erro ao buscar aniversariantes:", error);
+                }
             }
         };
         fetchBirthdays();
@@ -218,7 +237,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             unsubNotifications();
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [showToast]);
+    }, [currentUser, showToast]);
 
     const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 

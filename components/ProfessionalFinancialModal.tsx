@@ -4,7 +4,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Professional, Transaction } from '../types';
 // FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { XMarkIcon } from './Icons';
 import TransactionItem from './TransactionItem';
 import { ToastContext } from '../App';
@@ -32,8 +32,10 @@ const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({
     useEffect(() => {
         if (!isOpen) return;
 
-        const q = query(collection(db, "transactions"), where("type", "==", "payment"), where("professionalId", "==", professional.id));
-        const unsubscribe = onSnapshot(q, 
+        // FIX: Changed from v9 'query(collection(...), where(...))' to v8 chained syntax.
+        const q = db.collection("transactions").where("type", "==", "payment").where("professionalId", "==", professional.id);
+        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
+        const unsubscribe = q.onSnapshot(
             (snapshot) => {
                 const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
                 setTransactions(paymentsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));

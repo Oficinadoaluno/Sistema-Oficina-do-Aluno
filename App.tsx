@@ -1,18 +1,47 @@
-
-
+// FIX: O componente foi reestruturado em um "App Shell" para garantir renderização de fallback.
 import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { UserRole, Collaborator, Professional } from './types';
 import LoginForm from './components/LoginForm';
 import AdminDashboard from './components/AdminDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
-import { auth, db } from './firebase';
-// FIX: Import firebase compat to access User type and switch to v8 compat syntax for auth functions.
+// FIX: Importa a flag e as instâncias do Firebase do arquivo de configuração resiliente.
+import { auth, db, FIREBASE_CONFIG_MISSING } from './firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { CheckCircleIcon, ExclamationTriangleIcon, XMarkIcon, InformationCircleIcon } from './components/Icons';
 
 // --- Type Alias for Firebase User ---
 type User = firebase.User;
+
+// --- Componentes de Fallback ---
+
+const LoadingScreen: React.FC<{ message?: string }> = ({ message = "Carregando..." }) => (
+    <main className="min-h-screen bg-neutral flex items-center justify-center">
+        <div className="text-center">
+            <div className="w-12 h-12 border-4 border-zinc-200 border-t-secondary rounded-full animate-spin mx-auto"></div>
+            <p className="text-xl font-semibold text-zinc-600 mt-4">{message}</p>
+        </div>
+    </main>
+);
+
+const FirebaseConfigError: React.FC = () => (
+    <main className="min-h-screen bg-neutral flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-2xl text-center">
+            <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-zinc-800">Erro de Configuração</h1>
+            <p className="text-zinc-600 mt-2">
+                A configuração do Firebase não foi encontrada. A aplicação não pode ser inicializada.
+            </p>
+            <div className="mt-4 text-left bg-zinc-100 p-4 rounded-md text-sm">
+                <p className="font-semibold">Como corrigir:</p>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Se você for um desenvolvedor, certifique-se que o arquivo <code>.env.local</code> contém as variáveis <code>VITE_FIREBASE_*</code>.</li>
+                    <li>Ou, adicione o bloco de configuração <code>window.__FIREBASE_CONFIG__</code> no arquivo <code>index.html</code> antes do script da aplicação.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+);
 
 // --- Toast Notification System ---
 type ToastType = 'success' | 'error' | 'info';
@@ -24,7 +53,6 @@ interface ToastMessage {
 interface ToastContextType {
   showToast: (message: string, type?: ToastType) => void;
 }
-
 export const ToastContext = createContext<ToastContextType>({ showToast: () => {} });
 
 const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type, onClose }) => {
@@ -34,7 +62,6 @@ const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type
         info: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', icon: <InformationCircleIcon className="h-6 w-6 text-blue-500" /> }
     };
     const currentTheme = theme[type];
-
     return (
         <div className={`flex items-start w-full gap-3 p-4 rounded-lg shadow-lg border ${currentTheme.bg} ${currentTheme.border} animate-toast-in`}>
             <div className="flex-shrink-0">{currentTheme.icon}</div>
@@ -44,39 +71,8 @@ const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type
     );
 };
 
-
-// --- App Structure ---
-const buttonThemeConfig = {
-  [UserRole.Admin]: {
-    bgColor: 'bg-secondary',
-    hoverBgColor: 'hover:bg-secondary-dark',
-    shadowColor: 'hover:shadow-secondary/30',
-  },
-  [UserRole.Teacher]: {
-    bgColor: 'bg-secondary',
-    hoverBgColor: 'hover:bg-secondary-dark',
-    shadowColor: 'hover:shadow-secondary/30',
-  },
-};
-
-interface RoleButtonProps {
-  role: UserRole;
-  onClick: (role: UserRole) => void;
-}
-
-const RoleButton: React.FC<RoleButtonProps> = ({ role, onClick }) => {
-  const theme = buttonThemeConfig[role];
-  return (
-    <button
-      onClick={() => onClick(role)}
-      className={`w-full flex items-center justify-center py-4 px-4 text-white font-semibold text-lg rounded-xl transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg ${theme.bgColor} ${theme.hoverBgColor} ${theme.shadowColor}`}
-    >
-      {role}
-    </button>
-  );
-};
-
-const AppContent: React.FC = () => {
+// --- App Structure (Main Logic) ---
+const AppRouter: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<Collaborator | Professional | null>(null);
@@ -84,13 +80,11 @@ const AppContent: React.FC = () => {
   const { showToast } = useContext(ToastContext);
 
   useEffect(() => {
-    // FIX: Changed from v9 'onAuthStateChanged(auth, ...)' to v8 'auth.onAuthStateChanged(...)'.
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setLoadingAuth(true);
       setAuthUser(user);
       if (user) {
         try {
-            // FIX: Changed from v9 'doc(db,...)' and 'getDoc(...)' to v8 'db.collection(...).doc(...).get()'.
             let userDocRef = db.collection("collaborators").doc(user.uid);
             let userDoc = await userDocRef.get();
             if (userDoc.exists) {
@@ -105,7 +99,6 @@ const AppContent: React.FC = () => {
                 } else {
                     console.error("User document not found in 'collaborators' or 'professionals' collections.");
                     showToast("Sua conta não foi encontrada. Entre em contato com o suporte.", "error");
-                    // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
                     await auth.signOut();
                     setUserData(null);
                     setSelectedRole(null);
@@ -113,17 +106,8 @@ const AppContent: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Firestore Get User Error:", error);
-            if (error.code === 'permission-denied') {
-                console.error("Erro de Permissão: Verifique as regras de segurança do Firestore para 'collaborators' e 'professionals'.");
-                showToast("Você não tem permissão para acessar os dados de usuário.", "error");
-            } else if (error.code === 'unavailable') {
-                console.error("Erro de Rede: Não foi possível conectar ao Firestore. Verifique sua conexão com a internet.");
-                showToast("Erro de conexão. Verifique sua internet e tente novamente.", "error");
-            } else {
-                showToast("Ocorreu um erro ao buscar seus dados de usuário.", "error");
-            }
-            // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
-            await auth.signOut(); // Log out user on error
+            showToast("Ocorreu um erro ao buscar seus dados de usuário.", "error");
+            await auth.signOut();
             setUserData(null);
             setSelectedRole(null);
         }
@@ -133,33 +117,16 @@ const AppContent: React.FC = () => {
       }
       setLoadingAuth(false);
     });
-
     return () => unsubscribe();
   }, [showToast]);
   
-  const handleRoleSelect = (role: UserRole) => {
-    setSelectedRole(role);
-  };
+  const handleRoleSelect = (role: UserRole) => setSelectedRole(role);
+  const handleBack = () => setSelectedRole(null);
+  const handleLogout = async () => await auth.signOut();
 
-  const handleBack = () => {
-    setSelectedRole(null);
-  };
-
-  const handleLoginSuccess = () => {
-    // This is now handled by onAuthStateChanged
-  };
-
-  const handleLogout = async () => {
-    // FIX: Changed from v9 'signOut(auth)' to v8 'auth.signOut()'.
-    await auth.signOut();
-  };
-
+  // FIX: Retorna um loading state explícito enquanto onAuthStateChanged está rodando
   if (loadingAuth) {
-    return (
-      <main className="min-h-screen bg-neutral flex items-center justify-center">
-        <div className="text-2xl font-semibold text-zinc-500">Carregando...</div>
-      </main>
-    );
+    return <LoadingScreen message="Autenticando..." />;
   }
 
   if (authUser && userData) {
@@ -177,31 +144,15 @@ const AppContent: React.FC = () => {
         </main>
       )
     }
+    // Fallback caso algo dê errado com os roles
+    return <LoadingScreen message="Verificando permissões..." />;
   }
 
   const renderLoginContent = () => {
     if (selectedRole) {
-      return <LoginForm role={selectedRole} onBack={handleBack} onLoginSuccess={handleLoginSuccess} />;
+      return <LoginForm role={selectedRole} onBack={handleBack} onLoginSuccess={() => {}} />;
     }
-
-    return (
-       <div className="text-center animate-fade-in">
-        <h1 className="text-2xl font-light text-zinc-600">
-          Portal
-          <span className="block text-4xl font-bold text-primary">Oficina do Aluno</span>
-        </h1>
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <RoleButton 
-            role={UserRole.Admin}
-            onClick={handleRoleSelect}
-          />
-          <RoleButton 
-            role={UserRole.Teacher}
-            onClick={handleRoleSelect}
-          />
-        </div>
-      </div>
-    );
+    return <RoleSelector onRoleSelect={handleRoleSelect} />;
   };
   
   return (
@@ -209,54 +160,82 @@ const AppContent: React.FC = () => {
       <div className={`w-full ${selectedRole ? 'max-w-lg' : 'max-w-xl'} bg-white rounded-2xl shadow-xl p-8 sm:p-12 transition-all duration-500 relative`}>
         {renderLoginContent()}
       </div>
-
       <footer className="absolute bottom-4 text-zinc-500 text-sm">
         © {new Date().getFullYear()} Oficina do Aluno. Todos os direitos reservados.
       </footer>
-
       <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.5s ease-out forwards;
-        }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
       `}</style>
     </main>
   );
 };
 
-const App: React.FC = () => {
-    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+// --- Componentes da tela de Login ---
+const buttonThemeConfig = {
+  [UserRole.Admin]: { bgColor: 'bg-secondary', hoverBgColor: 'hover:bg-secondary-dark', shadowColor: 'hover:shadow-secondary/30' },
+  [UserRole.Teacher]: { bgColor: 'bg-secondary', hoverBgColor: 'hover:bg-secondary-dark', shadowColor: 'hover:shadow-secondary/30' },
+};
 
+const RoleButton: React.FC<{ role: UserRole; onClick: (role: UserRole) => void; }> = ({ role, onClick }) => {
+  const theme = buttonThemeConfig[role];
+  return (
+    <button onClick={() => onClick(role)} className={`w-full flex items-center justify-center py-4 px-4 text-white font-semibold text-lg rounded-xl transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg ${theme.bgColor} ${theme.hoverBgColor} ${theme.shadowColor}`}>
+      {role}
+    </button>
+  );
+};
+
+const RoleSelector: React.FC<{ onRoleSelect: (role: UserRole) => void }> = ({ onRoleSelect }) => (
+    <div className="text-center animate-fade-in">
+        <h1 className="text-2xl font-light text-zinc-600">
+          Portal
+          <span className="block text-4xl font-bold text-primary">Oficina do Aluno</span>
+        </h1>
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <RoleButton role={UserRole.Admin} onClick={onRoleSelect} />
+            <RoleButton role={UserRole.Teacher} onClick={onRoleSelect} />
+        </div>
+    </div>
+);
+
+
+// --- Context Provider Wrapper ---
+const AppWithProviders: React.FC = () => {
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const showToast = (message: string, type: ToastType = 'info') => {
         const id = Date.now();
-        setToasts(prev => [...prev.slice(-4), { id, message, type }]); // Keep max 5 toasts
+        setToasts(prev => [...prev.slice(-4), { id, message, type }]);
         setTimeout(() => removeToast(id), 5000);
     };
-
     const removeToast = (id: number) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     };
 
     return (
         <ToastContext.Provider value={{ showToast }}>
-            <AppContent />
+            <AppRouter />
             <div className="fixed top-6 right-6 z-[100] w-full max-w-sm space-y-3">
-                {toasts.map(toast => (
-                    <Toast key={toast.id} {...toast} onClose={() => removeToast(toast.id)} />
-                ))}
+                {toasts.map(toast => <Toast key={toast.id} {...toast} onClose={() => removeToast(toast.id)} />)}
             </div>
             <style>{`
-                @keyframes toast-in { 
-                    from { opacity: 0; transform: translateX(100%); } 
-                    to { opacity: 1; transform: translateX(0); } 
-                }
+                @keyframes toast-in { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
                 .animate-toast-in { animation: toast-in 0.3s ease-out forwards; }
             `}</style>
         </ToastContext.Provider>
     );
+};
+
+
+// FIX: Novo componente 'App' principal que age como um "App Shell",
+// tratando os estados mais críticos (configuração faltando, etc.) antes de renderizar o resto.
+const App: React.FC = () => {
+    if (FIREBASE_CONFIG_MISSING) {
+        return <FirebaseConfigError />;
+    }
+    
+    // Se a configuração estiver OK, renderiza a aplicação com seus providers e lógica.
+    return <AppWithProviders />;
 };
 
 

@@ -1,48 +1,68 @@
-// FIX: Switched to Firebase v8 compatibility layer to match the syntax used across the application.
+// FIX: Lógica de inicialização resiliente que não quebra se a configuração estiver ausente.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import 'firebase/compat/auth';
 
-// Your web app's Firebase configuration.
-// For more information on how to get this, visit:
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// IMPORTANT: Ensure your .env.local file has the correct VITE_FIREBASE_* variables.
-const firebaseConfig = {
-  // FIX: Cast import.meta to 'any' to resolve TypeScript errors regarding missing 'env' property.
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY,
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID,
-};
-
-// Tip: If you encounter storage/file upload errors, double-check that the
-// `storageBucket` value in your environment variables is correct and that
-// Firebase Storage is enabled in your Firebase Console.
-
-// FIX: Initialize Firebase using the v8 compatibility API.
-const app: firebase.app.App = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
-const db: firebase.firestore.Firestore = app.firestore();
-const auth: firebase.auth.Auth = app.auth();
-
-// --- EMULATOR CONNECTION (for local development) ---
-// To use the local Firebase emulators, uncomment the following lines.
-// Make sure the emulators are running (`firebase emulators:start`).
-// Vite's `import.meta.env.DEV` is used to only connect in development mode.
-/*
-if ((import.meta as any).env.DEV) {
-  try {
-    console.log("Connecting to Firebase emulators...");
-    // FIX: Switched to v8 compatibility API for connecting to emulators.
-    db.useEmulator('localhost', 8080);
-    auth.useEmulator('http://localhost:9099');
-    console.log("Successfully connected to Firebase emulators.");
-  } catch (error) {
-    console.error("Error connecting to Firebase emulators:", error);
+// Adiciona a propriedade __FIREBASE_CONFIG__ à interface Window
+declare global {
+  interface Window {
+    __FIREBASE_CONFIG__?: Record<string, string>;
   }
 }
-*/
+
+const viteEnv = (import.meta as any).env;
+
+const firebaseConfig = {
+  apiKey: viteEnv.VITE_FIREBASE_API_KEY || window.__FIREBASE_CONFIG__?.apiKey,
+  authDomain: viteEnv.VITE_FIREBASE_AUTH_DOMAIN || window.__FIREBASE_CONFIG__?.authDomain,
+  projectId: viteEnv.VITE_FIREBASE_PROJECT_ID || window.__FIREBASE_CONFIG__?.projectId,
+  storageBucket: viteEnv.VITE_FIREBASE_STORAGE_BUCKET || window.__FIREBASE_CONFIG__?.storageBucket,
+  messagingSenderId: viteEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || window.__FIREBASE_CONFIG__?.messagingSenderId,
+  appId: viteEnv.VITE_FIREBASE_APP_ID || window.__FIREBASE_CONFIG__?.appId,
+  measurementId: viteEnv.VITE_FIREBASE_MEASUREMENT_ID || window.__FIREBASE_CONFIG__?.measurementId,
+};
+
+// Valida se a configuração essencial está presente
+const isConfigMissing = !firebaseConfig.apiKey || !firebaseConfig.projectId;
+
+let app: firebase.app.App;
+let db: firebase.firestore.Firestore;
+let auth: firebase.auth.Auth;
+
+// FIX: Exporta uma flag para a UI reagir à ausência de configuração.
+export const FIREBASE_CONFIG_MISSING = isConfigMissing;
+
+if (!isConfigMissing) {
+  app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+  db = app.firestore();
+  auth = app.auth();
+
+  // Conexão com emuladores (apenas em desenvolvimento)
+  /*
+  if (import.meta.env.DEV) {
+    try {
+        console.log("Conectando aos emuladores do Firebase...");
+        db.useEmulator('localhost', 8080);
+        auth.useEmulator('http://localhost:9099');
+        console.log("Conectado com sucesso aos emuladores.");
+    } catch (error) {
+        console.error("Erro ao conectar aos emuladores:", error);
+    }
+  }
+  */
+} else {
+  console.error(
+    "Configuração do Firebase ausente! A aplicação não funcionará corretamente. " +
+    "Certifique-se de que suas variáveis de ambiente VITE_FIREBASE_* estão definidas " +
+    "ou que window.__FIREBASE_CONFIG__ está presente no seu index.html."
+  );
+  // Exporta instâncias nulas para evitar que a importação quebre o app
+  // @ts-ignore
+  app = null;
+  // @ts-ignore
+  db = null;
+  // @ts-ignore
+  auth = null;
+}
 
 export { app, db, auth };

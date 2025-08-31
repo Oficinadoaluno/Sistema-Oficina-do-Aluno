@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useContext } from 'react';
 import { Student, Transaction, PaymentMethod, Collaborator } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { XMarkIcon } from './Icons';
 import TransactionItem from './TransactionItem';
+import { ToastContext } from '../App';
 
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -18,6 +20,7 @@ interface FinancialModalProps {
 }
 
 const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, student, currentUser }) => {
+    const { showToast } = useContext(ToastContext);
     const [activeTab, setActiveTab] = useState<'historico' | 'creditos' | 'mensalidade'>('historico');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -64,11 +67,11 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
                 const newCredits = (student.credits || 0) + (transactionData.credits || 0);
                 await updateDoc(studentRef, { credits: newCredits });
             }
-            alert('Registro salvo com sucesso!');
+            showToast('Registro salvo com sucesso!', 'success');
             setActiveTab('historico');
         } catch (error) {
             console.error("Error saving transaction:", error);
-            alert("Falha ao salvar registro.");
+            showToast("Falha ao salvar registro.", 'error');
         }
     };
 

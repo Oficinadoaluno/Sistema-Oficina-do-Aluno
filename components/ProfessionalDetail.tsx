@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useContext } from 'react';
 import { Professional, WeeklyAvailability, DayOfWeek, PastClassForProfessional, ScheduledClass, ClassGroup } from '../types';
 import ProfessionalFinancialModal from './ProfessionalFinancialModal';
 import WeeklyAvailabilityComponent from './WeeklyAvailability';
 import { db } from '../firebase';
 import { doc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { ToastContext } from '../App';
 import { 
     ArrowLeftIcon, CurrencyDollarIcon, KeyIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon, 
     UserPlusIcon, PencilIcon, XMarkIcon
@@ -35,6 +37,7 @@ const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpe
 interface ProfessionalDetailProps { professional: Professional; onBack: () => void; onEdit: () => void; }
 
 const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, onBack, onEdit }) => {
+    const { showToast } = useContext(ToastContext);
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
@@ -53,13 +56,13 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     const updateStatus = async (newStatus: Professional['status']) => {
         const profRef = doc(db, "professionals", professional.id);
         await updateDoc(profRef, { status: newStatus });
-        alert(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`);
+        showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
     };
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         const profRef = doc(db, "professionals", professional.id);
         await updateDoc(profRef, { availability: newAvailability });
-        alert('Disponibilidade salva com sucesso!');
+        showToast('Disponibilidade salva com sucesso!', 'success');
     };
 
     const getStatusStyles = (status: Professional['status']) => ({ ativo: 'bg-green-100 text-green-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);

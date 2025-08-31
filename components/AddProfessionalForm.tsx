@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+
+import React, { useState, useContext } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { db, auth } from '../firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { ToastContext } from '../App';
 
 interface AddProfessionalFormProps {
     onBack: () => void;
@@ -16,6 +18,7 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 const disciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
 
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
+    const { showToast } = useContext(ToastContext);
     const isEditing = !!professionalToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,12 +48,12 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!fullName.trim() || !phone.trim() || (!isEditing && !login.trim())) {
-            alert('Por favor, preencha todos os campos obrigatórios (*).');
+            showToast('Por favor, preencha todos os campos obrigatórios (*).', 'error');
             return;
         }
 
         if (!isEditing && password.length < 6) {
-            alert('A senha temporária deve ter pelo menos 6 caracteres.');
+            showToast('A senha temporária deve ter pelo menos 6 caracteres.', 'error');
             return;
         }
         
@@ -83,7 +86,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             if (isEditing) {
                 const profRef = doc(db, "professionals", professionalToEdit.id);
                 await updateDoc(profRef, professionalData);
-                alert('Dados do profissional atualizados com sucesso!');
+                showToast('Dados do profissional atualizados com sucesso!', 'success');
             } else {
                 const emailForAuth = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
                 const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
@@ -95,17 +98,17 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                 };
                 
                 await setDoc(doc(db, "professionals", uid), newProfessionalData);
-                alert('Profissional cadastrado com sucesso!');
+                showToast('Profissional cadastrado com sucesso!', 'success');
             }
             onBack();
         } catch (error: any) {
             console.error("Error saving professional:", error);
              if (error.code === 'auth/email-already-in-use') {
-                alert('Erro: O login (email) já está em uso.');
+                showToast('Erro: O login (email) já está em uso.', 'error');
             } else if (error.code === 'auth/weak-password') {
-                alert('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.');
+                showToast('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.', 'error');
             } else {
-                alert("Ocorreu um erro ao salvar o profissional. Verifique o console para mais detalhes.");
+                showToast("Ocorreu um erro ao salvar o profissional.", 'error');
             }
         } finally {
             setIsSubmitting(false);

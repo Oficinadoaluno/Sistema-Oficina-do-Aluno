@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+
+import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, GroupClassReport, ContinuityItem, ClassReport, ContinuityStatus, DiagnosticReport } from '../types';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, where, doc, updateDoc, addDoc, getDocs } from 'firebase/firestore';
@@ -7,6 +8,7 @@ import WeeklyAvailabilityComponent from './WeeklyAvailability';
 import ProfessionalFinancialModal from './ProfessionalFinancialModal';
 import { InfoItem } from './InfoItem';
 import DiagnosticReportModal from './DiagnosticReportModal';
+import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, ChevronDownIcon, BirthdayIcon, AlertIcon, CalendarDaysIcon, 
     ArrowRightOnRectangleIcon, IdentificationIcon, LockClosedIcon, BanknotesIcon, XMarkIcon, 
@@ -24,6 +26,7 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Professional }> = ({ isOpen, onClose, user }) => {
+    const { showToast } = useContext(ToastContext);
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
     const [phone, setPhone] = useState(user.phone || '');
@@ -36,11 +39,11 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
         try {
             const userRef = doc(db, "professionals", user.id);
             await updateDoc(userRef, { name, email, phone, address });
-            alert('Dados atualizados com sucesso!');
+            showToast('Dados atualizados com sucesso!', 'success');
             onClose();
         } catch (error) {
             console.error("Error updating user profile:", error);
-            alert("Ocorreu um erro ao salvar os dados.");
+            showToast("Ocorreu um erro ao salvar os dados.", 'error');
         } finally {
             setIsSaving(false);
         }
@@ -68,6 +71,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    const { showToast } = useContext(ToastContext);
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -87,7 +91,7 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
                 const credential = EmailAuthProvider.credential(user.email, currentPassword);
                 await reauthenticateWithCredential(user, credential);
                 await updatePassword(user, newPassword);
-                alert('Senha alterada com sucesso!');
+                showToast('Senha alterada com sucesso!', 'success');
                 onClose();
             } catch (error: any) {
                 if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') { setError('A senha atual está incorreta.'); } 
@@ -610,6 +614,7 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
+    const { showToast } = useContext(ToastContext);
     const [students, setStudents] = useState<Student[]>([]);
     const [scheduledClassesData, setScheduledClassesData] = useState<ScheduledClass[]>([]);
     const [groupReports, setGroupReports] = useState<GroupClassReport[]>([]);
@@ -666,7 +671,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         const profRef = doc(db, "professionals", currentUser.id);
         await updateDoc(profRef, { availability: newAvailability });
-        alert('Disponibilidade salva com sucesso!');
+        showToast('Disponibilidade salva com sucesso!', 'success');
     };
     
     const handleSaveStandardReport = async (context: any, reportData: ClassReport) => {
@@ -708,7 +713,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                 await addDoc(collection(db, 'groupClassReports'), newReport);
             }
         }
-        alert('Relatório salvo com sucesso!');
+        showToast('Relatório salvo com sucesso!', 'success');
     };
 
     const handleSaveDiagnosticReport = async (context: any, reportData: DiagnosticReport) => {
@@ -729,7 +734,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                 }
             }
         }
-        alert('Relatório de Diagnóstico salvo com sucesso!');
+        showToast('Relatório de Diagnóstico salvo com sucesso!', 'success');
     };
     
     const { upcomingClasses, pastClasses, myBirthdays, earnings } = useMemo(() => {

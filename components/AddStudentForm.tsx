@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+
+import React, { useState, useContext } from 'react';
 import { Student } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { db } from '../firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { ToastContext } from '../App';
 
 interface AddStudentFormProps {
     onBack: () => void;
@@ -20,6 +22,7 @@ const gradeOptions = [
 ];
 
 const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }) => {
+    const { showToast } = useContext(ToastContext);
     const isEditing = !!studentToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +35,7 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!fullName.trim() || !objective.trim()) {
-            alert('Por favor, preencha os campos obrigatórios: Nome Completo e Principal Objetivo.');
+            showToast('Por favor, preencha os campos obrigatórios: Nome Completo e Principal Objetivo.', 'error');
             return;
         }
         setIsSubmitting(true);
@@ -76,11 +79,11 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
             } else {
                 await addDoc(collection(db, "students"), studentData);
             }
-            alert(isEditing ? 'Dados do aluno atualizados com sucesso!' : 'Aluno cadastrado com sucesso!');
+            showToast(isEditing ? 'Dados do aluno atualizados com sucesso!' : 'Aluno cadastrado com sucesso!', 'success');
             onBack();
         } catch (error) {
             console.error("Error saving student:", error);
-            alert("Ocorreu um erro ao salvar o aluno.");
+            showToast("Ocorreu um erro ao salvar o aluno.", 'error');
         } finally {
             setIsSubmitting(false);
         }

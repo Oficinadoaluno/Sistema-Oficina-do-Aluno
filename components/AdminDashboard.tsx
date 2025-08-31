@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import StudentList from './StudentList';
 import ProfessionalList from './ProfessionalList';
 import AgendaView from './AgendaView';
@@ -9,6 +10,7 @@ import { Collaborator, Transaction } from '../types';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, UserIcon, ChevronDownIcon, BirthdayIcon, AlertIcon, BookOpenIcon, UsersIcon, 
     CurrencyDollarIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserPlusIcon, 
@@ -37,6 +39,7 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Collaborator }> = ({ isOpen, onClose, user }) => {
+    const { showToast } = useContext(ToastContext);
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
     const [phone, setPhone] = useState(user.phone || '');
@@ -49,11 +52,11 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
         try {
             const userRef = doc(db, "collaborators", user.id);
             await updateDoc(userRef, { name, email, phone, address });
-            alert('Dados atualizados com sucesso!');
+            showToast('Dados atualizados com sucesso!', 'success');
             onClose();
         } catch (error) {
             console.error("Error updating user profile:", error);
-            alert("Ocorreu um erro ao salvar os dados.");
+            showToast("Ocorreu um erro ao salvar os dados.", 'error');
         } finally {
             setIsSaving(false);
         }
@@ -95,6 +98,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    const { showToast } = useContext(ToastContext);
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -120,7 +124,7 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
                 const credential = EmailAuthProvider.credential(user.email, currentPassword);
                 await reauthenticateWithCredential(user, credential);
                 await updatePassword(user, newPassword);
-                alert('Senha alterada com sucesso!');
+                showToast('Senha alterada com sucesso!', 'success');
                 onClose();
             } catch (error: any) {
                 console.error("Password change error:", error);

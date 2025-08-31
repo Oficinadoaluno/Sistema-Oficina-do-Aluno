@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Student, Collaborator, ScheduledClass, ContinuityItem, ClassReport, Professional } from '../types';
 import FinancialModal from './FinancialModal';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { ToastContext } from '../App';
 import { 
     ArrowLeftIcon, CreditCardIcon, KeyIcon, CheckBadgeIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon, 
     UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon
@@ -162,6 +164,7 @@ const StudentInfoDisplay: React.FC<{student: Student; continuityItems: Continuit
 interface StudentDetailProps { student: Student; onBack: () => void; onEdit: () => void; currentUser: Collaborator; }
 
 const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, currentUser }) => {
+    const { showToast } = useContext(ToastContext);
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
@@ -191,10 +194,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         const studentRef = doc(db, "students", student.id);
         try {
             await updateDoc(studentRef, { status: newStatus });
-            alert(`Status do aluno atualizado para "${newStatus}"!`);
+            showToast(`Status do aluno atualizado para "${newStatus}"!`, 'success');
         } catch (error) {
             console.error("Error updating student status: ", error);
-            alert("Falha ao atualizar status.");
+            showToast("Falha ao atualizar status.", 'error');
         }
     };
 

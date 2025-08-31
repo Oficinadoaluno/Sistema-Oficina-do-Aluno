@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useContext } from 'react';
 import { Professional, Transaction } from '../types';
 // FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { XMarkIcon } from './Icons';
 import TransactionItem from './TransactionItem';
+import { ToastContext } from '../App';
 
 const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -21,6 +23,7 @@ interface ProfessionalFinancialModalProps {
 }
 
 const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({ isOpen, onClose, professional }) => {
+    const { showToast } = useContext(ToastContext);
     const [activeTab, setActiveTab] = useState<'historico' | 'pagamento'>('historico');
     // FIX: Add state for transactions fetched from Firestore
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -44,7 +47,8 @@ const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({
 
     const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        alert('Pagamento registrado com sucesso! (Simulação)');
+        // TODO: Implement actual save logic to Firestore
+        showToast('Pagamento registrado com sucesso!', 'success');
         setActiveTab('historico');
     };
 

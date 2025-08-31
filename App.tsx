@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { UserRole, Collaborator, Professional } from './types';
 import LoginForm from './components/LoginForm';
 import AdminDashboard from './components/AdminDashboard';
@@ -7,7 +7,40 @@ import TeacherDashboard from './components/TeacherDashboard';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { CheckCircleIcon, ExclamationTriangleIcon, XMarkIcon, InformationCircleIcon } from './components/Icons';
 
+// --- Toast Notification System ---
+type ToastType = 'success' | 'error' | 'info';
+interface ToastMessage {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+interface ToastContextType {
+  showToast: (message: string, type?: ToastType) => void;
+}
+
+export const ToastContext = createContext<ToastContextType>({ showToast: () => {} });
+
+const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type, onClose }) => {
+    const theme = {
+        success: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', icon: <CheckCircleIcon className="h-6 w-6 text-green-500" /> },
+        error: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', icon: <ExclamationTriangleIcon className="h-6 w-6 text-red-500" /> },
+        info: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', icon: <InformationCircleIcon className="h-6 w-6 text-blue-500" /> }
+    };
+    const currentTheme = theme[type];
+
+    return (
+        <div className={`flex items-start w-full gap-3 p-4 rounded-lg shadow-lg border ${currentTheme.bg} ${currentTheme.border} animate-toast-in`}>
+            <div className="flex-shrink-0">{currentTheme.icon}</div>
+            <div className={`flex-grow text-sm font-semibold ${currentTheme.text}`}>{message}</div>
+            <button onClick={onClose} className="p-1 -mt-1 -mr-1 rounded-full hover:bg-black/10"><XMarkIcon className="h-5 w-5" /></button>
+        </div>
+    );
+};
+
+
+// --- App Structure ---
 const buttonThemeConfig = {
   [UserRole.Admin]: {
     bgColor: 'bg-secondary',
@@ -38,7 +71,7 @@ const RoleButton: React.FC<RoleButtonProps> = ({ role, onClick }) => {
   );
 };
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<Collaborator | Professional | null>(null);
@@ -112,7 +145,6 @@ const App: React.FC = () => {
     if (selectedRole === UserRole.Teacher) {
       return (
          <main className="min-h-screen bg-neutral font-sans">
-           {/* FIX: Pass currentUser prop to TeacherDashboard */}
            <TeacherDashboard onLogout={handleLogout} currentUser={userData as Professional} />
         </main>
       )
@@ -166,5 +198,38 @@ const App: React.FC = () => {
     </main>
   );
 };
+
+const App: React.FC = () => {
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+    const showToast = (message: string, type: ToastType = 'info') => {
+        const id = Date.now();
+        setToasts(prev => [...prev.slice(-4), { id, message, type }]); // Keep max 5 toasts
+        setTimeout(() => removeToast(id), 5000);
+    };
+
+    const removeToast = (id: number) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+    };
+
+    return (
+        <ToastContext.Provider value={{ showToast }}>
+            <AppContent />
+            <div className="fixed top-6 right-6 z-[100] w-full max-w-sm space-y-3">
+                {toasts.map(toast => (
+                    <Toast key={toast.id} {...toast} onClose={() => removeToast(toast.id)} />
+                ))}
+            </div>
+            <style>{`
+                @keyframes toast-in { 
+                    from { opacity: 0; transform: translateX(100%); } 
+                    to { opacity: 1; transform: translateX(0); } 
+                }
+                .animate-toast-in { animation: toast-in 0.3s ease-out forwards; }
+            `}</style>
+        </ToastContext.Provider>
+    );
+};
+
 
 export default App;

@@ -1,10 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional } from '../types';
 import AddCollaboratorForm from './AddCollaboratorForm';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, doc, addDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, PhoneIcon, CheckCircleIcon } from './Icons';
+import { ToastContext } from '../App';
 
 // --- Reusable Components ---
 
@@ -86,13 +88,14 @@ const CollaboratorsView: React.FC<{ collaborators: Collaborator[]; onEdit: (c: C
 };
 
 const ProspectsView: React.FC<{students: Student[]}> = ({ students }) => {
+    const { showToast } = useContext(ToastContext);
     const prospects = useMemo(() => students.filter(s => s.status === 'prospeccao'), [students]);
     
     const handleConvert = async (student: Student) => {
         if(window.confirm(`Tem certeza que deseja converter ${student.name} para matrícula?`)) {
             const studentRef = doc(db, 'students', student.id);
             await updateDoc(studentRef, { status: 'matricula' });
-            alert(`${student.name} convertido para matrícula com sucesso!`);
+            showToast(`${student.name} convertido para matrícula com sucesso!`, 'success');
         }
     };
 
@@ -172,6 +175,7 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
+    const { showToast } = useContext(ToastContext);
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -194,22 +198,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const handleSaveCollaborator = async (data: Omit<Collaborator, 'id'>, password?: string) => {
         if (collaboratorToEdit) { // Editing existing collaborator
             try {
+                const { login, ...updateData } = data; // FIX: Do not include login in the update payload
                 const collabRef = doc(db, "collaborators", collaboratorToEdit.id);
-                await updateDoc(collabRef, data);
+                await updateDoc(collabRef, updateData);
                 if (password) {
-                    alert("A senha de outros usuários não pode ser alterada a partir deste painel por motivos de segurança. Peça para o colaborador redefinir a própria senha se necessário.");
+                    showToast("Senha de outros usuários não pode ser alterada aqui.", 'info');
                 }
-                alert("Dados do colaborador atualizados com sucesso!");
+                showToast("Dados do colaborador atualizados com sucesso!", 'success');
                 setView('list');
                 setCollaboratorToEdit(null);
             } catch (error) {
                 console.error("Error updating collaborator:", error);
-                alert("Ocorreu um erro ao atualizar o colaborador.");
+                showToast("Ocorreu um erro ao atualizar o colaborador.", 'error');
                 throw error;
             }
         } else { // Creating new collaborator
             if (!password || password.length < 6) {
-                alert("Por favor, forneça uma senha temporária com pelo menos 6 caracteres para o novo colaborador.");
+                showToast("Forneça uma senha temporária com no mínimo 6 caracteres.", 'error');
                 throw new Error("Weak password");
             }
             try {
@@ -217,17 +222,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const uid = userCredential.user.uid;
                 await setDoc(doc(db, "collaborators", uid), data);
-                alert("Colaborador criado com sucesso!");
+                showToast("Colaborador criado com sucesso!", 'success');
                 setView('list');
                 setCollaboratorToEdit(null);
             } catch (error: any) {
                 console.error("Error creating collaborator:", error);
                 if (error.code === 'auth/email-already-in-use') {
-                    alert('Erro: O login (email) já está em uso.');
+                    showToast('Erro: O login (email) já está em uso.', 'error');
                 } else if (error.code === 'auth/weak-password') {
-                    alert('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.');
+                    showToast('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.', 'error');
                 } else {
-                    alert("Ocorreu um erro ao criar o colaborador.");
+                    showToast("Ocorreu um erro ao criar o colaborador.", 'error');
                 }
                 throw error;
             }

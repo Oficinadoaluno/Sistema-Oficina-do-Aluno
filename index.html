@@ -1,4 +1,3 @@
-<!-- FIX: Adicionado overlay para captura de erros e bloco de configuração do Firebase -->
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -6,34 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal Oficina do Aluno</title>
-    <style>
-      #error-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background-color: rgba(40, 40, 40, 0.85);
-        color: #f0f0f0;
-        font-family: monospace;
-        padding: 2rem;
-        z-index: 99999;
-        overflow: auto;
-      }
-      #error-overlay h2 {
-        color: #ff6b6b;
-        margin-bottom: 1rem;
-      }
-      #error-overlay pre {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        color: #ffd166;
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
     "react": "https://aistudiocdn.com/react@^19.1.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
     "firebase/": "https://aistudiocdn.com/firebase@^12.2.1/",
     "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/"
   }
@@ -42,51 +19,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <div id="error-overlay">
-      <h2>Ocorreu um Erro na Aplicação</h2>
-      <pre id="error-message"></pre>
-    </div>
-
-    <!-- 
-      FIX: Adicionado bloco de configuração do Firebase.
-      Este bloco permite que a aplicação seja inicializada mesmo fora de um ambiente Vite,
-      fornecendo um fallback para as variáveis de ambiente.
-      DEVE VIR ANTES do script principal da aplicação.
-    -->
-    <script>
-      // Preencha esta configuração com as chaves do seu projeto Firebase
-      window.__FIREBASE_CONFIG__ = {
-        apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU",
-        authDomain: "sistema-oficinadoaluno.firebaseapp.com",
-        projectId: "sistema-oficinadoaluno",
-        storageBucket: "sistema-oficinadoaluno.appspot.com",
-        messagingSenderId: "296393709615",
-        appId: "1:296393709615:web:1c37f1867522b51f3b8eda",
-        measurementId: "G-V66GW4L7ZV"
-      };
-    </script>
-    
-    <!-- 
-      FIX: Adicionado overlay para captura de erros globais.
-      Isso previne a "tela branca" ao exibir erros de JavaScript não tratados.
-    -->
-    <script>
-      const showErrorOverlay = (message) => {
-        const overlay = document.getElementById('error-overlay');
-        const msgElem = document.getElementById('error-message');
-        if (overlay && msgElem) {
-          msgElem.textContent = message;
-          overlay.style.display = 'block';
-        }
-      };
-      window.addEventListener('error', (event) => {
-        showErrorOverlay(`Error: ${event.message}\nFile: ${event.filename}:${event.lineno}:${event.colno}\n\nStack:\n${event.error?.stack || 'N/A'}`);
-      });
-      window.addEventListener('unhandledrejection', (event) => {
-        showErrorOverlay(`Unhandled Promise Rejection:\nReason: ${event.reason?.message || event.reason}\n\nStack:\n${event.reason?.stack || 'N/A'}`);
-      });
-    </script>
-    
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

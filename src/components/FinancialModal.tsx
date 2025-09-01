@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useContext } from 'react';
 import { Student, Transaction, PaymentMethod, Collaborator } from '../types';
 import { db } from '../firebase';
@@ -23,7 +19,6 @@ interface FinancialModalProps {
 }
 
 const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, student, currentUser }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [activeTab, setActiveTab] = useState<'historico' | 'creditos' | 'mensalidade'>('historico');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');

@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import StudentList from './StudentList';
 import ProfessionalList from './ProfessionalList';
@@ -51,7 +47,6 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Collaborator }> = ({ isOpen, onClose, user }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
@@ -98,7 +93,6 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -174,7 +168,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -182,7 +175,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const canAccessFinancial = currentUser?.adminPermissions?.canAccessFinancial ?? false;
 
     useEffect(() => {
-        // Gate: Only fetch data if a user is logged in
         if (!currentUser || !currentUser.id) return;
 
         const q = db.collection("notifications")
@@ -271,7 +263,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                     <h1 className="text-xl font-semibold text-zinc-700">Portal Oficina do Aluno</h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    {/* Icons for notifications and birthdays can be added here */}
                     <div className="relative" ref={menuRef}>
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">
                             <span className="font-semibold">{currentUser.name}</span>

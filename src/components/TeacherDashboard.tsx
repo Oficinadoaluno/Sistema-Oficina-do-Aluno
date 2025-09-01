@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ContinuityItem, ClassReport, DiagnosticReport } from '../types';
 import { db, auth } from '../firebase';
@@ -28,7 +24,6 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Professional }> = ({ isOpen, onClose, user }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
@@ -71,7 +66,6 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
 };
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -121,7 +115,6 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
-    // FIX: Explicitly cast the type of ToastContext to resolve property access error.
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [view, setView] = useState<'dashboard' | 'availability'>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);

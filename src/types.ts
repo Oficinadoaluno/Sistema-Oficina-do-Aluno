@@ -92,6 +92,7 @@ export interface Transaction {
   surcharge?: number;
   registeredById: string;
   studentId?: string; // Link transaction to a student
+  professionalId?: string;
 }
 
 // --- Continuity and Report Types ---

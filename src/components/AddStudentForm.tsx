@@ -16,11 +16,12 @@ const gradeOptions = [
 ];
 
 interface AddStudentFormProps {
-    onBack: () => void;
+    onCancel: () => void;
+    onSaveSuccess: (studentId: string) => void;
     studentToEdit?: Student;
 }
 
-const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }) => {
+const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess, studentToEdit }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const isEditing = !!studentToEdit;
     
@@ -155,15 +156,16 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
         const sanitizedData = sanitizeFirestore(studentData);
 
         try {
-            if (isEditing) {
+            if (isEditing && studentToEdit) {
                 const studentRef = db.collection("students").doc(studentToEdit.id);
                 await studentRef.update(sanitizedData);
                 showToast('Dados do aluno atualizados com sucesso!', 'success');
+                onSaveSuccess(studentToEdit.id);
             } else {
-                await db.collection("students").add(sanitizedData);
+                const docRef = await db.collection("students").add(sanitizedData);
                 showToast('Aluno cadastrado com sucesso!', 'success');
+                onSaveSuccess(docRef.id);
             }
-            onBack();
         } catch (error: any) {
             console.error("Error saving student:", error);
             if (error.code === 'permission-denied') {
@@ -179,7 +181,7 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
             <div className="flex items-center gap-4 mb-6">
-                <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors">
+                <button onClick={onCancel} className="text-zinc-500 hover:text-zinc-800 transition-colors">
                     <ArrowLeftIcon className="h-6 w-6" />
                 </button>
                 <h2 className="text-2xl font-bold text-zinc-800">{isEditing ? 'Editar Aluno' : 'Cadastrar Novo Aluno'}</h2>
@@ -234,7 +236,7 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onBack, studentToEdit }
                  </fieldset>
 
                 <div className="flex justify-end items-center gap-4 pt-4 border-t">
-                    <button type="button" onClick={onBack} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
+                    <button type="button" onClick={onCancel} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
                     <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400">
                         {isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Aluno')}
                     </button>

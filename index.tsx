@@ -1,14 +1,1 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error('Root element #root not found. App could not be mounted.');
-}
-
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// This file is deprecated. Its contents have been moved or removed. It is cleared to resolve build errors.

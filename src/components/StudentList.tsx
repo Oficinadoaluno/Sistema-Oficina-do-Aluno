@@ -87,12 +87,35 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
         }
     };
     
+    const handleSaveSuccess = (studentId: string) => {
+        setLoading(true);
+        db.collection("students").doc(studentId).get()
+            .then(doc => {
+                if (doc.exists) {
+                    const studentData = { id: doc.id, ...doc.data() } as Student;
+                    setSelectedStudent(studentData);
+                    setView('detail');
+                } else {
+                    showToast("Não foi possível encontrar o aluno salvo, retornando à lista.", "info");
+                    setView('list');
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching student after save:", error);
+                showToast("Erro ao buscar dados do aluno, retornando à lista.", "error");
+                setView('list');
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    };
+    
     if (view === 'add') {
-        return <AddStudentForm onBack={() => setView('list')} />;
+        return <AddStudentForm onCancel={() => setView('list')} onSaveSuccess={handleSaveSuccess} />;
     }
 
     if (view === 'edit' && selectedStudent) {
-        return <AddStudentForm onBack={handleBackToList} studentToEdit={selectedStudent} />;
+        return <AddStudentForm onCancel={handleBackToList} studentToEdit={selectedStudent} onSaveSuccess={handleSaveSuccess} />;
     }
 
     if (view === 'detail' && selectedStudent) {

@@ -193,9 +193,15 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             }
         };
         
-        const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id).orderBy("date", "asc");
+        // FIX: Removed server-side orderBy to prevent index error. Sorting is now done client-side.
+        const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id);
         const unsubClasses = qClasses.onSnapshot(
-            snap => setAllScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), 
+            snap => {
+                const classes = snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
+                // Sort classes by date ascending client-side
+                classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                setAllScheduledClasses(classes);
+            }, 
             createSpecificErrorHandler("aulas agendadas")
         );
         

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional } from '../types';
 import AddCollaboratorForm from './AddCollaboratorForm';
 import { db, auth } from '../firebase';
-// FIX: Removed v9 imports as they are not available in v8. All Firestore/Auth calls now use the 'db' and 'auth' instances.
 import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, PhoneIcon, CheckCircleIcon } from './Icons';
 import { ToastContext } from '../App';
 
@@ -32,7 +31,7 @@ const MetricCard: React.FC<{ title: string; value: string | number; icon: React.
     </div>
 );
 
-type SettingsTab = 'collaborators' | 'reports' | 'support';
+type SettingsTab = 'collaborators' | 'reports';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -50,7 +49,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
     // Fetch data from Firestore
     useEffect(() => {
-        // FIX: Changed from v9 'collection' and 'onSnapshot' to v8 'db.collection.onSnapshot'.
         const unsubCollaborators = db.collection("collaborators").onSnapshot(snap => {
             setCollaborators(snap.docs.map(d => ({id: d.id, ...d.data()})) as Collaborator[]);
         }, (err) => {
@@ -83,7 +81,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const handleSaveCollaborator = async (collaboratorData: Omit<Collaborator, 'id'>, password?: string) => {
         try {
             if (view === 'edit' && collaboratorToEdit) {
-                // FIX: Changed from v9 'doc' and 'updateDoc' to v8 'db.collection.doc.update'.
                 const collaboratorRef = db.collection("collaborators").doc(collaboratorToEdit.id);
                 await collaboratorRef.update(collaboratorData as any);
                 showToast('Colaborador atualizado com sucesso!', 'success');
@@ -91,11 +88,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 if (!password) throw new Error("Password is required for new collaborator.");
                 const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@sistema-oficinadoaluno.com`;
                 
-                // FIX: Changed from v9 'createUserWithEmailAndPassword' to v8 'auth.createUserWithEmailAndPassword'.
                 const userCredential = await auth.createUserWithEmailAndPassword(emailForAuth, password);
                 const uid = userCredential.user!.uid;
 
-                // FIX: Changed from v9 'setDoc(doc(...))' to v8 'db.collection.doc.set()'.
                 await db.collection("collaborators").doc(uid).set(collaboratorData);
                 showToast('Colaborador criado com sucesso!', 'success');
             }
@@ -112,7 +107,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             } else {
                 showToast("Ocorreu um erro ao salvar o colaborador.", 'error');
             }
-            // Re-throw to inform the child form component
             throw error;
         }
     };
@@ -143,7 +137,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 <nav className="-mb-px flex space-x-6">
                     <TabButton label="Colaboradores" icon={UserGroupIcon} isActive={activeTab === 'collaborators'} onClick={() => setActiveTab('collaborators')} />
                     <TabButton label="Relatórios" icon={ChartPieIcon} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
-                    <TabButton label="Suporte" icon={PhoneIcon} isActive={activeTab === 'support'} onClick={() => setActiveTab('support')} />
                 </nav>
             </div>
 
@@ -195,14 +188,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             <h4 className="font-semibold text-zinc-700">Em breve</h4>
                             <p className="text-zinc-500">Relatórios detalhados de desempenho, financeiros e de captação de alunos estarão disponíveis aqui.</p>
                         </div>
-                    </section>
-                )}
-                {activeTab === 'support' && (
-                    <section className="text-center p-8 border rounded-lg bg-zinc-50">
-                        <CheckCircleIcon className="h-12 w-12 text-secondary mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-zinc-700">Suporte Técnico</h3>
-                        <p className="text-zinc-600 mt-2">Para dúvidas, sugestões ou problemas com o sistema, entre em contato.</p>
-                        <p className="text-lg font-bold text-secondary mt-4">suporte@sistema-oficinadoaluno.com</p>
                     </section>
                 )}
             </main>

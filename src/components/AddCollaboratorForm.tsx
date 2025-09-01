@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
 import { ArrowLeftIcon } from './Icons';

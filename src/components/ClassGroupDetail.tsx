@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ClassGroup, Student, Professional, DayOfWeek } from '../types';
 import InfoItem from './InfoItem';
@@ -28,7 +27,6 @@ interface ClassGroupDetailProps {
     students: Student[];
     professional?: Professional;
     onEdit: () => void;
-    // FIX: Change groupId to string to match type
     onArchive: (groupId: string) => void;
     onReactivate: (groupId: string) => void;
 }

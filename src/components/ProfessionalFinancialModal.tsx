@@ -1,10 +1,6 @@
-
-
 import React, { useState, useEffect, useContext } from 'react';
 import { Professional, Transaction } from '../types';
-// FIX: Remove mock data import and add firebase imports
 import { db } from '../firebase';
-// FIX: Removed v9 imports as they are not available in v8. All Firestore calls now use the 'db' instance.
 import { XMarkIcon } from './Icons';
 import TransactionItem from './TransactionItem';
 import { ToastContext } from '../App';
@@ -25,16 +21,12 @@ interface ProfessionalFinancialModalProps {
 const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({ isOpen, onClose, professional }) => {
     const { showToast } = useContext(ToastContext);
     const [activeTab, setActiveTab] = useState<'historico' | 'pagamento'>('historico');
-    // FIX: Add state for transactions fetched from Firestore
     const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-    // FIX: Fetch payments from Firestore instead of using mock data
     useEffect(() => {
         if (!isOpen) return;
 
-        // FIX: Changed from v9 'query(collection(...), where(...))' to v8 chained syntax.
         const q = db.collection("transactions").where("type", "==", "payment").where("professionalId", "==", professional.id);
-        // FIX: Changed from v9 'onSnapshot(q, ...)' to v8 'q.onSnapshot(...)'.
         const unsubscribe = q.onSnapshot(
             (snapshot) => {
                 const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
@@ -91,7 +83,6 @@ const ProfessionalFinancialModal: React.FC<ProfessionalFinancialModalProps> = ({
                 <main className="flex-grow overflow-y-auto">
                     {activeTab === 'historico' && (
                         <div className="divide-y">
-                            {/* FIX: Use transactions from state */}
                             {transactions.length > 0 ? (
                                 transactions.map(tx => <TransactionItem key={tx.id} transaction={tx} type="professional" />)
                             ) : (

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Student, Professional, Collaborator } from '../types';
 import { XMarkIcon } from './Icons';
@@ -67,7 +66,6 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
         e.preventDefault();
         
         let sourceDest = '';
-        // FIX: Compare string IDs directly without converting to Number
         if (sourceType === 'aluno') sourceDest = students.find(s => s.id === sourceId)?.name || 'Aluno';
         else if (sourceType === 'professor') sourceDest = professionals.find(p => p.id === sourceId)?.name || 'Professor';
         else if (sourceType === 'colaborador') sourceDest = collaborators.find(c => c.id === sourceId)?.name || 'Colaborador';

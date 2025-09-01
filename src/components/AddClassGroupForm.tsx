@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ClassGroup, Student, Professional, DayOfWeek } from '../types';
 import { XMarkIcon, ExclamationTriangleIcon, CheckIcon } from './Icons';
@@ -37,7 +35,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
     // Form State
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    // FIX: Use string array for IDs to match type definitions
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
     const [professionalId, setProfessionalId] = useState('');
     const [discipline, setDiscipline] = useState('');
@@ -58,7 +55,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setName(groupToEdit.name);
             setDescription(groupToEdit.description);
             setSelectedStudentIds(groupToEdit.studentIds);
-            // FIX: Remove redundant .toString() as ID is already a string
             setProfessionalId(groupToEdit.professionalId);
             setDiscipline(groupToEdit.discipline || '');
             setCreditsToDeduct(groupToEdit.creditsToDeduct);
@@ -102,14 +98,12 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             .filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()));
     }, [students, selectedStudentIds, studentSearch]);
 
-    // FIX: Handle string student ID
     const handleSelectStudent = (studentId: string) => {
         setSelectedStudentIds(prev => [...prev, studentId]);
         setStudentSearch('');
         setIsDropdownOpen(false);
     };
     
-    // FIX: Handle string student ID
     const handleRemoveStudent = (studentId: string) => {
         setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
     };
@@ -137,7 +131,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             ? { type: 'recurring' as const, days: recurringDays }
             : { type: 'single' as const, date: singleDate, time: singleTime };
             
-        // FIX: Pass professionalId as a string
         onSave({ name, description, studentIds: selectedStudentIds, professionalId: professionalId, schedule, discipline, creditsToDeduct, color });
         onClose();
     };

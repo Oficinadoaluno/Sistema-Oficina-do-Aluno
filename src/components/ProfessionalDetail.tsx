@@ -8,7 +8,6 @@ import {
     ArrowLeftIcon, CurrencyDollarIcon, KeyIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon, 
     UserPlusIcon, PencilIcon, XMarkIcon
 } from './Icons';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 const formatPhoneForDisplay = (phone?: string): string => {
   if (!phone) return '';
@@ -30,6 +29,7 @@ const InfoItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
 interface ManageProfessionalModalProps { isOpen: boolean; onClose: () => void; onInactivate: () => void; professional: Professional; onEdit: () => void; }
 const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpen, onClose, onInactivate, professional, onEdit }) => {
     if (!isOpen) return null;
+    // TODO: Connect login/password to Firebase Auth
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
@@ -47,7 +47,7 @@ const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpe
 interface ProfessionalDetailProps { professional: Professional; onBack: () => void; onEdit: () => void; }
 
 const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, onBack, onEdit }) => {
-    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
+    const { showToast } = useContext(ToastContext);
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
@@ -78,7 +78,7 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     const updateStatus = async (newStatus: Professional['status']) => {
         try {
             const profRef = db.collection("professionals").doc(professional.id);
-            await profRef.update(sanitizeFirestore({ status: newStatus }));
+            await profRef.update({ status: newStatus });
             showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
         } catch (error: any) {
             console.error("Error updating professional status:", error);
@@ -93,7 +93,7 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         try {
             const profRef = db.collection("professionals").doc(professional.id);
-            await profRef.update(sanitizeFirestore({ availability: newAvailability }));
+            await profRef.update({ availability: newAvailability });
             showToast('Disponibilidade salva com sucesso!', 'success');
         } catch (error: any) {
             console.error("Error saving availability:", error);
@@ -135,57 +135,12 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
             </header>
             <main className="flex-grow overflow-y-auto space-y-8 pr-2 -mr-2">
                 <section className="bg-neutral p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-3 rounded-full"><CurrencyDollarIcon className="h-8 w-8 text-primary" /></div>
-                        <div>
-                            <h3 className="text-sm font-medium text-zinc-500 uppercase">Ganhos Previstos ({now.toLocaleString('pt-BR', { month: 'long' })})</h3>
-                            <p className="text-4xl font-bold text-primary">R$ {estimatedEarnings.toFixed(2).replace('.',',')}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-around gap-4 p-2 sm:border-l sm:pl-4">
-                        <div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Individual</h3><p className="text-xl font-bold text-zinc-700">{individualHours.toFixed(1)}h</p></div>
-                        <div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Turma</h3><p className="text-xl font-bold text-zinc-700">{groupHours.toFixed(1)}h</p></div>
-                        <div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Total</h3><p className="text-xl font-bold text-zinc-700">{totalHours.toFixed(1)}h</p></div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <button onClick={() => setIsFinancialModalOpen(true)} className="flex-1 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Financeiro</button>
-                        <button onClick={() => setShowAllInfo(!showAllInfo)} className="flex-1 py-2 px-4 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300">{showAllInfo ? 'Ocultar' : 'Mostrar'} Detalhes</button>
-                    </div>
+                    <div className="flex items-center gap-4"><div className="bg-primary/10 p-3 rounded-full"><CurrencyDollarIcon className="h-8 w-8 text-primary" /></div><div><h3 className="text-sm font-medium text-zinc-500 uppercase">Ganhos Previstos ({now.toLocaleString('pt-BR', { month: 'long' })})</h3><p className="text-4xl font-bold text-primary">R$ {estimatedEarnings.toFixed(2).replace('.',',')}</p></div></div>
+                    <div className="flex items-center justify-around gap-4 p-2 sm:border-l sm:pl-4"><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Individual</h3><p className="text-xl font-bold text-zinc-700">{individualHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Turma</h3><p className="text-xl font-bold text-zinc-700">{groupHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Total</h3><p className="text-xl font-bold text-zinc-700">{totalHours.toFixed(1)}h</p></div></div>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><button onClick={() => setIsFinancialModalOpen(true)} className="flex-1 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Financeiro</button><button onClick={() => setShowAllInfo(!showAllInfo)} className="flex-1 py-2 px-4 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300">{showAllInfo ? 'Ocultar' : 'Mostrar'} Detalhes</button></div>
                 </section>
-                {showAllInfo && (
-                    <section className="animate-fade-in-fast space-y-6">
-                        <fieldset className="border-t pt-4">
-                            <legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Pessoais e Contato</legend>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                                <InfoItem label="Nome Completo" value={professional.name} />
-                                <InfoItem label="Email" value={professional.email} />
-                                <InfoItem label="Celular" value={formatPhoneForDisplay(professional.phone)} />
-                                <InfoItem label="Endereço" value={professional.address} />
-                                <InfoItem label="CPF" value={professional.cpf} />
-                                <InfoItem label="Data de Nascimento" value={professional.birthDate ? new Date(professional.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined} />
-                            </div>
-                        </fieldset>
-                        <fieldset className="border-t pt-4">
-                            <legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Acadêmicos e Financeiros</legend>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                                <InfoItem label="Formação" value={professional.education} />
-                                <InfoItem label="Colégio Atual" value={professional.currentSchool} />
-                                <InfoItem label="Valor Hora/Aula Individual" value={professional.hourlyRateIndividual?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
-                                <InfoItem label="Valor Hora/Aula Turma" value={professional.hourlyRateGroup?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
-                                <InfoItem label="Certificações" value={professional.certifications} />
-                                <InfoItem label="Chave PIX" value={professional.pixKey} />
-                                <InfoItem label="Banco" value={professional.bank} />
-                                <InfoItem label="Agência" value={professional.agency} />
-                                <InfoItem label="Conta" value={professional.account} />
-                            </div>
-                        </fieldset>
-                    </section>
-                )}
-                <section>
-                    <div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" />
-                    <h3 className="text-xl font-semibold text-zinc-700">Disponibilidade Semanal</h3></div>
-                    <WeeklyAvailabilityComponent initialAvailability={professional.availability || {}} onSave={handleSaveAvailability} />
-                </section>
+                {showAllInfo && (<section className="animate-fade-in-fast space-y-6"><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Pessoais e Contato</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Nome Completo" value={professional.name} /><InfoItem label="Email" value={professional.email} /><InfoItem label="Celular" value={formatPhoneForDisplay(professional.phone)} /><InfoItem label="Endereço" value={professional.address} /><InfoItem label="CPF" value={professional.cpf} /><InfoItem label="Data de Nascimento" value={professional.birthDate ? new Date(professional.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined} /></div></fieldset><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Acadêmicos e Financeiros</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Formação" value={professional.education} /><InfoItem label="Colégio Atual" value={professional.currentSchool} /><InfoItem label="Valor Hora/Aula Individual" value={professional.hourlyRateIndividual?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Valor Hora/Aula Turma" value={professional.hourlyRateGroup?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Certificações" value={professional.certifications} /><InfoItem label="Chave PIX" value={professional.pixKey} /><InfoItem label="Banco" value={professional.bank} /><InfoItem label="Agência" value={professional.agency} /><InfoItem label="Conta" value={professional.account} /></div></fieldset></section>)}
+                <section><div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Disponibilidade Semanal</h3></div><WeeklyAvailabilityComponent initialAvailability={professional.availability || {}} onSave={handleSaveAvailability} /></section>
             </main>
         </div>
         <ManageProfessionalModal isOpen={isAccessModalOpen} onClose={() => setIsAccessModalOpen(false)} onInactivate={() => updateStatus('inativo')} professional={professional} onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} />

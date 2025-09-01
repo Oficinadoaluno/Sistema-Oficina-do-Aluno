@@ -11,13 +11,13 @@ declare global {
 const viteEnv = (import.meta as any)?.env ?? {};
 
 const firebaseConfig = {
-  apiKey: viteEnv.VITE_FIREBASE_API_KEY || window.__FIREBASE_CONFIG__?.apiKey,
-  authDomain: viteEnv.VITE_FIREBASE_AUTH_DOMAIN || window.__FIREBASE_CONFIG__?.authDomain,
-  projectId: viteEnv.VITE_FIREBASE_PROJECT_ID || window.__FIREBASE_CONFIG__?.projectId,
-  storageBucket: viteEnv.VITE_FIREBASE_STORAGE_BUCKET || window.__FIREBASE_CONFIG__?.storageBucket,
-  messagingSenderId: viteEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || window.__FIREBASE_CONFIG__?.messagingSenderId,
-  appId: viteEnv.VITE_FIREBASE_APP_ID || window.__FIREBASE_CONFIG__?.appId,
-  measurementId: viteEnv.VITE_FIREBASE_MEASUREMENT_ID || window.__FIREBASE_CONFIG__?.measurementId,
+  apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU",
+  authDomain: "sistema-oficinadoaluno.firebaseapp.com",
+  projectId: "sistema-oficinadoaluno",
+  storageBucket: "sistema-oficinadoaluno.firebasestorage.app",
+  messagingSenderId: "296393709615",
+  appId: "1:296393709615:web:1c37f1867522b51f3b8eda",
+  measurementId: "G-V66GW4L7ZV"
 };
 
 const isConfigMissing = !firebaseConfig.apiKey || !firebaseConfig.projectId;

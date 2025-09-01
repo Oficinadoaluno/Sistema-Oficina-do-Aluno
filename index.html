@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal Oficina do Aluno</title>
 
-    <!-- RESTAURA TAILWIND (visual antigo) -->
+    <!-- Tailwind via CDN: restaura o visual antigo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -18,13 +18,13 @@
               secondary: '#549DA0',
               'secondary-dark': '#4A8C8E',
               neutral: '#F4F4F9',
-            }
-          }
-        }
-      }
+            },
+          },
+        },
+      };
     </script>
 
-    <!-- Mantém import map da versão (2), incluindo Heroicons -->
+    <!-- Import map (mantido, se estiver usando via AI Studio/browser). Vite normalmente ignora isso no bundling local. -->
     <script type="importmap">
     {
       "imports": {
@@ -37,13 +37,22 @@
     }
     </script>
 
-    <!-- Corrige caminho do CSS para onde ele realmente está na versão (2) -->
+    <!-- Seu CSS próprio (sem @tailwind porque usamos a CDN) -->
     <link rel="stylesheet" href="/src/index.css">
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Firebase config via variável global, lida pelo app -->
+    <script>
+      window.__FIREBASE_CONFIG__ = {
+        apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU",
+        authDomain: "sistema-oficinadoaluno.firebaseapp.com",
+        projectId: "sistema-oficinadoaluno",
+        storageBucket: "sistema-oficinadoaluno.firebasestorage.app",
+        messagingSenderId: "296393709615",
+        appId: "1:296393709615:web:1c37f1867522b51f3b8eda",
+        measurementId: "G-V66GW4L7ZV"
+      };
+    </script>
 
-    <!-- Use apenas UM entrypoint para evitar montagem dupla -->
-    <script type="module" src="/index.tsx"></script>
-  </body>
-</html>
+    <div id="root"></div>
+    <!-- Apenas um entrypoint p

@@ -5,8 +5,6 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal Oficina do Aluno</title>
-
-    <!-- Tailwind via CDN: restaura o visual antigo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -23,25 +21,20 @@
         },
       };
     </script>
-
-    <!-- Import map (mantido, se estiver usando via AI Studio/browser). Vite normalmente ignora isso no bundling local. -->
-    <script type="importmap">
-    {
-      "imports": {
-        "react/": "https://aistudiocdn.com/react@^19.1.1/",
-        "react": "https://aistudiocdn.com/react@^19.1.1",
-        "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-        "firebase/": "https://aistudiocdn.com/firebase@^12.2.1/",
-        "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/"
-      }
-    }
-    </script>
-
-    <!-- Seu CSS próprio (sem @tailwind porque usamos a CDN) -->
     <link rel="stylesheet" href="/src/index.css">
-  </head>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.2.1/",
+    "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/"
+  }
+}
+</script>
+</head>
   <body>
-    <!-- Firebase config via variável global, lida pelo app -->
     <script>
       window.__FIREBASE_CONFIG__ = {
         apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU",
@@ -53,6 +46,7 @@
         measurementId: "G-V66GW4L7ZV"
       };
     </script>
-
     <div id="root"></div>
-    <!-- Apenas um entrypoint p
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

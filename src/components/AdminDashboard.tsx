@@ -177,13 +177,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     useEffect(() => {
         if (!currentUser || !currentUser.id) return;
 
+        // FIX: Removed server-side orderBy to prevent index error. Sorting is now done client-side.
         const q = db.collection("notifications")
-                    .where("recipientUid", "==", currentUser.id)
-                    .orderBy("createdAt", "desc")
-                    .limit(10);
+                    .where("recipientUid", "==", currentUser.id);
 
         const unsubNotifications = q.onSnapshot((snapshot) => {
-            setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+            
+            // Sort by createdAt descending
+            notificationsData.sort((a, b) => {
+                const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+
+            setNotifications(notificationsData.slice(0, 10)); // Limit to 10 most recent
         }, (error) => {
             console.error("Firestore (Notifications) Error:", error);
             if (error.code === 'permission-denied') {

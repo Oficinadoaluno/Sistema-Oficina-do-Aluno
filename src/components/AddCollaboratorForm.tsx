@@ -75,7 +75,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             setBank(collaboratorToEdit.bank || '');
             setAgency(collaboratorToEdit.agency || '');
             setAccount(collaboratorToEdit.account || '');
-            setSystemAccess(collaboratorToEdit.systemAccess);
+            setSystemAccess(collaboratorToEdit.systemAccess || []);
             setAdminPermissions(collaboratorToEdit.adminPermissions || emptyPermissions);
             setRemunerationType(collaboratorToEdit.remunerationType);
             setFixedSalary(collaboratorToEdit.fixedSalary || '');

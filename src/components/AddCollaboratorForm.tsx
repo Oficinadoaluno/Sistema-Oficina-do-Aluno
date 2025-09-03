@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
 import { ArrowLeftIcon } from './Icons';
+import { sanitizeFirestore, validateCPF, phoneMask, onlyDigits } from '../utils/sanitizeFirestore';
 
 interface AddCollaboratorFormProps {
     onBack: () => void;
@@ -21,59 +22,6 @@ const allAdminPermissions: { key: keyof AdminPermissions; label: string }[] = [
     { key: 'canAccessFinancial', label: 'Financeiro' },
     { key: 'canAccessSettings', label: 'Configurações' },
 ];
-
-const validateCPF = (cpf: string): boolean => {
-    if (!cpf) return true; // Optional field is valid if empty
-    const cpfClean = cpf.replace(/[^\d]/g, '');
-
-    if (cpfClean.length !== 11 || /^(\d)\1{10}$/.test(cpfClean)) {
-        return false;
-    }
-
-    let sum = 0;
-    let remainder;
-
-    for (let i = 1; i <= 9; i++) {
-        sum += parseInt(cpfClean.substring(i - 1, i)) * (11 - i);
-    }
-    remainder = (sum * 10) % 11;
-    if (remainder === 10 || remainder === 11) {
-        remainder = 0;
-    }
-    if (remainder !== parseInt(cpfClean.substring(9, 10))) {
-        return false;
-    }
-
-    sum = 0;
-    for (let i = 1; i <= 10; i++) {
-        sum += parseInt(cpfClean.substring(i - 1, i)) * (12 - i);
-    }
-    remainder = (sum * 10) % 11;
-    if (remainder === 10 || remainder === 11) {
-        remainder = 0;
-    }
-    if (remainder !== parseInt(cpfClean.substring(10, 11))) {
-        return false;
-    }
-
-    return true;
-};
-
-const phoneMask = (v: string): string => {
-  if (!v) return "";
-  v = v.replace(/\D/g, '');
-  v = v.substring(0, 11);
-  if (v.length > 10) {
-    v = v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  } else if (v.length > 6) {
-    v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-  } else if (v.length > 2) {
-    v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
-  } else {
-    v = v.replace(/^(\d*)/, '($1');
-  }
-  return v;
-};
 
 const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
@@ -118,7 +66,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             setRole(collaboratorToEdit.role);
             setLogin(collaboratorToEdit.login);
             setPassword('');
-            setPhone(collaboratorToEdit.phone || '');
+            setPhone(phoneMask(collaboratorToEdit.phone || ''));
             setEmail(collaboratorToEdit.email || '');
             setAddress(collaboratorToEdit.address || '');
             setCpf(collaboratorToEdit.cpf || '');
@@ -178,14 +126,14 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
 
         setIsSubmitting(true);
         try {
-            await onSave({
+            const collaboratorData = {
                 name,
                 role,
                 login,
-                phone: phone.replace(/\D/g, ''),
+                phone: onlyDigits(phone),
                 email,
                 address,
-                cpf,
+                cpf: onlyDigits(cpf),
                 birthDate,
                 pixKey,
                 bank,
@@ -196,7 +144,11 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 remunerationType,
                 fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,
                 commissionPercentage: remunerationType === 'commission' ? Number(commissionPercentage) : undefined,
-            }, password);
+            };
+            
+            const sanitizedData = sanitizeFirestore(collaboratorData);
+
+            await onSave(sanitizedData, password);
         } catch (error) {
             // Error is handled by parent, this just catches the promise rejection
             console.error("Save operation failed.");
@@ -230,7 +182,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             </div>
                              <div>
                                 <label htmlFor="collaboratorPhone" className={labelStyle}>Telefone</label>
-                                <input id="collaboratorPhone" type="tel" value={phoneMask(phone)} onChange={e => setPhone(e.target.value)} className={inputStyle} />
+                                <input id="collaboratorPhone" type="tel" value={phone} onChange={e => setPhone(phoneMask(e.target.value))} className={inputStyle} />
                             </div>
                              <div>
                                 <label htmlFor="collaboratorEmail" className={labelStyle}>Email</label>

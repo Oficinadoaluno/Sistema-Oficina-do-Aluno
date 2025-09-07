@@ -75,7 +75,18 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             setBank(collaboratorToEdit.bank || '');
             setAgency(collaboratorToEdit.agency || '');
             setAccount(collaboratorToEdit.account || '');
-            setSystemAccess(collaboratorToEdit.systemAccess || []);
+            
+            // Defensively handle malformed systemAccess data
+            const accessData = collaboratorToEdit.systemAccess || [];
+            if (Array.isArray(accessData)) {
+                setSystemAccess(accessData);
+            } else if (typeof accessData === 'object' && accessData !== null) {
+                // This handles legacy data that was incorrectly saved as an object instead of an array.
+                setSystemAccess(Object.values(accessData));
+            } else {
+                setSystemAccess([]);
+            }
+
             setAdminPermissions(collaboratorToEdit.adminPermissions || emptyPermissions);
             setRemunerationType(collaboratorToEdit.remunerationType);
             setFixedSalary(collaboratorToEdit.fixedSalary || '');

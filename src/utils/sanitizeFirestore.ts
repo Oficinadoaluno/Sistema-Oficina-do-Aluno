@@ -55,22 +55,30 @@ export const validateCPF = (cpf: string): boolean => {
 };
 
 /**
- * Remove recursivamente chaves com valores `undefined` de um objeto.
+ * Remove recursivamente chaves com valores `undefined` de um objeto ou array.
  * Essencial para preparar objetos para o Firestore, que não aceita `undefined`.
  *
  * @template T O tipo do objeto.
  * @param {T} obj O objeto a ser sanitizado.
  * @returns {T} Um novo objeto sem valores `undefined`.
  */
-export function sanitizeFirestore<T extends Record<string, any>>(obj: T): T {
+export function sanitizeFirestore<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
 
+  if (Array.isArray(obj)) {
+    // If it's an array, map over its items and sanitize them recursively.
+    return obj
+      .map(item => sanitizeFirestore(item))
+      .filter(item => item !== undefined) as T;
+  }
+
+  // If it's an object, create a new object and sanitize its properties.
   const newObj: { [key: string]: any } = {};
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const value = obj[key];
+      const value = (obj as any)[key];
       if (value !== undefined) {
         newObj[key] = sanitizeFirestore(value);
       }

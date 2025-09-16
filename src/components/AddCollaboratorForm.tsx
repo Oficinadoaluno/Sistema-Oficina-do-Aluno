@@ -257,7 +257,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                                             checked={adminPermissions[key]}
                                             onChange={() => handleAdminPermissionChange(key)}
                                             className={checkboxInputStyle}
-                                            disabled={key === 'canAccessSettings' && collaboratorToEdit?.role.toLowerCase() !== 'diretor(a)'}
+                                            disabled={key === 'canAccessSettings' && collaboratorToEdit?.role?.toLowerCase() !== 'diretor(a)'}
                                         />
                                         <span>{label}</span>
                                     </label>

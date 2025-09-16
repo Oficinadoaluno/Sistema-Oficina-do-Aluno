@@ -38,7 +38,7 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
-    const { showToast } = useContext(ToastContext);
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [activeTab, setActiveTab] = useState<SettingsTab>('collaborators');
     const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
     
@@ -107,7 +107,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             } else {
                 showToast("Ocorreu um erro ao salvar o colaborador.", 'error');
             }
-            throw error;
         }
     };
     

@@ -44,7 +44,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
     setError('');
     setIsLoading(true);
 
-    const email = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
+    const email = login.includes('@') ? login : `${login}@oficinadoaluno.com.br`;
 
     try {
       await auth.signInWithEmailAndPassword(email, password);

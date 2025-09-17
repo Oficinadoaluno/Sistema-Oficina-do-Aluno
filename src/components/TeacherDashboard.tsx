@@ -145,48 +145,43 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     };
 
     useEffect(() => {
-        const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
-        const unsubClasses = qClasses.onSnapshot(
-            snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), 
-            createSpecificErrorHandler("aulas")
-        );
+        const fetchData = async () => {
+            try {
+                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
+                const classesSnap = await qClasses.get();
+                const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
+                setScheduledClasses(classesData);
 
-        const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
-        const unsubGroups = qGroups.onSnapshot(
-            snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), 
-            createSpecificErrorHandler("turmas")
-        );
+                const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
+                const groupsSnap = await qGroups.get();
+                const groupsData = groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[];
+                setClassGroups(groupsData);
+                
+                const studentIds = new Set([
+                    ...classesData.map(c => c.studentId),
+                    ...groupsData.flatMap(g => g.studentIds)
+                ]);
 
-        return () => { unsubClasses(); unsubGroups(); };
+                if (studentIds.size > 0) {
+                    const studentIdArray = Array.from(studentIds);
+                    const qStudents = db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", studentIdArray);
+                    const studentsSnap = await qStudents.get();
+                    setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
+
+                    const qContinuity = db.collection("continuityItems").where("studentId", "in", studentIdArray);
+                    const continuitySnap = await qContinuity.get();
+                    setContinuityItems(continuitySnap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]);
+                } else {
+                    setStudents([]);
+                    setContinuityItems([]);
+                }
+            } catch (error) {
+                createSpecificErrorHandler('dados do painel')(error);
+            }
+        };
+        fetchData();
     }, [currentUser.id]);
 
-    useEffect(() => {
-        const studentIds = new Set([
-            ...scheduledClasses.map(c => c.studentId),
-            ...classGroups.flatMap(g => g.studentIds)
-        ]);
-
-        if (studentIds.size === 0) {
-            setStudents([]);
-            setContinuityItems([]);
-            return;
-        }
-
-        const studentIdArray = Array.from(studentIds);
-        const qStudents = db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", studentIdArray);
-        const unsubStudents = qStudents.onSnapshot(
-            snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), 
-            createSpecificErrorHandler("alunos")
-        );
-
-        const qContinuity = db.collection("continuityItems").where("studentId", "in", studentIdArray);
-        const unsubContinuity = qContinuity.onSnapshot(
-            snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), 
-            createSpecificErrorHandler("continuidade")
-        );
-
-        return () => { unsubStudents(); unsubContinuity(); };
-    }, [scheduledClasses, classGroups]);
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
         try {

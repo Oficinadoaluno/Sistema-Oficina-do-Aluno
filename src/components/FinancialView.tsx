@@ -14,43 +14,34 @@ const FinancialView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const [monthOffset, setMonthOffset] = useState(0); // 0 for current month, -1 for last month, etc.
 
     useEffect(() => {
-        const dataLoaded = { transactions: false, students: false, professionals: false };
-        const checkAllDataLoaded = () => {
-            if (Object.values(dataLoaded).every(Boolean)) {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const [transactionsSnap, studentsSnap, professionalsSnap] = await Promise.all([
+                    db.collection('transactions').orderBy('date', 'desc').get(),
+                    db.collection('students').get(),
+                    db.collection('professionals').get(),
+                ]);
+
+                setTransactions(transactionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[]);
+                
+                const studentMap = new Map<string, Student>();
+                studentsSnap.docs.forEach(doc => studentMap.set(doc.id, { id: doc.id, ...doc.data() } as Student));
+                setStudents(studentMap);
+                
+                const professionalMap = new Map<string, Professional>();
+                professionalsSnap.docs.forEach(doc => professionalMap.set(doc.id, { id: doc.id, ...doc.data() } as Professional));
+                setProfessionals(professionalMap);
+                
+            } catch (err: any) {
+                 console.error(`Error fetching financial data:`, err);
+                 showToast(`Erro ao buscar dados financeiros.`, "error");
+            } finally {
                 setLoading(false);
             }
         };
 
-        const createErrorHandler = (context: string) => (err: any) => {
-            console.error(`Error fetching ${context}:`, err);
-            showToast(`Erro ao buscar dados de ${context}.`, "error");
-            setLoading(false);
-        };
-
-        const unsubTransactions = db.collection('transactions').orderBy('date', 'desc').onSnapshot(snap => {
-            setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[]);
-            dataLoaded.transactions = true; checkAllDataLoaded();
-        }, createErrorHandler("transações"));
-
-        const unsubStudents = db.collection('students').onSnapshot(snap => {
-            const studentMap = new Map<string, Student>();
-            snap.docs.forEach(doc => studentMap.set(doc.id, { id: doc.id, ...doc.data() } as Student));
-            setStudents(studentMap);
-            dataLoaded.students = true; checkAllDataLoaded();
-        }, createErrorHandler("alunos"));
-
-        const unsubProfessionals = db.collection('professionals').onSnapshot(snap => {
-            const professionalMap = new Map<string, Professional>();
-            snap.docs.forEach(doc => professionalMap.set(doc.id, { id: doc.id, ...doc.data() } as Professional));
-            setProfessionals(professionalMap);
-            dataLoaded.professionals = true; checkAllDataLoaded();
-        }, createErrorHandler("profissionais"));
-
-        return () => {
-            unsubTransactions();
-            unsubStudents();
-            unsubProfessionals();
-        };
+        fetchData();
     }, [showToast]);
     
     const { currentMonthTransactions, totalIncome, totalExpenses, balance, monthName } = useMemo(() => {

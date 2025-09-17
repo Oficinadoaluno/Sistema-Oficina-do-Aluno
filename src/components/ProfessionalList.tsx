@@ -21,29 +21,32 @@ const ProfessionalList: React.FC<ProfessionalListProps> = ({ onBack: onBackToDas
     const { showToast } = useContext(ToastContext);
 
     useEffect(() => {
-        setLoading(true);
-        const q = db.collection("professionals").orderBy("name");
-        const unsubscribe = q.onSnapshot((snapshot) => {
-            const profsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[];
-            setProfessionals(profsData);
-            setLoading(false);
-        }, (error) => {
-            console.error("Firestore (ProfessionalList) Error:", error);
-            setLoading(false);
-            if (error.code === 'permission-denied') {
-                console.error("Erro de Permissão: Verifique as regras para a coleção 'professionals'.");
-                showToast("Você não tem permissão para listar os profissionais.", "error");
-            } else if (error.code === 'failed-precondition') {
-                console.error("Erro de Pré-condição: Um índice para a query de profissionais está faltando. Verifique o console.");
-                showToast("Erro de configuração do banco de dados (índice ausente).", "error");
-            } else if (error.code === 'unavailable') {
-                console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
-                showToast("Erro de conexão. Verifique sua internet.", "error");
-            } else {
-                showToast("Ocorreu um erro ao buscar os profissionais.", "error");
+        const fetchProfessionals = async () => {
+            setLoading(true);
+            try {
+                const q = db.collection("professionals").orderBy("name");
+                const snapshot = await q.get();
+                const profsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[];
+                setProfessionals(profsData);
+            } catch (error: any) {
+                console.error("Firestore (ProfessionalList) Error:", error);
+                if (error.code === 'permission-denied') {
+                    console.error("Erro de Permissão: Verifique as regras para a coleção 'professionals'.");
+                    showToast("Você não tem permissão para listar os profissionais.", "error");
+                } else if (error.code === 'failed-precondition') {
+                    console.error("Erro de Pré-condição: Um índice para a query de profissionais está faltando. Verifique o console.");
+                    showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+                } else if (error.code === 'unavailable') {
+                    console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
+                    showToast("Erro de conexão. Verifique sua internet.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao buscar os profissionais.", "error");
+                }
+            } finally {
+                setLoading(false);
             }
-        });
-        return () => unsubscribe();
+        };
+        fetchProfessionals();
     }, [showToast]);
     
     const allDisciplines = useMemo(() => [...new Set(professionals.flatMap(p => p.disciplines))].sort(), [professionals]);

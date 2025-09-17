@@ -177,31 +177,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     useEffect(() => {
         if (!currentUser || !currentUser.id) return;
 
-        // FIX: Removed server-side orderBy to prevent index error. Sorting is now done client-side.
-        const q = db.collection("notifications")
-                    .where("recipientUid", "==", currentUser.id);
+        const fetchNotifications = async () => {
+             try {
+                const q = db.collection("notifications").where("recipientUid", "==", currentUser.id);
+                const snapshot = await q.get();
+                const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+                
+                notificationsData.sort((a, b) => {
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA;
+                });
 
-        const unsubNotifications = q.onSnapshot((snapshot) => {
-            const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-            
-            // Sort by createdAt descending
-            notificationsData.sort((a, b) => {
-                const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-                const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
-                return dateB - dateA;
-            });
-
-            setNotifications(notificationsData.slice(0, 10)); // Limit to 10 most recent
-        }, (error) => {
-            console.error("Firestore (Notifications) Error:", error);
-            if (error.code === 'permission-denied') {
-                showToast("Você não tem permissão para ver notificações.", "error");
-            } else if (error.code === 'failed-precondition') {
-                showToast("Erro de configuração do banco de dados (índice de notificações ausente).", "error");
-            } else if (error.code === 'unavailable') {
-                showToast("Erro de conexão ao buscar notificações.", "error");
+                setNotifications(notificationsData.slice(0, 10)); // Limit to 10 most recent
+            } catch (error: any) {
+                console.error("Firestore (Notifications) Error:", error);
+                if (error.code === 'permission-denied') {
+                    showToast("Você não tem permissão para ver notificações.", "error");
+                } else if (error.code === 'failed-precondition') {
+                    showToast("Erro de configuração do banco de dados (índice de notificações ausente).", "error");
+                } else if (error.code === 'unavailable') {
+                    showToast("Erro de conexão ao buscar notificações.", "error");
+                }
             }
-        });
+        };
+        fetchNotifications();
         
         const fetchBirthdays = async () => {
             try {
@@ -235,7 +235,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         document.addEventListener("mousedown", handleClickOutside);
         
         return () => {
-            unsubNotifications();
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [currentUser, showToast]);

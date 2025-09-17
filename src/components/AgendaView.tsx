@@ -2,9 +2,10 @@ import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
 import { db } from '../firebase';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon
 } from './Icons';
 import { ToastContext } from '../App';
+import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Constants & Types ---
 const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); // 08:00 to 20:00
@@ -36,24 +37,49 @@ const ScheduleClassModal: React.FC<{
     allDisciplines: string[];
 }> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines }) => {
     
-    const [date, setDate] = useState(classToEdit?.date || new Date().toISOString().split('T')[0]);
-    const [time, setTime] = useState(classToEdit?.time || '');
-    const [studentId, setStudentId] = useState<string>(classToEdit?.studentId || '');
-    const [professionalId, setProfessionalId] = useState<string>(classToEdit?.professionalId || '');
-    const [type, setType] = useState<ScheduledClass['type']>(classToEdit?.type || 'Aula Regular');
-    
-    const isCustomDiscipline = classToEdit && !allDisciplines.includes(classToEdit.discipline);
-    const [discipline, setDiscipline] = useState(isCustomDiscipline ? 'Outro' : classToEdit?.discipline || '');
-    const [customDiscipline, setCustomDiscipline] = useState(isCustomDiscipline ? classToEdit.discipline : '');
-    
-    const [content, setContent] = useState(classToEdit?.content || '');
-    const [duration, setDuration] = useState(classToEdit?.duration || 90);
-    const [creditsPerHour, setCreditsPerHour] = useState(classToEdit ? classToEdit.creditsConsumed / (classToEdit.duration/60) : 1);
+    const [date, setDate] = useState('');
+    const [time, setTime] = useState('');
+    const [studentId, setStudentId] = useState<string>('');
+    const [professionalId, setProfessionalId] = useState<string>('');
+    const [type, setType] = useState<ScheduledClass['type']>('Aula Regular');
+    const [discipline, setDiscipline] = useState('');
+    const [customDiscipline, setCustomDiscipline] = useState('');
+    const [content, setContent] = useState('');
+    const [duration, setDuration] = useState(90);
+    const [creditsPerHour, setCreditsPerHour] = useState(1);
     const [awareOfNoCredits, setAwareOfNoCredits] = useState(false);
+    const [status, setStatus] = useState<ScheduledClass['status']>('scheduled');
+    const [statusChangeReason, setStatusChangeReason] = useState('');
     
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
     const studentDropdownRef = useRef<HTMLDivElement>(null);
+
+     useEffect(() => {
+        if (classToEdit) {
+            setDate(classToEdit.date || new Date().toISOString().split('T')[0]);
+            setTime(classToEdit.time || '');
+            setStudentId(classToEdit.studentId || '');
+            setProfessionalId(classToEdit.professionalId || '');
+            setType(classToEdit.type || 'Aula Regular');
+            const isCustom = classToEdit.discipline && !allDisciplines.includes(classToEdit.discipline);
+            setDiscipline(isCustom ? 'Outro' : classToEdit.discipline || '');
+            setCustomDiscipline(isCustom ? classToEdit.discipline : '');
+            setContent(classToEdit.content || '');
+            setDuration(classToEdit.duration || 90);
+            setCreditsPerHour(classToEdit.creditsConsumed ? classToEdit.creditsConsumed / (classToEdit.duration / 60) : 1);
+            setStatus(classToEdit.status || 'scheduled');
+            setStatusChangeReason(classToEdit.statusChangeReason || '');
+        } else {
+            // Reset for new class
+            setDate(new Date().toISOString().split('T')[0]);
+            setTime(''); setStudentId(''); setProfessionalId(''); setType('Aula Regular');
+            setDiscipline(''); setCustomDiscipline(''); setContent(''); setDuration(90);
+            setCreditsPerHour(1); setStatus('scheduled'); setStatusChangeReason('');
+        }
+        setAwareOfNoCredits(false);
+    }, [classToEdit, isOpen, allDisciplines]);
+
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -106,7 +132,8 @@ const ScheduleClassModal: React.FC<{
             date, time, studentId, professionalId,
             type, discipline: finalDiscipline, content, duration, creditsConsumed: creditsNeeded,
             reportRegistered: classToEdit?.reportRegistered || false,
-            status: classToEdit?.status || 'scheduled',
+            status,
+            statusChangeReason: (status === 'canceled' || status === 'rescheduled') ? statusChangeReason : undefined,
         });
         onClose();
     };
@@ -229,7 +256,7 @@ const ScheduleClassModal: React.FC<{
                            <input type="number" id="creditsPerHour" value={creditsPerHour} onChange={e => setCreditsPerHour(parseFloat(e.target.value))} className={inputStyle} />
                         </div>
                     </div>
-                    {creditWarning && (
+                     {creditWarning && (
                          <div className="p-3 bg-amber-50 border-l-4 border-amber-400 text-amber-800 space-y-2">
                             <div className="flex items-start gap-2 font-semibold">
                                 <ExclamationTriangleIcon className="h-6 w-6 text-amber-500 flex-shrink-0" />
@@ -239,16 +266,33 @@ const ScheduleClassModal: React.FC<{
                                 <input type="checkbox" checked={awareOfNoCredits} onChange={e => setAwareOfNoCredits(e.target.checked)} className="h-4 w-4 text-secondary focus:ring-secondary" />
                                 <span>Estou ciente e desejo agendar mesmo assim.</span>
                             </label>
-                            <div className={!awareOfNoCredits ? 'hidden' : ''}>
-                                <label htmlFor="paymentDate" className={labelStyle}>Data Prevista de Pagamento</label>
-                                <input type="date" id="paymentDate" className={inputStyle} />
-                            </div>
                         </div>
                     )}
                      {availabilityWarning && (
                         <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-800 flex items-center gap-2 font-semibold">
                             <ExclamationTriangleIcon className="h-5 w-5"/>
                             <span>Horário indisponível para este professor.</span>
+                        </div>
+                     )}
+                     {classToEdit && (
+                        <div className="border-t pt-4">
+                            <h3 className="text-lg font-semibold text-zinc-700 mb-2">Gerenciar Status da Aula</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="class-status" className={labelStyle}>Status</label>
+                                    <select id="class-status" value={status} onChange={e => setStatus(e.target.value as any)} className={inputStyle}>
+                                        <option value="scheduled">Agendada</option>
+                                        <option value="canceled">Cancelada</option>
+                                        <option value="rescheduled">Remarcada</option>
+                                    </select>
+                                </div>
+                                {(status === 'canceled' || status === 'rescheduled') && (
+                                    <div className="md:col-span-2">
+                                        <label htmlFor="status-reason" className={labelStyle}>Justificativa <span className="text-red-500">*</span></label>
+                                        <textarea id="status-reason" value={statusChangeReason} onChange={e => setStatusChangeReason(e.target.value)} rows={2} className={inputStyle} placeholder="Ex: Aluno solicitou alteração." required />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                      )}
                 </main>
@@ -283,54 +327,38 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [classToEdit, setClassToEdit] = useState<ScheduledClass | null>(null);
 
     useEffect(() => {
-        const subscriptions: (() => void)[] = [];
-        const dataLoaded = { students: false, professionals: false, classes: false, groups: false };
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const [classesSnap, studentsSnap, profsSnap, groupsSnap] = await Promise.all([
+                    db.collection("scheduledClasses").orderBy("date", "asc").get(),
+                    db.collection("students").get(),
+                    db.collection("professionals").get(),
+                    db.collection("classGroups").get()
+                ]);
 
-        const checkAllDataLoaded = () => {
-            if (Object.values(dataLoaded).every(Boolean)) {
+                setScheduledClasses(classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
+                setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
+                setProfessionals(profsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
+                setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
+
+            } catch (err: any) {
+                console.error(`Firestore Error (AgendaView):`, err);
+                let message = `Ocorreu um erro ao carregar os dados da agenda.`;
+                if (err.code === 'permission-denied') {
+                    message = `Você não tem permissão para acessar os dados da agenda. Verifique as regras do Firestore.`;
+                } else if (err.code === 'failed-precondition') {
+                    message = `Erro de configuração do banco de dados para a agenda (índice ausente). Consulte o administrador.`;
+                } else if (err.code === 'unavailable') {
+                    message = `Erro de conexão. Não foi possível carregar os dados da agenda. Verifique sua internet.`;
+                }
+                showToast(message, "error");
+                setError(message);
+            } finally {
                 setLoading(false);
             }
         };
-
-        const createErrorHandler = (context: string) => (err: any) => {
-            console.error(`Firestore Error (AgendaView - ${context}):`, err);
-            let message = `Ocorreu um erro ao carregar dados de ${context}.`;
-            if (err.code === 'permission-denied') {
-                message = `Você não tem permissão para acessar os dados de ${context}. Verifique as regras do Firestore.`;
-            } else if (err.code === 'failed-precondition') {
-                message = `Erro de configuração do banco de dados para ${context} (índice ausente). Consulte o administrador.`;
-            } else if (err.code === 'unavailable') {
-                message = `Erro de conexão. Não foi possível carregar os dados de ${context}. Verifique sua internet.`;
-            }
-            showToast(message, "error");
-            setError(message);
-            setLoading(false);
-        };
-
-        const qClasses = db.collection("scheduledClasses").orderBy("date", "asc");
-        subscriptions.push(qClasses.onSnapshot(snap => {
-            setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
-            dataLoaded.classes = true; checkAllDataLoaded();
-        }, createErrorHandler("aulas")));
-
-        subscriptions.push(db.collection("students").onSnapshot(snap => {
-            setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
-            dataLoaded.students = true; checkAllDataLoaded();
-        }, createErrorHandler("alunos")));
-
-        subscriptions.push(db.collection("professionals").onSnapshot(snap => {
-            setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
-            dataLoaded.professionals = true; checkAllDataLoaded();
-        }, createErrorHandler("profissionais")));
-        
-        subscriptions.push(db.collection("classGroups").onSnapshot(snap => {
-            setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
-            dataLoaded.groups = true; checkAllDataLoaded();
-        }, createErrorHandler("turmas")));
-
-        return () => {
-            subscriptions.forEach(unsub => unsub());
-        };
+        fetchData();
     }, [showToast]);
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
@@ -391,10 +419,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         try {
             if (classToEdit) {
                 const classRef = db.collection('scheduledClasses').doc(classToEdit.id);
-                await classRef.update(newClassData as any);
+                await classRef.update(sanitizeFirestore(newClassData));
                 showToast('Aula atualizada com sucesso!', 'success');
             } else {
-                await db.collection('scheduledClasses').add(newClassData);
+                await db.collection('scheduledClasses').add(sanitizeFirestore(newClassData));
                 showToast('Aula agendada com sucesso!', 'success');
             }
         } catch (error: any) {
@@ -407,6 +435,39 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         setClassToEdit(classData);
         setIsModalOpen(true);
     };
+
+    const getStatusBadge = (cls: ScheduledClass) => {
+        const statusText = {
+            scheduled: 'Agendada',
+            completed: 'Concluída',
+            canceled: 'Cancelada',
+            rescheduled: 'Remarcada',
+        };
+        const statusColors = {
+            scheduled: 'bg-blue-100 text-blue-800',
+            completed: 'bg-green-100 text-green-800',
+            canceled: 'bg-red-100 text-red-800',
+            rescheduled: 'bg-zinc-200 text-zinc-700',
+        };
+
+        if (cls.status === 'scheduled' && !cls.reportRegistered && new Date(`${cls.date}T${cls.time}`) < new Date()) {
+            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Pendente Relatório</span>;
+        }
+        
+        return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusColors[cls.status]}`}>{statusText[cls.status]}</span>
+    };
+
+    const getDailyClassStyles = (status?: ScheduledClass['status']) => {
+        switch (status) {
+            case 'canceled':
+                return { bg: 'bg-red-50 hover:bg-red-100', text: 'text-red-700', decoration: 'line-through', label: ' (Cancelada)' };
+            case 'rescheduled':
+                return { bg: 'bg-zinc-100 hover:bg-zinc-200', text: 'text-zinc-500', decoration: 'italic', label: ' (Remarcada)' };
+            default: // scheduled or completed
+                return { bg: 'bg-secondary/10 hover:bg-secondary/20', text: 'text-secondary-dark', decoration: '', label: '' };
+        }
+    };
+
 
     if (loading) {
         return (
@@ -465,25 +526,33 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         <tr key={prof.id}>
                                             <td className="p-2 border-b text-sm font-medium text-zinc-800 text-left sticky left-0 bg-white">{prof.name}</td>
                                             {timeSlots.map(time => {
-                                                const cls = dailyClasses.find(c => c.professionalId === prof.id && c.time === time);
-                                                if (!cls) return <td key={time} className="border p-0 align-top"><div className="h-12 w-full">&nbsp;</div></td>;
-                                                if (cls.classType === 'group') {
-                                                    return (
-                                                        <td key={time} className="border p-0 align-top">
-                                                            <div className="w-full h-full p-2 text-left bg-primary/10 rounded-sm">
-                                                                <p className="text-xs font-bold text-primary-dark truncate">{cls.group.name}</p>
-                                                                <p className="text-xs text-zinc-600 truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                }
-                                                const student = students.find(s => s.id === cls.studentId);
+                                                const hour = time.substring(0, 2);
+                                                const classesInSlot = dailyClasses.filter(c => c.professionalId === prof.id && c.time.startsWith(hour));
+
                                                 return (
-                                                    <td key={time} className="border p-0 align-top">
-                                                        <button onClick={() => openScheduleModal(cls)} className="w-full h-full p-2 text-left bg-secondary/10 hover:bg-secondary/20 rounded-sm">
-                                                            <p className="text-xs font-bold text-secondary-dark truncate">{student?.name || 'Aluno não encontrado'}</p>
-                                                            <p className="text-xs text-zinc-600 truncate">{cls.discipline}</p>
-                                                        </button>
+                                                    <td key={time} className="border p-0 align-top relative">
+                                                        <div className="h-full w-full p-1 space-y-1 flex flex-col min-h-[3rem]">
+                                                            {classesInSlot.map(cls => {
+                                                                if (cls.classType === 'group') {
+                                                                    return (
+                                                                        <div key={cls.id} className="w-full text-left bg-primary/10 rounded-sm p-1 text-xs">
+                                                                            <p className="font-bold text-primary-dark truncate">{cls.group.name}</p>
+                                                                            <p className="text-zinc-600 truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos às {cls.time}</p>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                const student = students.find(s => s.id === cls.studentId);
+                                                                const styles = getDailyClassStyles(cls.status);
+                                                                return (
+                                                                    <button key={cls.id} onClick={() => openScheduleModal(cls)} className={`w-full text-left rounded-sm p-1 text-xs ${styles.bg}`}>
+                                                                        <p className={`font-bold truncate ${styles.text} ${styles.decoration}`}>
+                                                                            {student?.name || 'Aluno não encontrado'}
+                                                                        </p>
+                                                                        <p className={`text-zinc-600 truncate ${styles.decoration}`}>{cls.discipline} às {cls.time}</p>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </td>
                                                 );
                                             })}
@@ -510,7 +579,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Detalhe</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status Relatório</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
                                         <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
                                     </tr>
                                 </thead>
@@ -537,9 +606,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${cls.reportRegistered ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                        {cls.reportRegistered ? 'Registrado' : 'Pendente'}
-                                                    </span>
+                                                    {getStatusBadge(cls)}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
                                                     <button onClick={() => openScheduleModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>

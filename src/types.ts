@@ -176,7 +176,8 @@ export interface ScheduledClass {
   duration: number; // in minutes
   creditsConsumed: number;
   reportRegistered: boolean;
-  status: 'scheduled' | 'completed' | 'canceled';
+  status: 'scheduled' | 'completed' | 'canceled' | 'rescheduled';
+  statusChangeReason?: string;
   report?: ClassReport;
   diagnosticReport?: DiagnosticReport;
 }

@@ -53,19 +53,31 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
     useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (ClassGroupView - ${context}) Error:`, error);
-            if (error.code === 'permission-denied') {
-                showToast(`Você não tem permissão para carregar dados de ${context}.`, "error");
-            } else if (error.code === 'unavailable') {
-                showToast("Erro de conexão. Verifique sua internet.", "error");
+        const fetchData = async () => {
+            try {
+                const [groupsSnap, studentsSnap, profsSnap] = await Promise.all([
+                    db.collection("classGroups").get(),
+                    db.collection("students").get(),
+                    db.collection("professionals").get(),
+                ]);
+
+                setGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
+                setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
+                setProfessionals(profsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
+
+            } catch (error: any) {
+                console.error(`Firestore (ClassGroupView) Error:`, error);
+                if (error.code === 'permission-denied') {
+                    showToast(`Você não tem permissão para carregar os dados das turmas.`, "error");
+                } else if (error.code === 'unavailable') {
+                    showToast("Erro de conexão. Verifique sua internet.", "error");
+                } else {
+                    showToast("Ocorreu um erro ao carregar os dados.", "error");
+                }
             }
         };
 
-        const unsubGroups = db.collection("classGroups").onSnapshot(snap => setGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("Turmas"));
-        const unsubStudents = db.collection("students").onSnapshot(snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), createErrorHandler("Alunos"));
-        const unsubProfessionals = db.collection("professionals").onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler("Profissionais"));
-        return () => { unsubGroups(); unsubStudents(); unsubProfessionals(); };
+        fetchData();
     }, [showToast]);
 
     const handleOpenModal = (group: ClassGroup | null = null) => {

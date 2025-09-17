@@ -27,14 +27,14 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
     useEffect(() => {
         if (!isOpen) return;
 
-        const q = db.collection("transactions").where("studentId", "==", student.id);
-        const unsubscribe = q.onSnapshot(
-            (snapshot) => {
+        const fetchTransactions = async () => {
+            try {
+                const q = db.collection("transactions").where("studentId", "==", student.id);
+                const snapshot = await q.get();
                 const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
                 setTransactions(txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-            },
-            (error) => {
-                console.error("Firestore (FinancialModal) Error:", error);
+            } catch (error: any) {
+                 console.error("Firestore (FinancialModal) Error:", error);
                 if (error.code === 'permission-denied') {
                     showToast("Você não tem permissão para ver o histórico financeiro.", "error");
                 } else if (error.code === 'failed-precondition') {
@@ -45,9 +45,10 @@ const FinancialModal: React.FC<FinancialModalProps> = ({ isOpen, onClose, studen
                     showToast("Ocorreu um erro ao buscar o histórico financeiro.", "error");
                 }
             }
-        );
+        };
+        
+        fetchTransactions();
 
-        return () => unsubscribe();
     }, [isOpen, student.id, showToast]);
 
     const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

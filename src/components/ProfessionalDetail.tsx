@@ -67,12 +67,25 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
             }
         };
 
-        const qClasses = db.collection("scheduledClasses").where("professionalId", "==", professional.id);
-        const qGroups = db.collection("classGroups").where("professionalId", "==", professional.id);
-        
-        const unsubClasses = qClasses.onSnapshot(snap => setScheduledClasses(snap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]), createErrorHandler("aulas agendadas"));
-        const unsubGroups = qGroups.onSnapshot(snap => setClassGroups(snap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler("turmas"));
-        return () => { unsubClasses(); unsubGroups(); };
+        const fetchData = async () => {
+            try {
+                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", professional.id);
+                const qGroups = db.collection("classGroups").where("professionalId", "==", professional.id);
+                
+                const [classesSnap, groupsSnap] = await Promise.all([
+                    qClasses.get(),
+                    qGroups.get()
+                ]);
+
+                setScheduledClasses(classesSnap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]);
+                setClassGroups(groupsSnap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]);
+
+            } catch (error) {
+                createErrorHandler('dados do profissional')(error);
+            }
+        };
+
+        fetchData();
     }, [professional.id, showToast]);
 
     const updateStatus = async (newStatus: Professional['status']) => {
@@ -111,9 +124,38 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const getDayOfWeekCount = (year: number, month: number, dayOfWeek: number): number => { let c = 0; const d = new Date(year, month, 1); while (d.getMonth() === month) { if (d.getDay() === dayOfWeek) c++; d.setDate(d.getDate() + 1); } return c; };
-    const individualHours = scheduledClasses.filter(c => { const d = new Date(c.date); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; }).reduce((t, c) => t + (c.duration / 60), 0);
-    const groupHours = classGroups.filter(g => g.status === 'active').reduce((t, g) => { let h = 0; if (g.schedule.type === 'recurring' && g.schedule.days) { for (const day of Object.keys(g.schedule.days)) { const idx = dayNameToIndex[day as DayOfWeek]; if (idx !== undefined) h += getDayOfWeekCount(currentYear, currentMonth, idx) * g.creditsToDeduct; } } return t + h; }, 0);
+    const getDayOfWeekCountInMonthUntilDate = (year: number, month: number, dayOfWeek: number, limitDate: Date): number => {
+        let count = 0;
+        const d = new Date(year, month, 1);
+        while (d.getMonth() === month && d < limitDate) {
+            if (d.getDay() === dayOfWeek) {
+                count++;
+            }
+            d.setDate(d.getDate() + 1);
+        }
+        return count;
+    };
+    
+    const individualHours = scheduledClasses
+    .filter(c => {
+        const classDateTime = new Date(`${c.date}T${c.time || '00:00'}`);
+        return classDateTime < now && c.status !== 'canceled' && c.status !== 'rescheduled';
+    })
+    .reduce((t, c) => t + (c.duration / 60), 0);
+
+    const groupHours = classGroups.filter(g => g.status === 'active').reduce((t, g) => {
+        let h = 0;
+        if (g.schedule.type === 'recurring' && g.schedule.days) {
+            for (const day of Object.keys(g.schedule.days)) {
+                const idx = dayNameToIndex[day as DayOfWeek];
+                if (idx !== undefined) {
+                    h += getDayOfWeekCountInMonthUntilDate(currentYear, currentMonth, idx, now) * g.creditsToDeduct;
+                }
+            }
+        }
+        return t + h;
+    }, 0);
+
     const totalHours = individualHours + groupHours;
     const estimatedEarnings = (individualHours * (professional.hourlyRateIndividual || 0)) + (groupHours * (professional.hourlyRateGroup || 0));
 

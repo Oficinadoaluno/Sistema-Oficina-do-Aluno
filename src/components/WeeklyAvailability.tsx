@@ -11,8 +11,8 @@ const days: { key: DayOfWeek; label: string }[] = [
     { key: 'domingo', label: 'Dom' },
 ];
 
-// 08:00 to 21:00
-const timeSlots = Array.from({ length: 14 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); 
+// 08:00 to 20:00
+const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); 
 
 interface WeeklyAvailabilityProps {
     initialAvailability: WeeklyAvailability;
@@ -68,7 +68,7 @@ const WeeklyAvailabilityComponent: React.FC<WeeklyAvailabilityProps> = ({ initia
                                         <td key={day.key} className="border">
                                             <button
                                                 onClick={() => handleSlotClick(day.key, time)}
-                                                className={`w-full h-8 transition-colors duration-150 ${isAvailable ? 'bg-secondary/80 hover:bg-secondary' : 'bg-white hover:bg-zinc-100'}`}
+                                                className={`w-full h-6 transition-colors duration-150 ${isAvailable ? 'bg-secondary/80 hover:bg-secondary' : 'bg-white hover:bg-zinc-100'}`}
                                                 aria-label={`Marcar ${day.label} às ${time} como ${isAvailable ? 'indisponível' : 'disponível'}`}
                                             >
                                                 &nbsp;

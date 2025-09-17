@@ -192,32 +192,30 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
             }
         };
-        
-        // FIX: Removed server-side orderBy to prevent index error. Sorting is now done client-side.
-        const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id);
-        const unsubClasses = qClasses.onSnapshot(
-            snap => {
-                const classes = snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
-                // Sort classes by date ascending client-side
+
+        const fetchData = async () => {
+            try {
+                const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id);
+                const classesSnap = await qClasses.get();
+                const classes = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
                 classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                 setAllScheduledClasses(classes);
-            }, 
-            createSpecificErrorHandler("aulas agendadas")
-        );
-        
-        const qContinuity = db.collection("continuityItems").where("studentId", "==", student.id);
-        const unsubContinuity = qContinuity.onSnapshot(
-            snap => setContinuityItems(snap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]), 
-            createSpecificErrorHandler("plano de continuidade")
-        );
-        
-        const qProfessionals = db.collection("professionals");
-        const unsubProfessionals = qProfessionals.onSnapshot(
-            snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), 
-            createSpecificErrorHandler("profissionais")
-        );
 
-        return () => { unsubClasses(); unsubContinuity(); unsubProfessionals(); };
+                const qContinuity = db.collection("continuityItems").where("studentId", "==", student.id);
+                const continuitySnap = await qContinuity.get();
+                setContinuityItems(continuitySnap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]);
+
+                const qProfessionals = db.collection("professionals");
+                const professionalsSnap = await qProfessionals.get();
+                setProfessionals(professionalsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
+
+            } catch (error: any) {
+                createSpecificErrorHandler('dados do aluno')(error);
+            }
+        };
+
+        fetchData();
+        
     }, [student.id, showToast]);
     
     const { upcomingClasses, pastClasses } = useMemo(() => {

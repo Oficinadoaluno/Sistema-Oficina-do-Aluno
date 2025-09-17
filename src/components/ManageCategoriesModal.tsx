@@ -73,7 +73,7 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({ isOpen, o
                             Despesas
                         </button>
                         <button onClick={() => setActiveTab('income')} className={`py-2 px-1 border-b-2 font-semibold text-sm ${activeTab === 'income' ? 'border-secondary text-secondary' : 'border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300'}`}>
-                            Recebimentos
+                            Receitas
                         </button>
                     </nav>
                 </div>
@@ -83,7 +83,7 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({ isOpen, o
                             type="text"
                             value={newCategoryName}
                             onChange={(e) => setNewCategoryName(e.target.value)}
-                            placeholder={`Nova categoria de ${activeTab === 'expenses' ? 'despesa' : 'recebimento'}`}
+                            placeholder={`Nova categoria de ${activeTab === 'expenses' ? 'despesa' : 'receita'}`}
                             className={inputStyle + " flex-grow"}
                         />
                         <button

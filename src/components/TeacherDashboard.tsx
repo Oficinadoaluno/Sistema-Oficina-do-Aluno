@@ -10,14 +10,9 @@ import DiagnosticReportModal from './DiagnosticReportModal';
 import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
-    LockClosedIcon, BanknotesIcon, ClockIcon, DocumentTextIcon, UsersIcon
+    LockClosedIcon, BanknotesIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
-
-// --- Tipos e Interfaces ---
-type DisplayClass = 
-    | { classType: 'individual'; data: ScheduledClass } 
-    | { classType: 'group'; data: ClassGroup; instanceDate: string; time: string };
 
 // --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
@@ -110,6 +105,18 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
         </div>
     );
 };
+
+const DashboardCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
+    <div className="bg-white p-4 rounded-lg shadow-sm border flex items-start gap-4">
+        <div className="bg-secondary/10 p-3 rounded-full">
+            <Icon className="h-6 w-6 text-secondary" />
+        </div>
+        <div>
+            <h4 className="text-sm font-medium text-zinc-500">{title}</h4>
+            <p className="text-2xl font-bold text-zinc-800">{value}</p>
+        </div>
+    </div>
+);
 
 // --- Componente Principal ---
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
@@ -224,62 +231,114 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return {
             upcomingClasses: all.filter(c => c.date >= todayStr),
-            pastClasses: all.filter(c => c.date < todayStr && !c.reportRegistered).reverse(),
+            pastClasses: all.filter(c => c.date < todayStr),
         };
     }, [scheduledClasses]);
 
+    const { pendingReportsCount, estimatedEarnings } = useMemo(() => {
+        const pending = pastClasses.filter(c => !c.reportRegistered).length;
+        
+        const dayNameToIndex: Record<DayOfWeek, number> = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const getDayOfWeekCountInMonthUntilDate = (year: number, month: number, dayOfWeek: number, limitDate: Date): number => {
+            let count = 0;
+            const d = new Date(year, month, 1);
+            while (d.getMonth() === month && d < limitDate) {
+                if (d.getDay() === dayOfWeek) count++;
+                d.setDate(d.getDate() + 1);
+            }
+            return count;
+        };
+        
+        const individualHours = scheduledClasses
+            .filter(c => {
+                const classDate = new Date(c.date);
+                return classDate.getMonth() === currentMonth && classDate.getFullYear() === currentYear && classDate < now && c.status !== 'canceled';
+            })
+            .reduce((t, c) => t + (c.duration / 60), 0);
+
+        const groupHours = classGroups.filter(g => g.status === 'active').reduce((t, g) => {
+            let h = 0;
+            if (g.schedule.type === 'recurring' && g.schedule.days) {
+                for (const day of Object.keys(g.schedule.days)) {
+                    const idx = dayNameToIndex[day as DayOfWeek];
+                    if (idx !== undefined) {
+                        h += getDayOfWeekCountInMonthUntilDate(currentYear, currentMonth, idx, now) * g.creditsToDeduct;
+                    }
+                }
+            }
+            return t + h;
+        }, 0);
+
+        const earnings = (individualHours * (currentUser.hourlyRateIndividual || 0)) + (groupHours * (currentUser.hourlyRateGroup || 0));
+
+        return { pendingReportsCount: pending, estimatedEarnings: earnings };
+    }, [pastClasses, scheduledClasses, classGroups, currentUser]);
+
+
     const renderDashboard = () => (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-view">
-            <section className="lg:col-span-2 space-y-6">
-                <div>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon/> Próximas Aulas</h3>
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                        {upcomingClasses.map(c => {
-                            const student = students.find(s => s.id === c.studentId);
-                            return (
-                                <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
-                                        <p className="text-sm text-zinc-600">{c.discipline}</p>
+        <div className="space-y-6 animate-fade-in-view">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <DashboardCard title="Aulas Futuras" value={upcomingClasses.length} icon={CalendarDaysIcon} />
+                <DashboardCard title="Relatórios Pendentes" value={pendingReportsCount} icon={DocumentTextIcon} />
+                <DashboardCard title="Ganhos Estimados (Mês)" value={`R$ ${estimatedEarnings.toFixed(2).replace('.', ',')}`} icon={CurrencyDollarIcon} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <section className="lg:col-span-2 space-y-6">
+                    <div>
+                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Próximas Aulas</h3>
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
+                            {upcomingClasses.length > 0 ? upcomingClasses.map(c => {
+                                const student = students.find(s => s.id === c.studentId);
+                                return (
+                                    <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
+                                            <p className="text-sm text-zinc-600">{c.discipline}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                            <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
-                                        <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            }) : <p className="text-center text-zinc-500 p-4">Nenhuma aula futura agendada.</p>}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><DocumentTextIcon/> Relatórios Pendentes</h3>
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                        {pastClasses.map(c => {
-                            const student = students.find(s => s.id === c.studentId);
-                            const context = { id: c.id, studentId: c.studentId, studentName: student?.name };
-                            return (
-                                <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
-                                        <p className="text-sm text-amber-700">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                    <div>
+                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Relatórios Pendentes</h3>
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
+                             {pastClasses.filter(c => !c.reportRegistered).length > 0 ? pastClasses.filter(c => !c.reportRegistered).map(c => {
+                                const student = students.find(s => s.id === c.studentId);
+                                const context = { id: c.id, studentId: c.studentId, studentName: student?.name };
+                                return (
+                                    <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
+                                            <p className="text-sm text-amber-700">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                        </div>
+                                        <button onClick={() => { setReportContext(context); setIsDiagnosticModalOpen(true); }} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-secondary-dark">Lançar Relatório</button>
                                     </div>
-                                    <button onClick={() => { setReportContext(context); setIsDiagnosticModalOpen(true); }} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm">Lançar Relatório</button>
-                                </div>
-                            );
-                        })}
+                                );
+                            }) : <p className="text-center text-zinc-500 p-4">Nenhum relatório pendente.</p>}
+                        </div>
                     </div>
-                </div>
-            </section>
-            <aside className="space-y-6">
-                <div className="bg-zinc-50 border p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-zinc-700 mb-2">Minhas Turmas</h3>
-                    <ul className="space-y-2">{classGroups.map(g => <li key={g.id} className="font-semibold">{g.name}</li>)}</ul>
-                </div>
-                <div className="bg-zinc-50 border p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-zinc-700 mb-2">Plano de Continuidade Ativo</h3>
-                    <ul className="space-y-2">{continuityItems.filter(i => i.status !== 'concluido').map(item => <li key={item.id} className="text-sm">{students.find(s => s.id === item.studentId)?.name}: {item.description}</li>)}</ul>
-                </div>
-            </aside>
+                </section>
+                <aside className="space-y-6">
+                    <div className="bg-white border p-4 rounded-lg">
+                        <h3 className="text-lg font-semibold text-zinc-700 mb-2">Minhas Turmas</h3>
+                        <ul className="space-y-2">{classGroups.length > 0 ? classGroups.map(g => <li key={g.id} className="font-semibold">{g.name}</li>) : <p className="text-sm text-zinc-500">Nenhuma turma atribuída.</p>}</ul>
+                    </div>
+                    <div className="bg-white border p-4 rounded-lg">
+                        <h3 className="text-lg font-semibold text-zinc-700 mb-2">Plano de Continuidade Ativo</h3>
+                        <ul className="space-y-2">{continuityItems.filter(i => i.status !== 'concluido').length > 0 ? continuityItems.filter(i => i.status !== 'concluido').map(item => <li key={item.id} className="text-sm">{students.find(s => s.id === item.studentId)?.name}: {item.description}</li>) : <p className="text-sm text-zinc-500">Nenhum item ativo.</p>}</ul>
+                    </div>
+                </aside>
+            </div>
         </div>
     );
 
@@ -306,10 +365,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             
             <main className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-bold text-zinc-800">Meu Painel</h2>
-                    <div>
-                        <button onClick={() => setView('dashboard')} className={`py-2 px-4 rounded-lg font-semibold ${view === 'dashboard' ? 'bg-secondary text-white' : 'bg-white'}`}>Painel</button>
-                        <button onClick={() => setView('availability')} className={`py-2 px-4 rounded-lg font-semibold ${view === 'availability' ? 'bg-secondary text-white' : 'bg-white'}`}>Disponibilidade</button>
+                    <h2 className="text-3xl font-bold text-zinc-800">{view === 'dashboard' ? 'Meu Painel' : 'Disponibilidade'}</h2>
+                    <div className="p-1 bg-zinc-200 rounded-lg flex items-center">
+                        <button onClick={() => setView('dashboard')} className={`py-1 px-4 rounded-md font-semibold text-sm ${view === 'dashboard' ? 'bg-white shadow' : 'text-zinc-600'}`}>Painel</button>
+                        <button onClick={() => setView('availability')} className={`py-1 px-4 rounded-md font-semibold text-sm ${view === 'availability' ? 'bg-white shadow' : 'text-zinc-600'}`}>Disponibilidade</button>
                     </div>
                 </div>
                 {view === 'dashboard' ? renderDashboard() : <WeeklyAvailabilityComponent initialAvailability={currentUser.availability || {}} onSave={handleSaveAvailability} />}

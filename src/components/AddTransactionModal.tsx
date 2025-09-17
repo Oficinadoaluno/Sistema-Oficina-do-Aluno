@@ -22,14 +22,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
     // State
     const [transactionType, setTransactionType] = useState<'recebimento' | 'pagamento'>('pagamento');
     const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
-    const [paidDate, setPaidDate] = useState<string | undefined>(undefined);
+    const [paidDate, setPaidDate] = useState<string | undefined>(new Date().toISOString().split('T')[0]);
     const [sourceType, setSourceType] = useState('outro');
     const [sourceId, setSourceId] = useState('');
     const [sourceText, setSourceText] = useState('');
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState<number | ''>('');
-    const [installments, setInstallments] = useState<number | ''>('');
-    const [fees, setFees] = useState<number | ''>('');
     const [paymentMethod, setPaymentMethod] = useState('pix');
     const [customPaymentMethod, setCustomPaymentMethod] = useState('');
     const [category, setCategory] = useState('');
@@ -41,15 +39,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
     useEffect(() => {
         if (isOpen) {
             setDueDate(new Date().toISOString().split('T')[0]);
-            setPaidDate(undefined);
+            setPaidDate(new Date().toISOString().split('T')[0]);
             setTransactionType('pagamento');
             setSourceType('outro');
             setSourceId('');
             setSourceText('');
             setDescription('');
             setAmount('');
-            setInstallments('');
-            setFees('');
             setPaymentMethod('pix');
             setCustomPaymentMethod('');
             setCategory(expenseCategories[0] || CREATE_NEW_CATEGORY);
@@ -65,24 +61,29 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        let sourceDest = '';
-        if (sourceType === 'aluno') sourceDest = students.find(s => s.id === sourceId)?.name || 'Aluno';
-        else if (sourceType === 'professor') sourceDest = professionals.find(p => p.id === sourceId)?.name || 'Professor';
-        else if (sourceType === 'colaborador') sourceDest = collaborators.find(c => c.id === sourceId)?.name || 'Colaborador';
-        else sourceDest = sourceText.trim();
+        let sourceData: { studentId?: string; professionalId?: string; sourceDest?: string } = {};
+
+        if (sourceType === 'aluno') sourceData.studentId = sourceId;
+        else if (sourceType === 'professor') sourceData.professionalId = sourceId;
+        else if (sourceType === 'colaborador') sourceData.sourceDest = collaborators.find(c => c.id === sourceId)?.name || 'Colaborador';
+        else sourceData.sourceDest = sourceText.trim();
         
         const finalCategory = category === CREATE_NEW_CATEGORY ? newCategoryName.trim() : category;
         const finalPaymentMethod = paymentMethod === 'outro' ? customPaymentMethod.trim() : paymentMethod;
 
-        if (!dueDate || !sourceDest || !amount || !finalCategory || !finalPaymentMethod) {
+        if (!dueDate || (!sourceData.studentId && !sourceData.professionalId && !sourceData.sourceDest) || !amount || !finalCategory || !finalPaymentMethod) {
             alert('Por favor, preencha todos os campos obrigatórios.');
             return;
         }
 
         onSave({
-            transactionType, dueDate, paidDate, sourceDest, description, amount,
-            installments: Number(installments) || undefined,
-            fees: Number(fees) || undefined,
+            type: transactionType === 'recebimento' ? 'monthly' : 'payment',
+            date: paidDate,
+            dueDate,
+            status: paidDate ? 'pago' : 'pendente',
+            ...sourceData,
+            description,
+            amount: Number(amount),
             paymentMethod: finalPaymentMethod,
             category: finalCategory,
         });
@@ -110,8 +111,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
                         <div>
                             <label className={labelStyle}>Tipo de Transação</label>
                             <div className="flex items-center gap-4 p-1 bg-zinc-100 rounded-lg">
-                                <button type="button" onClick={() => setTransactionType('pagamento')} className={`flex-1 py-1 rounded-md text-sm font-semibold ${transactionType === 'pagamento' ? 'bg-white shadow' : 'hover:bg-zinc-200'}`}>Pagamento</button>
-                                <button type="button" onClick={() => setTransactionType('recebimento')} className={`flex-1 py-1 rounded-md text-sm font-semibold ${transactionType === 'recebimento' ? 'bg-white shadow' : 'hover:bg-zinc-200'}`}>Recebimento</button>
+                                <button type="button" onClick={() => setTransactionType('pagamento')} className={`flex-1 py-1 rounded-md text-sm font-semibold ${transactionType === 'pagamento' ? 'bg-white shadow' : 'hover:bg-zinc-200'}`}>Despesa</button>
+                                <button type="button" onClick={() => setTransactionType('recebimento')} className={`flex-1 py-1 rounded-md text-sm font-semibold ${transactionType === 'recebimento' ? 'bg-white shadow' : 'hover:bg-zinc-200'}`}>Receita</button>
                             </div>
                         </div>
                          <div>
@@ -126,7 +127,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
                     </div>
                     {/* Source */}
                     <div>
-                        <label className={labelStyle}>Quem <span className="text-red-500">*</span></label>
+                        <label className={labelStyle}>{transactionType === 'pagamento' ? 'Destino' : 'Origem'} <span className="text-red-500">*</span></label>
                         <div className="grid grid-cols-3 gap-4">
                              <select value={sourceType} onChange={e => setSourceType(e.target.value)} className={inputStyle}>
                                 <option value="outro">Outro</option>
@@ -149,22 +150,27 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
                         <input id="description" type="text" value={description} onChange={e => setDescription(e.target.value)} className={inputStyle} placeholder="Opcional. Ex: Compra de material didático" />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="amount" className={labelStyle}>Valor (R$) <span className="text-red-500">*</span></label>
                             <input id="amount" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} step="0.01" min="0" className={inputStyle} required />
                         </div>
                         <div>
-                            <label htmlFor="installments" className={labelStyle}>Parcelas</label>
-                            <input id="installments" type="number" value={installments} onChange={e => setInstallments(Number(e.target.value))} min="1" className={inputStyle} placeholder="Opcional"/>
+                            <label htmlFor="category" className={labelStyle}>Categoria <span className="text-red-500">*</span></label>
+                            <select id="category" value={category} onChange={e => setCategory(e.target.value)} className={inputStyle}>
+                                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                <option value={CREATE_NEW_CATEGORY}>+ Criar nova categoria...</option>
+                            </select>
                         </div>
-                         <div>
-                            <label htmlFor="fees" className={labelStyle}>Taxas (R$)</label>
-                            <input id="fees" type="number" value={fees} onChange={e => setFees(Number(e.target.value))} step="0.01" min="0" className={inputStyle} placeholder="Opcional"/>
-                        </div>
+                        {category === CREATE_NEW_CATEGORY && (
+                            <div className="animate-fade-in-fast md:col-span-2">
+                                <label htmlFor="new-category" className={labelStyle}>Nome da Nova Categoria <span className="text-red-500">*</span></label>
+                                <input id="new-category" type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className={inputStyle} required />
+                            </div>
+                        )}
                     </div>
 
-                     {/* Payment Method and Category */}
+                     {/* Payment Method */}
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="paymentMethod" className={labelStyle}>Forma de Pagamento <span className="text-red-500">*</span></label>
@@ -181,19 +187,6 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
                             <div className="animate-fade-in-fast">
                                 <label htmlFor="customPaymentMethod" className={labelStyle}>Qual forma? <span className="text-red-500">*</span></label>
                                 <input id="customPaymentMethod" type="text" value={customPaymentMethod} onChange={e => setCustomPaymentMethod(e.target.value)} className={inputStyle} required/>
-                            </div>
-                        )}
-                        <div>
-                            <label htmlFor="category" className={labelStyle}>Categoria <span className="text-red-500">*</span></label>
-                            <select id="category" value={category} onChange={e => setCategory(e.target.value)} className={inputStyle}>
-                                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                <option value={CREATE_NEW_CATEGORY}>+ Criar nova categoria...</option>
-                            </select>
-                        </div>
-                        {category === CREATE_NEW_CATEGORY && (
-                            <div className="animate-fade-in-fast">
-                                <label htmlFor="new-category" className={labelStyle}>Nome da Nova Categoria <span className="text-red-500">*</span></label>
-                                <input id="new-category" type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className={inputStyle} required />
                             </div>
                         )}
                     </div>

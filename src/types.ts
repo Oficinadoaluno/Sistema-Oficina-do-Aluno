@@ -71,17 +71,21 @@ export interface Professional {
 
 // --- Financial Types ---
 
-export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro' | 'outro';
+export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro' | 'outro' | string;
 export type CardPaymentMethod = 'maquininha' | 'link' | 'outro';
 
 export interface Transaction {
   id: string;
   type: 'credit' | 'monthly' | 'payment';
-  date: string;
+  date: string; // Paid date for filtering
   amount: number;
+  paymentMethod: PaymentMethod;
+  registeredById: string;
+  // Student/Prof specific
   credits?: number;
   month?: string;
-  paymentMethod: PaymentMethod;
+  studentId?: string;
+  professionalId?: string;
   cardDetails?: {
     method: CardPaymentMethod;
     details?: string;
@@ -90,9 +94,12 @@ export interface Transaction {
   };
   discount?: number;
   surcharge?: number;
-  registeredById: string;
-  studentId?: string; // Link transaction to a student
-  professionalId?: string;
+  // Generic transaction fields
+  sourceDest?: string;
+  description?: string;
+  category?: string;
+  dueDate?: string;
+  status?: 'pago' | 'pendente';
 }
 
 // --- Continuity and Report Types ---

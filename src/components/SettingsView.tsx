@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional } from '../types';
 import AddCollaboratorForm from './AddCollaboratorForm';
 import { db, auth } from '../firebase';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, PhoneIcon, CheckCircleIcon } from './Icons';
 import { ToastContext } from '../App';
 
@@ -85,14 +87,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 await collaboratorRef.update(collaboratorData as any);
                 showToast('Colaborador atualizado com sucesso!', 'success');
             } else {
-                if (!password) throw new Error("Password is required for new collaborator.");
-                const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@sistema-oficinadoaluno.com`;
-                
-                const userCredential = await auth.createUserWithEmailAndPassword(emailForAuth, password);
-                const uid = userCredential.user!.uid;
+                if (!password) throw new Error("A senha é obrigatória para um novo colaborador.");
 
-                await db.collection("collaborators").doc(uid).set(collaboratorData);
-                showToast('Colaborador criado com sucesso!', 'success');
+                const creationAppName = `user-creation-${Date.now()}`;
+                const tempApp = firebase.initializeApp(firebase.app().options, creationAppName);
+                const tempAuth = tempApp.auth();
+
+                try {
+                    const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@sistema-oficinadoaluno.com`;
+                    const userCredential = await tempAuth.createUserWithEmailAndPassword(emailForAuth, password);
+                    const uid = userCredential.user!.uid;
+
+                    await db.collection("collaborators").doc(uid).set(collaboratorData);
+                    await tempAuth.signOut();
+                    showToast('Colaborador criado com sucesso!', 'success');
+                } finally {
+                    await tempApp.delete();
+                }
             }
             setView('list');
             setCollaboratorToEdit(null);
@@ -107,6 +118,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             } else {
                 showToast("Ocorreu um erro ao salvar o colaborador.", 'error');
             }
+            throw error; // Re-throw to prevent UI from changing on failure
         }
     };
     

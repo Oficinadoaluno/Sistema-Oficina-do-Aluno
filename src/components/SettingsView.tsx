@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional } from '../types';
 import AddCollaboratorForm from './AddCollaboratorForm';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, PhoneIcon, CheckCircleIcon } from './Icons';
@@ -118,7 +118,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             } else {
                 showToast("Ocorreu um erro ao salvar o colaborador.", 'error');
             }
-            throw error; // Re-throw to prevent UI from changing on failure
+            // Do not re-throw error, to allow UI to reset
         }
     };
     

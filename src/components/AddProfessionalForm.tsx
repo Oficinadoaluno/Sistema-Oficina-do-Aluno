@@ -1,7 +1,8 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
+import firebase from 'firebase/compat/app';
 import { ToastContext } from '../App';
 import { sanitizeFirestore, onlyDigits, phoneMask, validateCPF } from '../utils/sanitizeFirestore';
 
@@ -146,16 +147,26 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                 const profRef = db.collection("professionals").doc(professionalToEdit.id);
                 await profRef.update(sanitizedData);
                 showToast('Dados do profissional atualizados!', 'success');
+                onBack();
             } else {
-                const emailForAuth = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
-                const userCredential = await auth.createUserWithEmailAndPassword(emailForAuth, password);
-                const uid = userCredential.user!.uid;
+                const creationAppName = `user-creation-prof-${Date.now()}`;
+                const tempApp = firebase.initializeApp(firebase.app().options, creationAppName);
+                const tempAuth = tempApp.auth();
 
-                const newProfessionalData = { ...sanitizedData, status: 'ativo' as const };
-                await db.collection("professionals").doc(uid).set(newProfessionalData);
-                showToast('Profissional cadastrado com sucesso!', 'success');
+                try {
+                    const emailForAuth = login.includes('@') ? login : `${login}@sistema-oficinadoaluno.com`;
+                    const userCredential = await tempAuth.createUserWithEmailAndPassword(emailForAuth, password);
+                    const uid = userCredential.user!.uid;
+
+                    const newProfessionalData = { ...sanitizedData, status: 'ativo' as const };
+                    await db.collection("professionals").doc(uid).set(newProfessionalData);
+                    showToast('Profissional cadastrado com sucesso!', 'success');
+                    onBack();
+                } finally {
+                    await tempAuth.signOut();
+                    await tempApp.delete();
+                }
             }
-            onBack();
         } catch (error: any) {
             console.error("Error saving professional:", error);
             if (error.code === 'auth/email-already-in-use') {

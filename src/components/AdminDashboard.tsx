@@ -221,6 +221,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             } catch (error: any) {
                  if (error.code === 'permission-denied') {
                     console.warn("Permissão negada para buscar aniversariantes.");
+                    showToast('Não foi possível carregar os aniversariantes devido a permissões.', 'info');
                 } else {
                     console.error("Erro ao buscar aniversariantes:", error);
                 }

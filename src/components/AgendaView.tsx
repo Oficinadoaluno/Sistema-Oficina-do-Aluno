@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
-import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, LessonPackage } from '../types';
+import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
 import { db } from '../firebase';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
 import { 
     ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon
 } from './Icons';
@@ -32,13 +30,12 @@ type DisplayClass = DisplayIndividualClass | DisplayGroupClass;
 const ScheduleClassModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report'>, originalClass?: ScheduledClass | null) => Promise<void>;
+    onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report'>) => Promise<void>;
     classToEdit: ScheduledClass | null;
     students: Student[];
     professionals: Professional[];
     allDisciplines: string[];
-    lessonPackages: LessonPackage[];
-}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines, lessonPackages }) => {
+}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines }) => {
     
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
@@ -51,8 +48,6 @@ const ScheduleClassModal: React.FC<{
     const [duration, setDuration] = useState(90);
     const [status, setStatus] = useState<ScheduledClass['status']>('scheduled');
     const [statusChangeReason, setStatusChangeReason] = useState('');
-    const [paymentType, setPaymentType] = useState<ScheduledClass['paymentType'] | 'mensalidade'>('avulso');
-
     
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
@@ -72,17 +67,14 @@ const ScheduleClassModal: React.FC<{
             setDuration(classToEdit.duration || 90);
             setStatus(classToEdit.status || 'scheduled');
             setStatusChangeReason(classToEdit.statusChangeReason || '');
-            const student = students.find(s => s.id === classToEdit.studentId);
-            setPaymentType(student?.hasMonthlyPlan ? 'mensalidade' : classToEdit.paymentType || 'avulso');
         } else {
             // Reset for new class
             setDate(new Date().toISOString().split('T')[0]);
             setTime(''); setStudentId(''); setProfessionalId(''); setType('Aula Regular');
             setDiscipline(''); setCustomDiscipline(''); setContent(''); setDuration(90);
             setStatus('scheduled'); setStatusChangeReason('');
-            setPaymentType('avulso');
         }
-    }, [classToEdit, isOpen, allDisciplines, students]);
+    }, [classToEdit, isOpen, allDisciplines]);
 
 
     useEffect(() => {
@@ -97,15 +89,9 @@ const ScheduleClassModal: React.FC<{
 
     const finalDiscipline = discipline === 'Outro' ? customDiscipline : discipline;
 
-    const { student, professional, availabilityWarning, studentPackageInfo } = useMemo(() => {
+    const { student, professional, availabilityWarning } = useMemo(() => {
         const student = studentId ? students.find(s => s.id === studentId) : null;
         const professional = professionalId ? professionals.find(p => p.id === professionalId) : null;
-        
-        if (student && paymentType !== 'mensalidade' && student.hasMonthlyPlan) {
-            setPaymentType('mensalidade');
-        } else if (student && paymentType === 'mensalidade' && !student.hasMonthlyPlan) {
-            setPaymentType('avulso');
-        }
 
         let availabilityWarning = false;
         if (professional?.availability && date && time) {
@@ -116,20 +102,9 @@ const ScheduleClassModal: React.FC<{
                 availabilityWarning = true;
             }
         }
-        
-        const studentPackages = lessonPackages.filter(p => p.studentId === studentId && p.usedLessons < p.totalLessons);
-        const lessonsRemaining = studentPackages.reduce((sum, p) => sum + (p.totalLessons - p.usedLessons), 0);
 
-        return { 
-            student, 
-            professional, 
-            availabilityWarning,
-            studentPackageInfo: {
-                hasPackage: studentPackages.length > 0,
-                lessonsRemaining,
-            }
-        };
-    }, [studentId, professionalId, date, time, students, professionals, lessonPackages, paymentType]);
+        return { student, professional, availabilityWarning };
+    }, [studentId, professionalId, date, time, students, professionals]);
     
     const filteredStudents = useMemo(() => {
         const activeStudents = students.filter(s => s.status === 'matricula');
@@ -143,20 +118,13 @@ const ScheduleClassModal: React.FC<{
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (paymentType === 'pacote' && studentPackageInfo.lessonsRemaining <= 0) {
-            alert('Este aluno não possui aulas de pacote disponíveis. Altere o tipo de pagamento.');
-            return;
-        }
-        
         await onSchedule({
             date, time, studentId, professionalId,
             type, discipline: finalDiscipline, content, duration,
             reportRegistered: classToEdit?.reportRegistered || false,
             status,
             statusChangeReason: (status === 'canceled' || status === 'rescheduled') ? statusChangeReason : undefined,
-            paymentType: paymentType === 'mensalidade' ? undefined : paymentType,
-        }, classToEdit);
+        });
         onClose();
     };
 
@@ -273,31 +241,11 @@ const ScheduleClassModal: React.FC<{
                            <label htmlFor="duration" className={labelStyle}>Duração (minutos)</label>
                            <input type="number" id="duration" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className={inputStyle} />
                         </div>
-                         <div>
-                            <label htmlFor="paymentType" className={labelStyle}>Tipo de Pagamento</label>
-                            <select id="paymentType" value={paymentType} onChange={e => setPaymentType(e.target.value as any)} className={inputStyle} disabled={!studentId}>
-                                {student?.hasMonthlyPlan ? (
-                                    <option value="mensalidade">Mensalidade</option>
-                                ) : (
-                                <>
-                                    <option value="avulso">Avulso</option>
-                                    <option value="pacote" disabled={!studentPackageInfo.hasPackage}>Pacote ({studentPackageInfo.lessonsRemaining} restantes)</option>
-                                    <option value="gratuita">Gratuita</option>
-                                </>
-                                )}
-                            </select>
-                        </div>
                     </div>
                      {availabilityWarning && (
                         <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-800 flex items-center gap-2 font-semibold">
                             <ExclamationTriangleIcon className="h-5 w-5"/>
                             <span>Horário indisponível para este professor.</span>
-                        </div>
-                     )}
-                     {paymentType === 'pacote' && studentPackageInfo.lessonsRemaining <= 0 && studentId && (
-                         <div className="p-3 bg-amber-50 border-l-4 border-amber-400 text-amber-800 flex items-center gap-2 font-semibold">
-                            <ExclamationTriangleIcon className="h-5 w-5"/>
-                            <span>Este aluno não possui saldo de aulas no pacote.</span>
                         </div>
                      )}
                      {classToEdit && (
@@ -331,18 +279,6 @@ const ScheduleClassModal: React.FC<{
     );
 };
 
-const getPaymentTypeStyles = (paymentType?: ScheduledClass['paymentType'], hasMonthlyPlan?: boolean) => {
-    if (hasMonthlyPlan) {
-        return { text: 'Mensalidade', style: 'bg-blue-100 text-blue-800' };
-    }
-    switch (paymentType) {
-        case 'pacote': return { text: 'Pacote', style: 'bg-green-100 text-green-800' };
-        case 'avulso': return { text: 'Avulso', style: 'bg-amber-100 text-amber-800' };
-        case 'gratuita': return { text: 'Gratuita', style: 'bg-zinc-200 text-zinc-700' };
-        default: return { text: 'Não definido', style: 'bg-red-100 text-red-800' };
-    }
-};
-
 // --- Main View Component ---
 interface AgendaViewProps {
     onBack: () => void;
@@ -358,7 +294,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
-    const [lessonPackages, setLessonPackages] = useState<LessonPackage[]>([]);
     
     // UI State
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -369,20 +304,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [classesSnap, studentsSnap, profsSnap, groupsSnap, packagesSnap] = await Promise.all([
+                const [classesSnap, studentsSnap, profsSnap, groupsSnap] = await Promise.all([
                     db.collection("scheduledClasses").orderBy("date", "asc").get(),
                     db.collection("students").get(),
                     db.collection("professionals").get(),
-                    db.collection("classGroups").get(),
-                    db.collection("lessonPackages").get()
+                    db.collection("classGroups").get()
                 ]);
 
                 setScheduledClasses(classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
                 setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
                 setProfessionals(profsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
                 setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
-                setLessonPackages(packagesSnap.docs.map(d => ({id: d.id, ...d.data()})) as LessonPackage[]);
-
 
             } catch (err: any) {
                 console.error(`Firestore Error (AgendaView):`, err);
@@ -457,40 +389,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         setCurrentDate(newDate);
     };
 
-    const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>, originalClass?: ScheduledClass | null) => {
+    const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
         try {
-            const wasPackageClass = originalClass?.paymentType === 'pacote';
-            const isNowPackageClass = newClassData.paymentType === 'pacote';
-    
-            if (!isNowPackageClass && wasPackageClass && originalClass.packageId) {
-                // Class was changed FROM package TO something else, refund lesson
-                const packageRef = db.collection('lessonPackages').doc(originalClass.packageId);
-                await packageRef.update({ usedLessons: firebase.firestore.FieldValue.increment(-1) });
-                newClassData.packageId = undefined; 
-            }
-    
-            if (isNowPackageClass) {
-                // Find available package and deduct lesson
-                const studentPackages = lessonPackages
-                    .filter(p => p.studentId === newClassData.studentId)
-                    .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
-    
-                const availablePackage = studentPackages.find(p => p.usedLessons < p.totalLessons);
-    
-                if (!availablePackage) {
-                    throw new Error("No available package lessons for this student.");
-                }
-    
-                if (!wasPackageClass) { 
-                    // Only increment if it's a new package class
-                    const packageRef = db.collection('lessonPackages').doc(availablePackage.id);
-                    await packageRef.update({ usedLessons: firebase.firestore.FieldValue.increment(1) });
-                }
-                newClassData.packageId = availablePackage.id;
-            }
-    
-            if (originalClass) {
-                const classRef = db.collection('scheduledClasses').doc(originalClass.id);
+            if (classToEdit) {
+                const classRef = db.collection('scheduledClasses').doc(classToEdit.id);
                 await classRef.update(sanitizeFirestore(newClassData));
                 showToast('Aula atualizada com sucesso!', 'success');
             } else {
@@ -499,7 +401,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             }
         } catch (error: any) {
             console.error("Error scheduling class:", error);
-            showToast(error.message || "Ocorreu um erro ao agendar a aula.", "error");
+            showToast("Ocorreu um erro ao agendar a aula.", "error");
         }
     };
     
@@ -651,7 +553,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Detalhe</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Pagamento</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
                                         <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
                                     </tr>
@@ -667,21 +568,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{cls.group.name}</td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-400">N/A</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-400">N/A</td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm"></td>
                                                 </tr>
                                             )
                                         }
                                         const student = students.find(s => s.id === cls.studentId);
-                                        const payment = getPaymentTypeStyles(cls.paymentType, student?.hasMonthlyPlan);
                                         return (
                                             <tr key={cls.id}>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">Individual</span></td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${payment.style}`}>{payment.text}</span></td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm">{getStatusBadge(cls)}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {getStatusBadge(cls)}
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
                                                     <button onClick={() => openScheduleModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>
                                                 </td>
@@ -704,7 +604,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 students={students}
                 professionals={professionals}
                 allDisciplines={allDisciplines}
-                lessonPackages={lessonPackages}
             />
         </div>
     );

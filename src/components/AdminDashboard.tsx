@@ -4,7 +4,6 @@ import ProfessionalList from './ProfessionalList';
 import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
-import PackagesView from './PackagesView';
 import { Collaborator, Student, Professional, ScheduledClass, Transaction } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -14,7 +13,7 @@ import {
     LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
     Cog6ToothIcon, ArrowRightOnRectangleIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
-    BirthdayIcon, AlertIcon, ClockIcon, ArchiveBoxXMarkIcon
+    BirthdayIcon, AlertIcon, ClockIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -198,14 +197,6 @@ const DashboardContent: React.FC = () => {
         
         return alerts;
     }, [students, transactions]);
-    
-    const unassignedPaymentClasses = useMemo(() => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        return scheduledClasses.filter(c => {
-            const student = students.find(s => s.id === c.studentId);
-            return c.date <= todayStr && !c.paymentType && c.status === 'scheduled' && !student?.hasMonthlyPlan;
-        });
-    }, [scheduledClasses, students]);
 
     if (loading) {
         return <div className="text-center p-10">Carregando informações...</div>;
@@ -234,30 +225,17 @@ const DashboardContent: React.FC = () => {
                         </div>
                     </div>
                      <div>
-                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><AlertIcon className="text-amber-500" /> Alertas de Pagamento ({paymentAlerts.length + unassignedPaymentClasses.length})</h3>
+                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><AlertIcon className="text-amber-500" /> Alertas de Pagamento ({paymentAlerts.length})</h3>
                         <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
-                            {paymentAlerts.map((alert, index) => (
-                                <div key={`monthly-${index}`} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                            {paymentAlerts.length > 0 ? paymentAlerts.map((alert, index) => (
+                                <div key={index} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
                                     <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                                     <div>
                                         <p className="font-bold text-amber-800">{alert.studentName}</p>
                                         <p className="text-amber-700">{alert.message}</p>
                                     </div>
                                 </div>
-                            ))}
-                            {unassignedPaymentClasses.map((aula) => {
-                                 const student = students.find(s => s.id === aula.studentId);
-                                 return(
-                                    <div key={`unassigned-${aula.id}`} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
-                                        <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
-                                            <p className="text-amber-700">Aula de {aula.discipline} em {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} sem status de pagamento definido.</p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {(paymentAlerts.length + unassignedPaymentClasses.length) === 0 && <p className="text-zinc-500 text-center py-4">Nenhum alerta de pagamento.</p>}
+                            )) : <p className="text-zinc-500 text-center py-4">Nenhum alerta de pagamento.</p>}
                         </div>
                     </div>
                 </section>
@@ -283,7 +261,7 @@ const DashboardContent: React.FC = () => {
 
 // --- Componente Principal ---
 interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator; }
-type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages';
+type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -307,7 +285,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         { id: 'students', label: 'Alunos', icon: BookOpenIcon, canAccess: true },
         { id: 'professionals', label: 'Equipe', icon: UserIcon, canAccess: true },
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
-        { id: 'packages', label: 'Pacotes', icon: ArchiveBoxXMarkIcon, canAccess: true },
         { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: true },
         { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
     ];
@@ -318,7 +295,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         professionals: 'Gestão de Equipe',
         classes: 'Gestão de Turmas',
         calendar: 'Agenda',
-        packages: 'Gestão de Pacotes de Aulas',
         settings: 'Configurações'
     };
 
@@ -328,7 +304,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'professionals': return <ProfessionalList onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
-            case 'packages': return <PackagesView onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
             default: return <DashboardContent />;

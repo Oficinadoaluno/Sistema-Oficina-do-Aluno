@@ -153,19 +153,6 @@ const StudentInfoDisplay: React.FC<{student: Student}> = ({ student }) => {
     );
 }
 
-const getPaymentTypeStyles = (paymentType?: ScheduledClass['paymentType'], hasMonthlyPlan?: boolean) => {
-    if (hasMonthlyPlan) {
-        return { text: 'Mensalidade', style: 'bg-blue-100 text-blue-800' };
-    }
-    switch (paymentType) {
-        case 'pacote': return { text: 'Pacote', style: 'bg-green-100 text-green-800' };
-        case 'avulso': return { text: 'Avulso', style: 'bg-amber-100 text-amber-800' };
-        case 'gratuita': return { text: 'Gratuita', style: 'bg-zinc-200 text-zinc-700' };
-        default: return { text: 'Não definido', style: 'bg-red-100 text-red-800' };
-    }
-};
-
-
 // --- Componente Principal ---
 
 interface StudentDetailProps { student: Student; onBack: () => void; onEdit: () => void; currentUser: Collaborator; }
@@ -275,13 +262,8 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                     <h3 className="text-xl font-semibold text-zinc-700 mb-4">Histórico de Aulas</h3>
                     <div className="border rounded-lg overflow-hidden">
                         <table className="min-w-full divide-y divide-zinc-200">
-                            <thead className="bg-zinc-50"><tr><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Pagamento</th><th scope="col" className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
-                            <tbody className="bg-white divide-y divide-zinc-200">{pastClasses.map(aula => {
-                                const payment = getPaymentTypeStyles(aula.paymentType, student.hasMonthlyPlan);
-                                return (
-                                <tr key={aula.id}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{aula.discipline}</td><td className="px-4 py-3 text-sm text-zinc-600">Prof. {professionals.find(p => p.id === aula.professionalId)?.name || 'N/A'}</td><td className="px-4 py-3 text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${payment.style}`}>{payment.text}</span></td><td className="px-4 py-3 text-right text-sm">{aula.reportRegistered ? (<button onClick={() => setSelectedClassReport(aula)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Relatório</button>) : (<span className="text-zinc-400">Pendente</span>)}</td></tr>
-                                );
-                            })}</tbody>
+                            <thead className="bg-zinc-50"><tr><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th scope="col" className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
+                            <tbody className="bg-white divide-y divide-zinc-200">{pastClasses.map(aula => (<tr key={aula.id}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{aula.discipline}</td><td className="px-4 py-3 text-sm text-zinc-600">Prof. {professionals.find(p => p.id === aula.professionalId)?.name || 'N/A'}</td><td className="px-4 py-3 text-right text-sm">{aula.reportRegistered ? (<button onClick={() => setSelectedClassReport(aula)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Relatório</button>) : (<span className="text-zinc-400">Pendente</span>)}</td></tr>))}</tbody>
                         </table>
                         {pastClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhum histórico de aulas encontrado.</p>}
                     </div>

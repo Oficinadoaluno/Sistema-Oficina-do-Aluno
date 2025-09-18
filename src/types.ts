@@ -117,19 +117,9 @@ export interface PastClassForProfessional {
     report: string;
 }
 
-// --- Lesson Package Types ---
-export interface LessonPackage {
-  id: string;
-  studentId: string;
-  purchaseDate: string; // YYYY-MM-DD
-  totalLessons: number;
-  usedLessons: number;
-  registeredById: string;
-}
-
 // --- Agenda Types ---
 export interface ScheduledClass {
-  id:string;
+  id: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   studentId: string;
@@ -142,8 +132,6 @@ export interface ScheduledClass {
   status: 'scheduled' | 'completed' | 'canceled' | 'rescheduled';
   statusChangeReason?: string;
   report?: ClassReport;
-  paymentType?: 'avulso' | 'gratuita' | 'pacote';
-  packageId?: string;
 }
 
 // --- Class Group Types ---

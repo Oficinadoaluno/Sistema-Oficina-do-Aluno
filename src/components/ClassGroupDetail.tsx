@@ -2,7 +2,7 @@ import React from 'react';
 import { ClassGroup, Student, Professional, DayOfWeek } from '../types';
 import InfoItem from './InfoItem';
 import { 
-    ArrowLeftIcon, PencilIcon, ArchiveBoxXMarkIcon, CheckBadgeIcon, ExclamationTriangleIcon 
+    ArrowLeftIcon, PencilIcon, ArchiveBoxXMarkIcon, CheckBadgeIcon
 } from './Icons';
 
 const dayMap: Record<DayOfWeek, string> = {
@@ -86,7 +86,6 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                 <div className={`p-4 rounded-lg ${colorStyle.bg}`}>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <InfoItem label="Disciplina" value={group.discipline || 'N/A'} />
-                        <InfoItem label="Créditos por Aula" value={group.creditsToDeduct} />
                         <InfoItem label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${group.status === 'active' ? 'bg-cyan-100 text-cyan-800' : 'bg-zinc-200 text-zinc-700'}`}>{group.status === 'active' ? 'Ativa' : 'Arquivada'}</span>} />
                     </div>
                     {group.description && <InfoItem label="Descrição" value={group.description} className="mt-4" />}
@@ -123,35 +122,26 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             <thead className="bg-zinc-50">
                                 <tr>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status Financeiro</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Plano de Pagamento</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {groupStudents.map(student => {
-                                    const hasSufficientCredits = student.credits >= group.creditsToDeduct;
-                                    const hasStatusWarning = !student.hasMonthlyPlan && !hasSufficientCredits;
-                                    
-                                    return (
-                                        <tr key={student.id} className="hover:bg-zinc-50">
-                                            <td className="px-4 py-3 font-medium text-zinc-800">{student.name}</td>
-                                            <td className="px-4 py-3">
-                                                {student.hasMonthlyPlan ? (
-                                                    <span className="flex items-center gap-2 text-sm text-cyan-700">
-                                                        <CheckBadgeIcon /> Mensalidade Ativa
-                                                    </span>
-                                                ) : hasStatusWarning ? (
-                                                    <span className="flex items-center gap-2 text-sm text-red-700">
-                                                        <ExclamationTriangleIcon /> Créditos Insuficientes
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-sm text-zinc-600">
-                                                        Consome {group.creditsToDeduct} créditos (Saldo: {student.credits})
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
+                                {groupStudents.map(student => (
+                                    <tr key={student.id} className="hover:bg-zinc-50">
+                                        <td className="px-4 py-3 font-medium text-zinc-800">{student.name}</td>
+                                        <td className="px-4 py-3">
+                                            {student.hasMonthlyPlan ? (
+                                                <span className="flex items-center gap-2 text-sm text-cyan-700 font-semibold">
+                                                    <CheckBadgeIcon /> Mensalidade
+                                                </span>
+                                            ) : (
+                                                <span className="text-sm text-zinc-600">
+                                                    Pagamento Avulso
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>

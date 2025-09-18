@@ -38,7 +38,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
     const [professionalId, setProfessionalId] = useState('');
     const [discipline, setDiscipline] = useState('');
-    const [creditsToDeduct, setCreditsToDeduct] = useState(1);
     const [scheduleType, setScheduleType] = useState<'recurring' | 'single'>('recurring');
     const [recurringDays, setRecurringDays] = useState<{ [key in DayOfWeek]?: string }>({});
     const [singleDate, setSingleDate] = useState('');
@@ -57,7 +56,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setSelectedStudentIds(groupToEdit.studentIds);
             setProfessionalId(groupToEdit.professionalId);
             setDiscipline(groupToEdit.discipline || '');
-            setCreditsToDeduct(groupToEdit.creditsToDeduct);
             setScheduleType(groupToEdit.schedule.type);
             setColor(groupToEdit.color || pastelColors[0].name);
             if (groupToEdit.schedule.type === 'recurring') {
@@ -73,7 +71,6 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setSelectedStudentIds([]);
             setProfessionalId('');
             setDiscipline('');
-            setCreditsToDeduct(1);
             setScheduleType('recurring');
             setRecurringDays({});
             setSingleDate('');
@@ -131,7 +128,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             ? { type: 'recurring' as const, days: recurringDays }
             : { type: 'single' as const, date: singleDate, time: singleTime };
             
-        onSave({ name, description, studentIds: selectedStudentIds, professionalId: professionalId, schedule, discipline, creditsToDeduct, color });
+        onSave({ name, description, studentIds: selectedStudentIds, professionalId: professionalId, schedule, discipline, color });
         onClose();
     };
 
@@ -209,14 +206,10 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
                      {/* Details */}
                     <fieldset>
                         <legend className="text-lg font-semibold text-zinc-700 mb-2">Detalhes da Turma</legend>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div>
                                 <label htmlFor="discipline" className={labelStyle}>Disciplina</label>
                                 <input id="discipline" type="text" value={discipline} onChange={e => setDiscipline(e.target.value)} className={inputStyle} />
-                            </div>
-                             <div>
-                                <label htmlFor="creditsToDeduct" className={labelStyle}>Créditos por Aula</label>
-                                <input id="creditsToDeduct" type="number" min="0.5" step="0.5" value={creditsToDeduct} onChange={e => setCreditsToDeduct(Number(e.target.value))} className={inputStyle} />
                             </div>
                              <div>
                                 <label className={labelStyle}>Cor de Identificação</label>

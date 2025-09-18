@@ -1,10 +1,7 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { Collaborator, Student, Professional, Transaction } from '../types';
-import AddCollaboratorForm from './AddCollaboratorForm';
+import { Collaborator, Student, Professional, Transaction, ScheduledClass } from '../types';
 import { db } from '../firebase';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import { ArrowLeftIcon, PlusIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
+import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon } from './Icons';
 import { ToastContext } from '../App';
 
 // --- Reusable Components ---
@@ -33,7 +30,7 @@ const MetricCard: React.FC<{ title: string; value: string | number; icon: React.
     </div>
 );
 
-type SettingsTab = 'collaborators' | 'reports' | 'paymentRecords';
+type SettingsTab = 'reports' | 'paymentRecords' | 'remunerations';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -41,15 +38,14 @@ interface SettingsViewProps {
 
 const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
-    const [activeTab, setActiveTab] = useState<SettingsTab>('collaborators');
-    const [view, setView] = useState<'list' | 'add' | 'edit'>('list');
+    const [activeTab, setActiveTab] = useState<SettingsTab>('reports');
     
     // Data states
     const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [collaboratorToEdit, setCollaboratorToEdit] = useState<Collaborator | null>(null);
+    const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
 
     // UI state
     const [monthOffset, setMonthOffset] = useState(0);
@@ -60,8 +56,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const unsubStudents = db.collection("students").onSnapshot(snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), (err) => showToast("Erro ao buscar alunos.", "error"));
         const unsubProfessionals = db.collection("professionals").onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), (err) => showToast("Erro ao buscar profissionais.", "error"));
         const unsubTransactions = db.collection("transactions").orderBy("date", "desc").onSnapshot(snap => setTransactions(snap.docs.map(d => ({id: d.id, ...d.data()})) as Transaction[]), (err) => showToast("Erro ao buscar registros.", "error"));
+        const unsubClasses = db.collection("scheduledClasses").onSnapshot(snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]), (err) => showToast("Erro ao buscar aulas.", "error"));
         
-        return () => { unsubCollaborators(); unsubStudents(); unsubProfessionals(); unsubTransactions(); };
+        return () => { unsubCollaborators(); unsubStudents(); unsubProfessionals(); unsubTransactions(); unsubClasses(); };
     }, [showToast]);
 
     const metrics = useMemo(() => ({
@@ -71,7 +68,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         totalCollaborators: collaborators.length,
     }), [students, professionals, collaborators]);
     
-    const paymentRecords = useMemo(() => {
+    const { monthName, paymentRecords, remunerationsData } = useMemo(() => {
         const targetDate = new Date();
         targetDate.setDate(1);
         targetDate.setUTCHours(0, 0, 0, 0);
@@ -80,20 +77,50 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const targetYear = targetDate.getFullYear();
         const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-        const paymentTransactions = transactions.filter(tx => {
-             if (!tx.date || tx.type !== 'payment') return false;
-             const txDate = new Date(tx.date);
-             return txDate.getUTCMonth() === targetMonth && txDate.getUTCFullYear() === targetYear;
+        const getFilteredData = <T extends { date: string }>(data: T[]) => 
+            data.filter(item => {
+                if (!item.date) return false;
+                const itemDate = new Date(item.date);
+                return itemDate.getUTCMonth() === targetMonth && itemDate.getUTCFullYear() === targetYear;
+            });
+
+        // Payment Records
+        const paymentTransactions = getFilteredData(transactions).filter((tx: Transaction) => tx.type === 'payment');
+        // FIX: Add explicit type to `tx` parameter to ensure correct type inference.
+        const totalPayments = paymentTransactions.reduce((sum, tx: Transaction) => sum + tx.amount, 0);
+
+        // Remunerations
+        const profRemunerations = professionals.map(prof => {
+            const completedClasses = getFilteredData(scheduledClasses).filter((c: ScheduledClass) => c.professionalId === prof.id && c.status === 'completed');
+            // FIX: Add explicit type to `c` parameter to ensure correct type inference.
+            const totalHours = completedClasses.reduce((sum, c: ScheduledClass) => sum + (c.duration / 60), 0);
+            const earnings = totalHours * (prof.hourlyRateIndividual || 0); // Assuming individual rate
+            return { ...prof, classCount: completedClasses.length, earnings };
         });
 
-        const totalPayments = paymentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const monthlyRevenue = getFilteredData(transactions)
+            .filter((tx: Transaction) => tx.type === 'credit' || tx.type === 'monthly')
+            // FIX: Add explicit type to `tx` parameter to ensure correct type inference in chained methods.
+            .reduce((sum, tx: Transaction) => sum + tx.amount, 0);
 
-        return { monthName, paymentTransactions, totalPayments };
+        const collabRemunerations = collaborators.map(collab => {
+            let earnings = 0;
+            if (collab.remunerationType === 'fixed') {
+                earnings = collab.fixedSalary || 0;
+            } else if (collab.remunerationType === 'commission') {
+                earnings = monthlyRevenue * ((collab.commissionPercentage || 0) / 100);
+            }
+            return { ...collab, earnings };
+        });
 
-    }, [transactions, monthOffset]);
+        return {
+            monthName,
+            paymentRecords: { paymentTransactions, totalPayments },
+            remunerationsData: { profRemunerations, collabRemunerations }
+        };
+    }, [transactions, monthOffset, professionals, scheduledClasses, collaborators]);
     
     const collaboratorMap = useMemo(() => new Map(collaborators.map(c => [c.id, c.name])), [collaborators]);
-    const studentMap = useMemo(() => new Map(students.map(s => [s.id, s.name])), [students]);
     const professionalMap = useMemo(() => new Map(professionals.map(p => [p.id, p.name])), [professionals]);
 
     const getPaymentDescription = (tx: Transaction): string => {
@@ -106,56 +133,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         return `Pagamento (${tx.category || 'Geral'})`;
     };
 
-
-    const handleSaveCollaborator = async (collaboratorData: Omit<Collaborator, 'id'>, password?: string) => {
-        try {
-            if (view === 'edit' && collaboratorToEdit) {
-                const collaboratorRef = db.collection("collaborators").doc(collaboratorToEdit.id);
-                await collaboratorRef.update(collaboratorData as any);
-                showToast('Colaborador atualizado com sucesso!', 'success');
-            } else {
-                if (!password) throw new Error("A senha é obrigatória para um novo colaborador.");
-
-                const creationAppName = `user-creation-${Date.now()}`;
-                const tempApp = firebase.initializeApp(firebase.app().options, creationAppName);
-                const tempAuth = tempApp.auth();
-
-                try {
-                    const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@sistema-oficinadoaluno.com`;
-                    const userCredential = await tempAuth.createUserWithEmailAndPassword(emailForAuth, password);
-                    const uid = userCredential.user!.uid;
-
-                    await db.collection("collaborators").doc(uid).set(collaboratorData);
-                    await tempAuth.signOut();
-                    showToast('Colaborador criado com sucesso!', 'success');
-                } finally {
-                    await tempApp.delete();
-                }
-            }
-            setView('list');
-            setCollaboratorToEdit(null);
-        } catch (error: any) {
-            console.error("Error saving collaborator:", error);
-            if (error.code === 'auth/email-already-in-use') showToast('Erro: O login (email) já está em uso.', 'error');
-            else if (error.code === 'auth/weak-password') showToast('Erro: A senha é muito fraca. Use pelo menos 6 caracteres.', 'error');
-            else if (error.code === 'permission-denied') showToast("Você não tem permissão para salvar este colaborador.", "error");
-            else showToast("Ocorreu um erro ao salvar o colaborador.", 'error');
-        }
-    };
-    
-    const handleEditCollaborator = (collaborator: Collaborator) => {
-        setCollaboratorToEdit(collaborator);
-        setView('edit');
-    };
-
-    if (view === 'add' || view === 'edit') {
-        return <AddCollaboratorForm 
-            onBack={() => setView('list')} 
-            onSave={handleSaveCollaborator}
-            collaboratorToEdit={collaboratorToEdit}
-        />;
-    }
-
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view space-y-6">
             <header className="flex items-center gap-4">
@@ -167,47 +144,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
             <div className="border-b">
                 <nav className="-mb-px flex space-x-6">
-                    <TabButton label="Colaboradores" icon={UserGroupIcon} isActive={activeTab === 'collaborators'} onClick={() => setActiveTab('collaborators')} />
                     <TabButton label="Relatórios" icon={ChartPieIcon} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
                     <TabButton label="Registros de Pagamentos" icon={BanknotesIcon} isActive={activeTab === 'paymentRecords'} onClick={() => setActiveTab('paymentRecords')} />
+                    <TabButton label="Remunerações" icon={CurrencyDollarIcon} isActive={activeTab === 'remunerations'} onClick={() => setActiveTab('remunerations')} />
                 </nav>
             </div>
 
             <main className="flex-grow overflow-y-auto pr-2">
-                {activeTab === 'collaborators' && (
-                    <section>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-semibold text-zinc-700">Gerenciar Equipe</h3>
-                            <button onClick={() => { setView('add'); setCollaboratorToEdit(null); }} className="flex items-center gap-2 bg-secondary text-white font-semibold py-2 px-3 rounded-lg hover:bg-secondary-dark">
-                                <PlusIcon className="h-5 w-5"/> Novo Colaborador
-                            </button>
-                        </div>
-                        <div className="border rounded-lg overflow-hidden">
-                            <table className="min-w-full divide-y divide-zinc-200">
-                                <thead className="bg-zinc-50">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Função</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Login</th>
-                                        <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-zinc-200">
-                                    {collaborators.map(c => (
-                                        <tr key={c.id}>
-                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{c.name}</td>
-                                            <td className="px-4 py-3 text-sm text-zinc-600">{c.role}</td>
-                                            <td className="px-4 py-3 text-sm text-zinc-600">{c.login}</td>
-                                            <td className="px-4 py-3 text-right text-sm">
-                                                <button onClick={() => handleEditCollaborator(c)} className="font-semibold text-secondary hover:text-secondary-dark">Editar</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-                )}
                  {activeTab === 'reports' && (
                      <section>
                         <h3 className="text-xl font-semibold text-zinc-700 mb-4">Relatórios e Métricas</h3>
@@ -229,7 +172,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             <h3 className="text-xl font-semibold text-zinc-700">Registros de Pagamentos</h3>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
-                                <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{paymentRecords.monthName}</span>
+                                <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
                                 <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-1 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon className="h-5 w-5" /></button>
                             </div>
                         </div>
@@ -259,6 +202,38 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 </tbody>
                             </table>
                             {paymentRecords.paymentTransactions.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhum pagamento registrado neste mês.</p>}
+                        </div>
+                    </section>
+                 )}
+                 {activeTab === 'remunerations' && (
+                    <section>
+                         <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-semibold text-zinc-700">Previsão de Remunerações</h3>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
+                                <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
+                                <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-1 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon className="h-5 w-5" /></button>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Profissionais</h4>
+                                <div className="border rounded-lg overflow-hidden">
+                                     <table className="min-w-full divide-y divide-zinc-200">
+                                        <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Aulas Concluídas</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
+                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.profRemunerations.map(p => (<tr key={p.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800">{p.name}</td><td className="px-4 py-3 text-sm text-zinc-600 text-center">{p.classCount}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {p.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                             <div>
+                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Colaboradores</h4>
+                                <div className="border rounded-lg overflow-hidden">
+                                     <table className="min-w-full divide-y divide-zinc-200">
+                                        <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
+                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.collabRemunerations.map(c => (<tr key={c.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800">{c.name}</td><td className="px-4 py-3 text-sm text-zinc-600 capitalize">{c.remunerationType || 'N/A'}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {c.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </section>
                  )}

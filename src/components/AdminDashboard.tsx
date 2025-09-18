@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useContext } from 'react';
+import React, { useState, useRef, useEffect, useContext, useMemo } from 'react';
 import StudentList from './StudentList';
 import ProfessionalList from './ProfessionalList';
 import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
-import { Collaborator } from '../types'; 
+import PackagesView from './PackagesView';
+import { Collaborator, Student, Professional, ScheduledClass, Transaction } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -12,7 +13,8 @@ import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
     Cog6ToothIcon, ArrowRightOnRectangleIcon,
-    IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon
+    IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
+    BirthdayIcon, AlertIcon, ClockIcon, ArchiveBoxXMarkIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -118,21 +120,170 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
     );
 };
 
-// --- Componentes do Painel ---
-interface DashboardCardProps { title: string; value: string; icon: React.ElementType; onClick?: () => void; color: 'secondary'; disabled?: boolean; }
 
-const DashboardCard: React.FC<DashboardCardProps> = ({ title, value, icon: Icon, onClick, color, disabled = false }) => (
-    <button onClick={onClick} className={`bg-gradient-to-br from-secondary/80 to-secondary text-white p-6 rounded-xl shadow-lg transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl hover:shadow-secondary/30 text-left w-full disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-lg`} disabled={!onClick || disabled}>
-        <div className="flex justify-between items-start">
-            <div className="space-y-1"><h3 className="text-xl font-bold">{title}</h3><p className="text-sm opacity-90">{value}</p></div>
-            <div className="bg-white/20 p-3 rounded-full"><Icon className="h-6 w-6 text-white" /></div>
+// --- Componente de Conteúdo do Dashboard ---
+const DashboardContent: React.FC = () => {
+    const [loading, setLoading] = useState(true);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [professionals, setProfessionals] = useState<Professional[]>([]);
+    const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [studentsSnap, profsSnap, classesSnap, transSnap] = await Promise.all([
+                    db.collection("students").get(),
+                    db.collection("professionals").get(),
+                    db.collection("scheduledClasses").get(),
+                    db.collection("transactions").get(),
+                ]);
+                setStudents(studentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]);
+                setProfessionals(profsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]);
+                setScheduledClasses(classesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]);
+                setTransactions(transSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Transaction[]);
+            } catch (error) {
+                console.error("Error fetching dashboard data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const todaysBirthdays = useMemo(() => {
+        const today = new Date();
+        const todayMonth = today.getMonth() + 1;
+        const todayDate = today.getDate();
+        
+        const people = [...students, ...professionals];
+        return people.filter(p => {
+            if (!p.birthDate) return false;
+            const birthDate = new Date(p.birthDate);
+            return birthDate.getUTCMonth() + 1 === todayMonth && birthDate.getUTCDate() === todayDate;
+        }).map(p => ({ name: p.name, role: 'school' in p ? 'Aluno(a)' : 'Profissional' }));
+    }, [students, professionals]);
+
+    const todaysClasses = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return scheduledClasses
+            .filter(c => c.date === todayStr && c.status === 'scheduled')
+            .sort((a, b) => a.time.localeCompare(b.time));
+    }, [scheduledClasses]);
+
+    const paymentAlerts = useMemo(() => {
+        const alerts: { studentName: string; message: string; studentId: string }[] = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Check for missing monthly payments
+        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        const currentMonthName = today.toLocaleString('pt-BR', { month: 'long' });
+        const monthlyStudents = students.filter(s => s.hasMonthlyPlan && s.status === 'matricula');
+        
+        for (const student of monthlyStudents) {
+            const hasPaid = transactions.some(t => 
+                t.type === 'monthly' && 
+                t.studentId === student.id && 
+                t.month === currentMonthStr
+            );
+            if (!hasPaid) {
+                alerts.push({
+                    studentId: student.id,
+                    studentName: student.name,
+                    message: `Pendente pagamento da mensalidade de ${currentMonthName}.`
+                });
+            }
+        }
+        
+        return alerts;
+    }, [students, transactions]);
+    
+    const unassignedPaymentClasses = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return scheduledClasses.filter(c => {
+            const student = students.find(s => s.id === c.studentId);
+            return c.date <= todayStr && !c.paymentType && c.status === 'scheduled' && !student?.hasMonthlyPlan;
+        });
+    }, [scheduledClasses, students]);
+
+    if (loading) {
+        return <div className="text-center p-10">Carregando informações...</div>;
+    }
+
+    return (
+        <div className="space-y-8 animate-fade-in-view">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <section className="lg:col-span-2 space-y-6">
+                     <div>
+                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon /> Aulas de Hoje ({todaysClasses.length})</h3>
+                        <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
+                            {todaysClasses.length > 0 ? todaysClasses.map(c => {
+                                const student = students.find(s => s.id === c.studentId);
+                                const professional = professionals.find(p => p.id === c.professionalId);
+                                return (
+                                    <div key={c.id} className="flex items-center gap-4 text-sm">
+                                        <div className="flex items-center gap-2 font-semibold text-secondary w-20"><ClockIcon className="h-4 w-4" /> {c.time}</div>
+                                        <div className="flex-grow">
+                                            <p className="font-bold text-zinc-800">{student?.name || 'Aluno não encontrado'}</p>
+                                            <p className="text-zinc-500">{c.discipline} com {professional?.name || 'Prof. não encontrado'}</p>
+                                        </div>
+                                    </div>
+                                );
+                            }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula agendada para hoje.</p>}
+                        </div>
+                    </div>
+                     <div>
+                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><AlertIcon className="text-amber-500" /> Alertas de Pagamento ({paymentAlerts.length + unassignedPaymentClasses.length})</h3>
+                        <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
+                            {paymentAlerts.map((alert, index) => (
+                                <div key={`monthly-${index}`} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                                    <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold text-amber-800">{alert.studentName}</p>
+                                        <p className="text-amber-700">{alert.message}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {unassignedPaymentClasses.map((aula) => {
+                                 const student = students.find(s => s.id === aula.studentId);
+                                 return(
+                                    <div key={`unassigned-${aula.id}`} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                                        <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
+                                            <p className="text-amber-700">Aula de {aula.discipline} em {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} sem status de pagamento definido.</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {(paymentAlerts.length + unassignedPaymentClasses.length) === 0 && <p className="text-zinc-500 text-center py-4">Nenhum alerta de pagamento.</p>}
+                        </div>
+                    </div>
+                </section>
+
+                <aside>
+                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BirthdayIcon /> Aniversariantes do Dia</h3>
+                    <div className="bg-white border rounded-lg p-4 space-y-3">
+                        {todaysBirthdays.length > 0 ? todaysBirthdays.map((p, index) => (
+                           <div key={index} className="flex items-center gap-3 text-sm">
+                                <BirthdayIcon className="h-5 w-5 text-primary" />
+                                <div>
+                                    <p className="font-bold text-zinc-800">{p.name}</p>
+                                    <p className="text-zinc-500 text-xs">{p.role}</p>
+                                </div>
+                            </div>
+                        )) : <p className="text-zinc-500">Nenhum aniversário hoje.</p>}
+                    </div>
+                </aside>
+            </div>
         </div>
-    </button>
-);
+    );
+};
 
 // --- Componente Principal ---
 interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator; }
-type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings';
+type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -154,8 +305,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const navItems = [
         { id: 'dashboard', label: 'Painel', icon: ChartPieIcon, canAccess: true },
         { id: 'students', label: 'Alunos', icon: BookOpenIcon, canAccess: true },
-        { id: 'professionals', label: 'Profissionais', icon: UserIcon, canAccess: true },
+        { id: 'professionals', label: 'Equipe', icon: UserIcon, canAccess: true },
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
+        { id: 'packages', label: 'Pacotes', icon: ArchiveBoxXMarkIcon, canAccess: true },
         { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: true },
         { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
     ];
@@ -163,29 +315,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const pageTitles: Record<View, string> = {
         dashboard: 'Painel de Controle',
         students: 'Gestão de Alunos',
-        professionals: 'Gestão de Profissionais',
+        professionals: 'Gestão de Equipe',
         classes: 'Gestão de Turmas',
         calendar: 'Agenda',
+        packages: 'Gestão de Pacotes de Aulas',
         settings: 'Configurações'
     };
 
     const renderContent = () => {
         switch (view) {
             case 'students': return <StudentList onBack={() => setView('dashboard')} currentUser={currentUser} />;
-            case 'professionals': return <ProfessionalList onBack={() => setView('dashboard')} />;
+            case 'professionals': return <ProfessionalList onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
+            case 'packages': return <PackagesView onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
-            default: return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-view">
-                    <DashboardCard title="Alunos" value="Gerenciar matrículas" icon={BookOpenIcon} color="secondary" onClick={() => setView('students')} />
-                    <DashboardCard title="Profissionais" value="Gerenciar equipe" icon={UserIcon} color="secondary" onClick={() => setView('professionals')} />
-                    <DashboardCard title="Turmas" value="Visualizar e montar" icon={UsersIcon} color="secondary" onClick={() => setView('classes')} />
-                    <DashboardCard title="Agenda" value="Visualizar aulas" icon={CalendarDaysIcon} color="secondary" onClick={() => setView('calendar')} />
-                    <DashboardCard title="Configurações" value="Ajustes do sistema" icon={Cog6ToothIcon} color="secondary" onClick={canAccessSettings ? () => setView('settings') : undefined} disabled={!canAccessSettings}/>
-                </div>
-            );
+            default: return <DashboardContent />;
         }
     };
 

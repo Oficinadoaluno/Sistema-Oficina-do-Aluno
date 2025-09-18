@@ -153,7 +153,6 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
                 motherName: guardianName,
                 objective,
                 status,
-                credits: 0,
                 hasMonthlyPlan: false,
             };
         }

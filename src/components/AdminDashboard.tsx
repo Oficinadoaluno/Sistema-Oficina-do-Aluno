@@ -4,6 +4,7 @@ import ProfessionalList from './ProfessionalList';
 import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
+import PackagesView from './PackagesView';
 import { Collaborator, Student, Professional, ScheduledClass, Transaction } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -11,9 +12,9 @@ import 'firebase/compat/auth';
 import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
-    Cog6ToothIcon, ArrowRightOnRectangleIcon,
+    Cog6ToothIcon, ArrowRightOnRectangleIcon, ArchiveBoxIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
-    BirthdayIcon, AlertIcon, ClockIcon
+    BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -119,6 +120,18 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
     );
 };
 
+// --- Card de métrica reutilizável ---
+const MetricCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
+    <div className="bg-white p-4 rounded-lg shadow-sm border flex items-start gap-4">
+        <div className="bg-secondary/10 p-3 rounded-full">
+            <Icon className="h-6 w-6 text-secondary" />
+        </div>
+        <div>
+            <h4 className="text-sm font-medium text-zinc-500">{title}</h4>
+            <p className="text-2xl font-bold text-zinc-800">{value}</p>
+        </div>
+    </div>
+);
 
 // --- Componente de Conteúdo do Dashboard ---
 const DashboardContent: React.FC = () => {
@@ -126,21 +139,18 @@ const DashboardContent: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [studentsSnap, profsSnap, classesSnap, transSnap] = await Promise.all([
+                const [studentsSnap, profsSnap, classesSnap] = await Promise.all([
                     db.collection("students").get(),
                     db.collection("professionals").get(),
                     db.collection("scheduledClasses").get(),
-                    db.collection("transactions").get(),
                 ]);
                 setStudents(studentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]);
                 setProfessionals(profsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]);
                 setScheduledClasses(classesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]);
-                setTransactions(transSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Transaction[]);
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {
@@ -149,6 +159,10 @@ const DashboardContent: React.FC = () => {
         };
         fetchData();
     }, []);
+
+    const activeStudentsCount = useMemo(() => {
+        return students.filter(s => s.status === 'matricula').length;
+    }, [students]);
 
     const todaysBirthdays = useMemo(() => {
         const today = new Date();
@@ -169,45 +183,38 @@ const DashboardContent: React.FC = () => {
             .filter(c => c.date === todayStr && c.status === 'scheduled')
             .sort((a, b) => a.time.localeCompare(b.time));
     }, [scheduledClasses]);
-
-    const paymentAlerts = useMemo(() => {
-        const alerts: { studentName: string; message: string; studentId: string }[] = [];
+    
+    const classesToBill = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Check for missing monthly payments
-        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-        const currentMonthName = today.toLocaleString('pt-BR', { month: 'long' });
-        const monthlyStudents = students.filter(s => s.hasMonthlyPlan && s.status === 'matricula');
-        
-        for (const student of monthlyStudents) {
-            const hasPaid = transactions.some(t => 
-                t.type === 'monthly' && 
-                t.studentId === student.id && 
-                t.month === currentMonthStr
-            );
-            if (!hasPaid) {
-                alerts.push({
-                    studentId: student.id,
-                    studentName: student.name,
-                    message: `Pendente pagamento da mensalidade de ${currentMonthName}.`
-                });
-            }
-        }
-        
-        return alerts;
-    }, [students, transactions]);
+        return scheduledClasses
+            .filter(c => {
+                const classDate = new Date(c.date);
+                return classDate < today &&
+                       c.status !== 'canceled' &&
+                       (!c.paymentStatus || c.paymentStatus === 'pending');
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [scheduledClasses]);
+
 
     if (loading) {
         return <div className="text-center p-10">Carregando informações...</div>;
     }
 
     return (
-        <div className="space-y-8 animate-fade-in-view">
+        <div className="space-y-6 animate-fade-in-view">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard title="Aulas de Hoje" value={todaysClasses.length} icon={CalendarDaysIcon} />
+                <MetricCard title="Aulas a Faturar" value={classesToBill.length} icon={BanknotesIcon} />
+                <MetricCard title="Aniversariantes do Dia" value={todaysBirthdays.length} icon={BirthdayIcon} />
+                <MetricCard title="Alunos Ativos" value={activeStudentsCount} icon={UsersIcon} />
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <section className="lg:col-span-2 space-y-6">
                      <div>
-                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon /> Aulas de Hoje ({todaysClasses.length})</h3>
+                        <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-zinc-500"/> Aulas de Hoje</h3>
                         <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
                             {todaysClasses.length > 0 ? todaysClasses.map(c => {
                                 const student = students.find(s => s.id === c.studentId);
@@ -225,23 +232,26 @@ const DashboardContent: React.FC = () => {
                         </div>
                     </div>
                      <div>
-                        <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><AlertIcon className="text-amber-500" /> Alertas de Pagamento ({paymentAlerts.length})</h3>
+                        <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BanknotesIcon className="h-5 w-5 text-amber-500" /> Aulas a Faturar</h3>
                         <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
-                            {paymentAlerts.length > 0 ? paymentAlerts.map((alert, index) => (
-                                <div key={index} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
-                                    <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                                    <div>
-                                        <p className="font-bold text-amber-800">{alert.studentName}</p>
-                                        <p className="text-amber-700">{alert.message}</p>
+                            {classesToBill.length > 0 ? classesToBill.map(c => {
+                                const student = students.find(s => s.id === c.studentId);
+                                return (
+                                    <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                                        <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
+                                            <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )) : <p className="text-zinc-500 text-center py-4">Nenhum alerta de pagamento.</p>}
+                                );
+                            }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula pendente de faturamento.</p>}
                         </div>
                     </div>
                 </section>
 
                 <aside>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BirthdayIcon /> Aniversariantes do Dia</h3>
+                    <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BirthdayIcon className="h-5 w-5 text-zinc-500"/> Aniversariantes do Dia</h3>
                     <div className="bg-white border rounded-lg p-4 space-y-3">
                         {todaysBirthdays.length > 0 ? todaysBirthdays.map((p, index) => (
                            <div key={index} className="flex items-center gap-3 text-sm">
@@ -261,7 +271,7 @@ const DashboardContent: React.FC = () => {
 
 // --- Componente Principal ---
 interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator; }
-type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings';
+type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -271,6 +281,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const menuRef = useRef<HTMLDivElement>(null);
 
     const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? false;
+    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? true;
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -285,6 +296,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         { id: 'students', label: 'Alunos', icon: BookOpenIcon, canAccess: true },
         { id: 'professionals', label: 'Equipe', icon: UserIcon, canAccess: true },
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
+        { id: 'packages', label: 'Pacotes', icon: ArchiveBoxIcon, canAccess: canAccessPackages },
         { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: true },
         { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
     ];
@@ -294,6 +306,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         students: 'Gestão de Alunos',
         professionals: 'Gestão de Equipe',
         classes: 'Gestão de Turmas',
+        packages: 'Gestão de Pacotes de Aulas',
         calendar: 'Agenda',
         settings: 'Configurações'
     };
@@ -304,6 +317,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'professionals': return <ProfessionalList onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
+            case 'packages': return <PackagesView onBack={() => setView('dashboard')} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
             default: return <DashboardContent />;

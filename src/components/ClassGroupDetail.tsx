@@ -97,12 +97,30 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                     <div className="p-4 border rounded-lg">
                         {group.schedule.type === 'recurring' && group.schedule.days && Object.keys(group.schedule.days).length > 0 ? (
                             <ul className="space-y-1">
-                                {Object.entries(group.schedule.days).map(([day, time]) => (
-                                    <li key={day} className="flex justify-between">
-                                        <span className="font-medium text-zinc-700">{dayMap[day as DayOfWeek]}</span>
-                                        <span className="text-zinc-600">{time}</span>
-                                    </li>
-                                ))}
+                                {Object.entries(group.schedule.days).map(([day, schedule]) => {
+                                    // FIX: Replaced unsafe property access on 'schedule' with a type-safe block
+                                    // to correctly handle both legacy string formats and object-based schedules.
+                                    const timeDisplay = (() => {
+                                        if (typeof schedule === 'string') {
+                                            return schedule;
+                                        }
+                                        if (schedule && typeof schedule === 'object') {
+                                            const s = schedule as { start?: string; end?: string };
+                                            if (s.start && s.end) {
+                                                return `${s.start} - ${s.end}`;
+                                            }
+                                            return s.start || 'N/A';
+                                        }
+                                        return 'N/A';
+                                    })();
+
+                                    return (
+                                        <li key={day} className="flex justify-between">
+                                            <span className="font-medium text-zinc-700">{dayMap[day as DayOfWeek]}</span>
+                                            <span className="text-zinc-600">{timeDisplay}</span>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         ) : group.schedule.type === 'single' ? (
                             <p className="text-zinc-700">

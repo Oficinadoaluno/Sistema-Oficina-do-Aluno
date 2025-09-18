@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
-import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup } from '../types';
+import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, ClassPackage } from '../types';
 import { db } from '../firebase';
 import { 
     ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon
@@ -35,7 +35,8 @@ const ScheduleClassModal: React.FC<{
     students: Student[];
     professionals: Professional[];
     allDisciplines: string[];
-}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines }) => {
+    allPackages: (ClassPackage & { usedCount: number })[];
+}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines, allPackages }) => {
     
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
@@ -48,6 +49,7 @@ const ScheduleClassModal: React.FC<{
     const [duration, setDuration] = useState(90);
     const [status, setStatus] = useState<ScheduledClass['status']>('scheduled');
     const [statusChangeReason, setStatusChangeReason] = useState('');
+    const [packageId, setPackageId] = useState<string | undefined>(undefined);
     
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
@@ -67,12 +69,14 @@ const ScheduleClassModal: React.FC<{
             setDuration(classToEdit.duration || 90);
             setStatus(classToEdit.status || 'scheduled');
             setStatusChangeReason(classToEdit.statusChangeReason || '');
+            setPackageId(classToEdit.packageId);
         } else {
             // Reset for new class
             setDate(new Date().toISOString().split('T')[0]);
             setTime(''); setStudentId(''); setProfessionalId(''); setType('Aula Regular');
             setDiscipline(''); setCustomDiscipline(''); setContent(''); setDuration(90);
             setStatus('scheduled'); setStatusChangeReason('');
+            setPackageId(undefined);
         }
     }, [classToEdit, isOpen, allDisciplines]);
 
@@ -116,6 +120,11 @@ const ScheduleClassModal: React.FC<{
         );
     }, [studentSearch, students]);
 
+    const studentActivePackages = useMemo(() => {
+        if (!studentId) return [];
+        return allPackages.filter(p => p.studentId === studentId && p.status === 'active');
+    }, [studentId, allPackages]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await onSchedule({
@@ -124,6 +133,7 @@ const ScheduleClassModal: React.FC<{
             reportRegistered: classToEdit?.reportRegistered || false,
             status,
             statusChangeReason: (status === 'canceled' || status === 'rescheduled') ? statusChangeReason : undefined,
+            packageId,
         });
         onClose();
     };
@@ -242,6 +252,20 @@ const ScheduleClassModal: React.FC<{
                            <input type="number" id="duration" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className={inputStyle} />
                         </div>
                     </div>
+                     {studentActivePackages.length > 0 && (
+                        <div className="p-3 bg-cyan-50 border-l-4 border-cyan-400 rounded-r-lg">
+                             <label htmlFor="package-select" className={labelStyle}>Usar Crédito de Pacote?</label>
+                             <select id="package-select" value={packageId || ''} onChange={e => setPackageId(e.target.value || undefined)} className={inputStyle}>
+                                 <option value="">Não (aula avulsa)</option>
+                                 {studentActivePackages.map(pkg => {
+                                     const remaining = pkg.packageSize - pkg.usedCount;
+                                     return <option key={pkg.id} value={pkg.id}>
+                                         Pacote de {pkg.packageSize} aulas ({remaining} restantes) - Comprado em {new Date(pkg.purchaseDate).toLocaleDateString('pt-BR', {timeZone:'UTC'})}
+                                     </option>;
+                                 })}
+                             </select>
+                        </div>
+                    )}
                      {availabilityWarning && (
                         <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-800 flex items-center gap-2 font-semibold">
                             <ExclamationTriangleIcon className="h-5 w-5"/>
@@ -294,6 +318,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [professionals, setProfessionals] = useState<Professional[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
+    const [allPackages, setAllPackages] = useState<ClassPackage[]>([]);
     
     // UI State
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -304,17 +329,19 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [classesSnap, studentsSnap, profsSnap, groupsSnap] = await Promise.all([
+                const [classesSnap, studentsSnap, profsSnap, groupsSnap, pkgSnap] = await Promise.all([
                     db.collection("scheduledClasses").orderBy("date", "asc").get(),
                     db.collection("students").get(),
                     db.collection("professionals").get(),
-                    db.collection("classGroups").get()
+                    db.collection("classGroups").get(),
+                    db.collection("classPackages").where("status", "==", "active").get()
                 ]);
 
                 setScheduledClasses(classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
                 setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
                 setProfessionals(profsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
                 setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
+                setAllPackages(pkgSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]);
 
             } catch (err: any) {
                 console.error(`Firestore Error (AgendaView):`, err);
@@ -353,7 +380,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                     const time = group.schedule.days[dayOfWeek];
                     if (time) {
                         const dateStr = d.toISOString().split('T')[0];
-                        groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time, professionalId: group.professionalId });
+                        groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: time.start, professionalId: group.professionalId });
                     }
                 }
             } else if (group.schedule.type === 'single' && group.schedule.date && group.schedule.time) {
@@ -383,6 +410,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         return professionals.filter(p => p.status === 'ativo' && professionalIdsWithClasses.has(p.id));
     }, [dailyClasses, professionals]);
 
+    const packagesWithUsage = useMemo(() => {
+        return allPackages.map(pkg => {
+            const usedCount = scheduledClasses.filter(c => c.packageId === pkg.id).length;
+            return { ...pkg, usedCount };
+        });
+    }, [allPackages, scheduledClasses]);
+
     const handleDateChange = (amount: number) => {
         const newDate = new Date(currentDate);
         newDate.setDate(currentDate.getDate() + amount);
@@ -391,12 +425,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
 
     const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
         try {
+            const dataToSave = {
+                ...newClassData,
+                paymentStatus: newClassData.packageId ? 'package' : 'pending'
+            };
+
             if (classToEdit) {
                 const classRef = db.collection('scheduledClasses').doc(classToEdit.id);
-                await classRef.update(sanitizeFirestore(newClassData));
+                await classRef.update(sanitizeFirestore(dataToSave as any));
                 showToast('Aula atualizada com sucesso!', 'success');
             } else {
-                await db.collection('scheduledClasses').add(sanitizeFirestore(newClassData));
+                await db.collection('scheduledClasses').add(sanitizeFirestore(dataToSave as any));
                 showToast('Aula agendada com sucesso!', 'success');
             }
         } catch (error: any) {
@@ -604,6 +643,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 students={students}
                 professionals={professionals}
                 allDisciplines={allDisciplines}
+                allPackages={packagesWithUsage}
             />
         </div>
     );

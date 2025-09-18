@@ -39,7 +39,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
     const [professionalId, setProfessionalId] = useState('');
     const [discipline, setDiscipline] = useState('');
     const [scheduleType, setScheduleType] = useState<'recurring' | 'single'>('recurring');
-    const [recurringDays, setRecurringDays] = useState<{ [key in DayOfWeek]?: string }>({});
+    const [recurringDays, setRecurringDays] = useState<{ [key in DayOfWeek]?: { start: string; end: string } }>({});
     const [singleDate, setSingleDate] = useState('');
     const [singleTime, setSingleTime] = useState('');
     const [color, setColor] = useState(pastelColors[0].name);
@@ -59,8 +59,22 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setScheduleType(groupToEdit.schedule.type);
             setColor(groupToEdit.color || pastelColors[0].name);
             if (groupToEdit.schedule.type === 'recurring') {
-                setRecurringDays(groupToEdit.schedule.days || {});
+                const sanitizedDays: { [key in DayOfWeek]?: { start: string; end: string } } = {};
+                if (groupToEdit.schedule.days) {
+                    for (const day in groupToEdit.schedule.days) {
+                        const schedule = (groupToEdit.schedule.days as any)[day];
+                        if (typeof schedule === 'string') {
+                            // Handle old format (string) gracefully
+                            sanitizedDays[day as DayOfWeek] = { start: schedule, end: '' };
+                        } else if (schedule && typeof schedule === 'object' && 'start' in schedule) {
+                            // Handle new format
+                            sanitizedDays[day as DayOfWeek] = schedule;
+                        }
+                    }
+                }
+                setRecurringDays(sanitizedDays);
             } else {
+                setRecurringDays({});
                 setSingleDate(groupToEdit.schedule.date || '');
                 setSingleTime(groupToEdit.schedule.time || '');
             }
@@ -105,14 +119,18 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
         setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
     };
     
-    const handleRecurringDayToggle = (day: DayOfWeek, time: string) => {
+    const handleRecurringDayChange = (day: DayOfWeek, type: 'start' | 'end', time: string) => {
         setRecurringDays(prev => {
             const newDays = { ...prev };
-            if (!time) {
+            const currentDay = newDays[day] || { start: '', end: '' };
+            currentDay[type] = time;
+
+            if (!currentDay.start && !currentDay.end) {
                 delete newDays[day];
             } else {
-                newDays[day] = time;
+                newDays[day] = currentDay;
             }
+
             return newDays;
         });
     };
@@ -233,16 +251,24 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
                         </div>
                         
                         {scheduleType === 'recurring' ? (
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                                 {dayOptions.map(day => (
                                     <div key={day.key} className="flex items-center gap-2">
-                                        <label htmlFor={`time-${day.key}`} className="w-20 font-medium text-zinc-600">{day.label}</label>
+                                        <label className="w-12 font-medium text-zinc-600 flex-shrink-0">{day.label}</label>
                                         <input
-                                            id={`time-${day.key}`}
                                             type="time"
-                                            value={recurringDays[day.key] || ''}
-                                            onChange={e => handleRecurringDayToggle(day.key, e.target.value)}
+                                            value={recurringDays[day.key]?.start || ''}
+                                            onChange={e => handleRecurringDayChange(day.key, 'start', e.target.value)}
                                             className={inputStyle}
+                                            aria-label={`Horário de início na ${day.label}`}
+                                        />
+                                        <span className="text-zinc-500">-</span>
+                                        <input
+                                            type="time"
+                                            value={recurringDays[day.key]?.end || ''}
+                                            onChange={e => handleRecurringDayChange(day.key, 'end', e.target.value)}
+                                            className={inputStyle}
+                                            aria-label={`Horário de término na ${day.label}`}
                                         />
                                     </div>
                                 ))}

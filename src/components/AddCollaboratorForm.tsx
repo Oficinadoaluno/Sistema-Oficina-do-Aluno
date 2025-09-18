@@ -18,6 +18,7 @@ const allAdminPermissions: { key: keyof AdminPermissions; label: string }[] = [
     { key: 'canAccessStudents', label: 'Alunos' },
     { key: 'canAccessProfessionals', label: 'Profissionais' },
     { key: 'canAccessClassGroups', label: 'Turmas' },
+    { key: 'canAccessPackages', label: 'Pacotes' },
     { key: 'canAccessAgenda', label: 'Agenda' },
     { key: 'canAccessFinancial', label: 'Financeiro' },
     { key: 'canAccessSettings', label: 'Configurações' },
@@ -49,6 +50,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
         canAccessAgenda: false,
         canAccessFinancial: false,
         canAccessSettings: false,
+        canAccessPackages: false,
     });
     const [remunerationType, setRemunerationType] = useState<'fixed' | 'commission' | undefined>(undefined);
     const [fixedSalary, setFixedSalary] = useState<number | ''>('');
@@ -57,7 +59,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
 
     const emptyPermissions = {
         canAccessStudents: false, canAccessProfessionals: false, canAccessClassGroups: false,
-        canAccessAgenda: false, canAccessFinancial: false, canAccessSettings: false,
+        canAccessAgenda: false, canAccessFinancial: false, canAccessSettings: false, canAccessPackages: false,
     };
 
     useEffect(() => {

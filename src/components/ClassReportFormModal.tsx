@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ClassReport, ScheduledClass, Student } from '../types';
-import { XMarkIcon, PlusIcon, TrashIcon } from './Icons';
+import { XMarkIcon, PlusIcon, TrashIcon, CheckCircleIcon, XCircleIcon, ClipboardDocumentCheckIcon } from './Icons';
+import { ToastContext } from '../App';
 
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 const textareaStyle = `${inputStyle} min-h-[80px]`;
 const moodOptions = ['😞', '😕', '😐', '🙂', '😊'];
+const testTypeOptions = ['Bimestral', 'Semanal', 'Trabalho', 'Simulado', 'Outro'];
+
 
 interface ClassReportFormModalProps {
     isOpen: boolean;
@@ -19,12 +22,16 @@ interface ClassReportFormModalProps {
 }
 
 const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onClose, onSave, context }) => {
-    
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
+
     const [mood, setMood] = useState('😊');
     const [initialObservations, setInitialObservations] = useState('');
     const [contents, setContents] = useState<{ discipline: string; content: string }[]>([{ discipline: '', content: '' }]);
     const [description, setDescription] = useState('');
     const [nextSteps, setNextSteps] = useState<string[]>(['']);
+    const [homeworkAssigned, setHomeworkAssigned] = useState(false);
+    const [showTestRecord, setShowTestRecord] = useState(false);
+    const [testRecord, setTestRecord] = useState<{ type: string; maxScore: number | ''; studentScore: number | '' }>({ type: 'Bimestral', maxScore: '', studentScore: '' });
     
     useEffect(() => {
         if (isOpen && context) {
@@ -35,12 +42,28 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
                 setContents(existingReport.contents && existingReport.contents.length > 0 ? existingReport.contents : [{ discipline: context.class.discipline, content: '' }]);
                 setDescription(existingReport.description || '');
                 setNextSteps(existingReport.nextSteps && existingReport.nextSteps.length > 0 ? existingReport.nextSteps : ['']);
+                setHomeworkAssigned(existingReport.homeworkAssigned || false);
+                if (existingReport.testRecord) {
+                    setTestRecord({
+                        type: existingReport.testRecord.type,
+                        maxScore: existingReport.testRecord.maxScore,
+                        studentScore: existingReport.testRecord.studentScore,
+                    });
+                    setShowTestRecord(true);
+                } else {
+                    setTestRecord({ type: 'Bimestral', maxScore: '', studentScore: '' });
+                    setShowTestRecord(false);
+                }
             } else {
+                // Reset for new report
                 setMood('😊');
                 setInitialObservations('');
                 setContents([{ discipline: context.class.discipline, content: '' }]);
                 setDescription('');
                 setNextSteps(['']);
+                setHomeworkAssigned(false);
+                setTestRecord({ type: 'Bimestral', maxScore: '', studentScore: '' });
+                setShowTestRecord(false);
             }
         }
     }, [isOpen, context]);
@@ -61,13 +84,36 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
     };
     
     const handleSaveClick = () => {
+        if (!mood) {
+            showToast('Por favor, selecione o humor do aluno.', 'error');
+            return;
+        }
+        if (context.isFirstReport && !initialObservations.trim()) {
+            showToast('O campo "Observações" é obrigatório para o primeiro relatório.', 'error');
+            return;
+        }
+        if (!description.trim()) {
+            showToast('O campo "Observações da Aula" é obrigatório.', 'error');
+            return;
+        }
+
         const reportData: ClassReport = {
             mood,
             initialObservations: context.isFirstReport ? initialObservations : undefined,
             contents: contents.filter(c => c.content.trim() !== ''),
             description,
             nextSteps: nextSteps.filter(s => s.trim() !== ''),
+            homeworkAssigned,
         };
+
+        if (showTestRecord && testRecord.maxScore !== '' && testRecord.studentScore !== '') {
+            reportData.testRecord = {
+                type: testRecord.type,
+                maxScore: Number(testRecord.maxScore),
+                studentScore: Number(testRecord.studentScore),
+            };
+        }
+
         onSave(context.class, reportData);
     };
 
@@ -84,7 +130,7 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
                 </header>
                 <main className="flex-grow overflow-y-auto p-6 space-y-6">
                     <div>
-                        <label className={labelStyle}>Como o aluno estava na aula?</label>
+                        <label className={labelStyle}>Como o aluno estava na aula? <span className="text-red-500">*</span></label>
                         <div className="flex items-center gap-2 bg-zinc-100 p-2 rounded-lg">
                             {moodOptions.map(m => (
                                 <button key={m} type="button" onClick={() => setMood(m)} className={`flex-1 text-3xl py-1 rounded-md transition-all ${mood === m ? 'bg-white shadow scale-110' : 'hover:bg-white/50'}`}>{m}</button>
@@ -94,8 +140,8 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
 
                     {context.isFirstReport && (
                          <div className="animate-fade-in-view">
-                            <label htmlFor="initial-obs" className={labelStyle}>Observações Iniciais (Diagnóstico)</label>
-                            <textarea id="initial-obs" value={initialObservations} onChange={e => setInitialObservations(e.target.value)} className={textareaStyle} placeholder="Descreva suas primeiras impressões, dificuldades e habilidades observadas, e a proposta pedagógica inicial." />
+                            <label htmlFor="initial-obs" className={labelStyle}>Observacoes <span className="text-red-500">*</span></label>
+                            <textarea id="initial-obs" value={initialObservations} onChange={e => setInitialObservations(e.target.value)} className={textareaStyle} placeholder="Descreva suas impressões sobre as habilidades, dificuldades e a estratégia utilizada" required />
                          </div>
                     )}
                     
@@ -106,11 +152,52 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
                         </div>
                     </div>
                     
-                    <div>
-                        <label htmlFor="description" className={labelStyle}>Observações Gerais da Aula</label>
-                        <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} className={textareaStyle} placeholder="Comportamento do aluno, desempenho, dificuldades, etc." />
+                     <div>
+                        <label htmlFor="description" className={labelStyle}>Observações da Aula <span className="text-red-500">*</span></label>
+                        <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} className={textareaStyle} placeholder="Descreva o desenvolvimento do aluno, dificuldades, sucessos e comportamento geral." required />
                     </div>
 
+                    <div>
+                        <label className={labelStyle}>Deixou exercício para casa?</label>
+                        <div className="flex items-center gap-4 bg-zinc-100 p-2 rounded-lg">
+                            <button type="button" onClick={() => setHomeworkAssigned(true)} className={`flex-1 flex items-center justify-center gap-2 py-1 rounded-md text-sm font-semibold ${homeworkAssigned ? 'bg-white shadow' : 'hover:bg-white/50'}`}>
+                                <CheckCircleIcon className="h-5 w-5 text-green-500" /> Sim
+                            </button>
+                            <button type="button" onClick={() => setHomeworkAssigned(false)} className={`flex-1 flex items-center justify-center gap-2 py-1 rounded-md text-sm font-semibold ${!homeworkAssigned ? 'bg-white shadow' : 'hover:bg-white/50'}`}>
+                                 <XCircleIcon className="h-5 w-5 text-red-500" /> Não
+                            </button>
+                        </div>
+                    </div>
+
+                    {!showTestRecord ? (
+                        <button type="button" onClick={() => setShowTestRecord(true)} className="w-full flex items-center justify-center gap-2 text-sm text-secondary font-semibold hover:underline py-2">
+                            <ClipboardDocumentCheckIcon className="h-5 w-5" /> Registrar Nota de Prova
+                        </button>
+                    ) : (
+                        <div className="p-4 bg-zinc-50 rounded-lg space-y-3 animate-fade-in-fast border">
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-semibold text-zinc-700">Registro de Nota de Prova</h4>
+                                <button type="button" onClick={() => setShowTestRecord(false)} className="text-sm text-zinc-500 hover:text-red-600">Remover</button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label htmlFor="test-type" className={labelStyle}>Tipo</label>
+                                    <select id="test-type" value={testRecord.type} onChange={e => setTestRecord(p => ({...p, type: e.target.value}))} className={inputStyle}>
+                                        {testTypeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                </div>
+                                 <div>
+                                    <label htmlFor="max-score" className={labelStyle}>Nota Máx.</label>
+                                    <input id="max-score" type="number" step="0.1" placeholder="10.0" value={testRecord.maxScore} onChange={e => setTestRecord(p => ({...p, maxScore: e.target.value === '' ? '' : parseFloat(e.target.value)}))} className={inputStyle}/>
+                                </div>
+                                 <div>
+                                    <label htmlFor="student-score" className={labelStyle}>Nota Aluno</label>
+                                    <input id="student-score" type="number" step="0.1" placeholder="8.5" value={testRecord.studentScore} onChange={e => setTestRecord(p => ({...p, studentScore: e.target.value === '' ? '' : parseFloat(e.target.value)}))} className={inputStyle} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
                     <div>
                         <label className={labelStyle}>Próximos Passos / Tópicos a Revisar</label>
                         <div className="space-y-2">

@@ -46,6 +46,37 @@
         { "fieldPath": "recipientUid", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "classPackages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "purchaseDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "groupAttendance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "groupStudentDailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "groupStudentDailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

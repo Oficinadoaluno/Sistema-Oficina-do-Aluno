@@ -102,11 +102,17 @@ export interface Transaction {
 
 // --- Continuity and Report Types ---
 export interface ClassReport {
-  mood?: string; // emoji character or custom text
+  mood: string; // emoji character or custom text
   contents: { discipline: string; content: string }[];
   description: string;
   initialObservations?: string; // Only for the first report for a student
   nextSteps?: string[]; // Replaces continuity plan
+  homeworkAssigned?: boolean;
+  testRecord?: {
+    type: string;
+    maxScore: number;
+    studentScore: number;
+  };
 }
 
 export interface PastClassForProfessional {
@@ -115,6 +121,19 @@ export interface PastClassForProfessional {
     subject: string;
     date: string;
     report: string;
+}
+
+// --- Class Package Types ---
+export interface ClassPackage {
+  id: string;
+  studentId: string;
+  studentName: string; // denormalized for easy display
+  packageSize: number;
+  purchaseDate: string; // YYYY-MM-DD
+  valuePaid?: number;
+  observations?: string;
+  status: 'active' | 'completed' | 'canceled';
+  // usedClasses will be derived by querying scheduledClasses with this package's ID
 }
 
 // --- Agenda Types ---
@@ -132,13 +151,15 @@ export interface ScheduledClass {
   status: 'scheduled' | 'completed' | 'canceled' | 'rescheduled';
   statusChangeReason?: string;
   report?: ClassReport;
+  packageId?: string;
+  paymentStatus?: 'paid' | 'free' | 'package' | 'pending';
 }
 
 // --- Class Group Types ---
 export interface ClassGroupSchedule {
     type: 'recurring' | 'single';
     // For recurring
-    days?: { [key in DayOfWeek]?: string }; // e.g. { segunda: '14:00', quarta: '14:00' }
+    days?: { [key in DayOfWeek]?: { start: string; end: string } }; // e.g. { segunda: { start: '14:00', end: '15:30' } }
     // For single
     date?: string;
     time?: string;
@@ -164,6 +185,24 @@ export interface GroupClassReport {
   report: ClassReport;
 }
 
+export interface GroupAttendance {
+  id: string;
+  groupId: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  status: 'present' | 'absent' | 'justified';
+}
+
+export interface GroupStudentDailyReport {
+    id: string;
+    groupId: string;
+    studentId: string;
+    date: string; // YYYY-MM-DD
+    subjects: { discipline: string; activity: string }[];
+    observations: string;
+}
+
+
 // --- System & Collaborator Types ---
 export type SystemPanel = 'admin' | 'teacher' | 'student';
 
@@ -174,6 +213,7 @@ export interface AdminPermissions {
     canAccessAgenda: boolean;
     canAccessFinancial: boolean;
     canAccessSettings: boolean;
+    canAccessPackages: boolean;
 }
 
 export interface Collaborator {

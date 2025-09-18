@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { Student, Collaborator, ScheduledClass, Professional } from '../types';
+import { Student, Collaborator, ScheduledClass, Professional, ClassPackage, ClassGroup, DayOfWeek, GroupStudentDailyReport } from '../types';
 import { db } from '../firebase';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 import { ToastContext } from '../App';
 import {
     ArrowLeftIcon, KeyIcon, CheckBadgeIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon,
-    UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon
+    UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon,
+    ChevronLeftIcon, ChevronRightIcon
 } from './Icons';
 import InfoItem from './InfoItem';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -86,15 +89,32 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                      <button onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 -mt-2 -mr-2"><XMarkIcon /></button>
                 </div>
                 <div className="mt-4 pt-4 border-t max-h-[60vh] overflow-y-auto pr-2 space-y-4">
-                    <InfoItem label="Humor do Aluno" value={<span className="text-2xl">{report.mood}</span>} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <InfoItem label="Humor do Aluno" value={<span className="text-2xl">{report.mood}</span>} />
+                        <InfoItem label="Exercício para Casa" value={report.homeworkAssigned ? 'Sim' : 'Não'} />
+                    </div>
                     {report.initialObservations && (
-                        <InfoItem label="Observações Iniciais (Diagnóstico)" value={<p className="whitespace-pre-wrap">{report.initialObservations}</p>} />
+                        <InfoItem label="Observacoes" value={<p className="whitespace-pre-wrap">{report.initialObservations}</p>} />
                     )}
+                    {report.description && (
+                        <InfoItem label="Observações da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
+                    )}
+
+                    {report.testRecord && (
+                        <div>
+                            <h4 className="text-sm font-medium text-zinc-500">Nota de Prova Registrada</h4>
+                            <div className="p-3 bg-zinc-50 rounded-md mt-1 grid grid-cols-3 gap-2">
+                                <InfoItem label="Tipo" value={report.testRecord.type} />
+                                <InfoItem label="Nota Máxima" value={report.testRecord.maxScore.toFixed(1)} />
+                                <InfoItem label="Nota Aluno" value={<span className="font-bold text-lg text-secondary">{report.testRecord.studentScore.toFixed(1)}</span>} />
+                            </div>
+                        </div>
+                    )}
+                    
                     <div>
                         <h4 className="text-sm font-medium text-zinc-500">Conteúdo Abordado</h4>
                         <div className="p-3 bg-zinc-50 rounded-md mt-1 space-y-2">{(report.contents && report.contents.length > 0) ? report.contents.map((c, index) => (<div key={index}><p className="font-semibold text-zinc-800">{c.discipline}</p><p className="text-zinc-700 pl-2">{c.content}</p></div>)) : <p className="text-zinc-500">Nenhum conteúdo especificado.</p>}</div>
                     </div>
-                    <InfoItem label="Observações Gerais da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
                     <div>
                         <h4 className="text-sm font-medium text-zinc-500">Próximos Passos / Tópicos a Revisar</h4>
                         <div className="p-3 bg-zinc-50 rounded-md mt-1">
@@ -107,6 +127,52 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Fechar</button></div>
+            </div>
+        </div>
+    );
+};
+
+interface GroupReportModalProps {
+    report: GroupStudentDailyReport | null;
+    group: ClassGroup | undefined;
+    onClose: () => void;
+}
+const GroupReportModal: React.FC<GroupReportModalProps> = ({ report, group, onClose }) => {
+    if (!report) return null;
+
+    return (
+         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4 animate-fade-in-down" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-bold text-zinc-800">Relatório da Aula em Turma</h3>
+                        <p className="text-zinc-600 font-semibold">{group?.name || 'Turma'}</p>
+                        <p className="text-sm text-zinc-500">{new Date(report.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                    </div>
+                     <button onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 -mt-2 -mr-2"><XMarkIcon /></button>
+                </div>
+                <div className="mt-4 pt-4 border-t max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                    <div>
+                        <h4 className="text-sm font-medium text-zinc-500">Matérias e Atividades</h4>
+                        <div className="p-3 bg-zinc-50 rounded-md mt-1 space-y-2">
+                            {(report.subjects && report.subjects.length > 0) ? report.subjects.map((s, index) => (
+                                <div key={index} className="flex justify-between">
+                                    <p className="font-semibold text-zinc-800">{s.discipline}</p>
+                                    <p className="text-zinc-700 font-medium bg-zinc-200 px-2 py-0.5 rounded-full text-xs">{s.activity}</p>
+                                </div>
+                            )) : <p className="text-zinc-500">Nenhuma matéria registrada.</p>}
+                        </div>
+                    </div>
+                     <div>
+                        <h4 className="text-sm font-medium text-zinc-500">Observações e Ocorrências</h4>
+                        <div className="p-3 bg-zinc-50 rounded-md mt-1">
+                            <p className="whitespace-pre-wrap text-zinc-700">{report.observations || 'Nenhuma observação.'}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end">
+                    <button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Fechar</button>
+                </div>
             </div>
         </div>
     );
@@ -163,34 +229,38 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
     const [selectedClassReport, setSelectedClassReport] = useState<ScheduledClass | null>(null);
+    const [selectedGroupReport, setSelectedGroupReport] = useState<GroupStudentDailyReport | null>(null);
     const [allScheduledClasses, setAllScheduledClasses] = useState<ScheduledClass[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
+    const [classPackages, setClassPackages] = useState<ClassPackage[]>([]);
+    const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
+    const [groupReports, setGroupReports] = useState<GroupStudentDailyReport[]>([]);
+    const [monthOffset, setMonthOffset] = useState(0);
+
 
     useEffect(() => {
         const createSpecificErrorHandler = (context: string) => (error: any) => {
             console.error(`Firestore (${context}) Error:`, error);
-            if (error.code === 'permission-denied') {
-                showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
-            } else if (error.code === 'failed-precondition') {
-                showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
-            } else if (error.code === 'unavailable') {
-                showToast(`Erro de conexão ao buscar ${context.toLowerCase()}. Verifique sua internet.`, "error");
-            } else {
-                showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
-            }
+            showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
         };
 
         const fetchData = async () => {
             try {
-                const qClasses = db.collection("scheduledClasses").where("studentId", "==", student.id);
-                const classesSnap = await qClasses.get();
+                const [classesSnap, professionalsSnap, packagesSnap, groupsSnap, groupReportsSnap] = await Promise.all([
+                    db.collection("scheduledClasses").where("studentId", "==", student.id).get(),
+                    db.collection("professionals").get(),
+                    db.collection("classPackages").where("studentId", "==", student.id).get(),
+                    db.collection("classGroups").where("studentIds", "array-contains", student.id).get(),
+                    db.collection("groupStudentDailyReports").where("studentId", "==", student.id).orderBy("date", "desc").get(),
+                ]);
+
                 const classes = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
                 classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                 setAllScheduledClasses(classes);
-
-                const qProfessionals = db.collection("professionals");
-                const professionalsSnap = await qProfessionals.get();
                 setProfessionals(professionalsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
+                setClassPackages(packagesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]);
+                setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
+                setGroupReports(groupReportsSnap.docs.map(d => ({id: d.id, ...d.data()})) as GroupStudentDailyReport[]);
 
             } catch (error: any) {
                 createSpecificErrorHandler('dados do aluno')(error);
@@ -198,7 +268,6 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         };
 
         fetchData();
-        
     }, [student.id, showToast]);
     
     const { upcomingClasses, pastClasses } = useMemo(() => {
@@ -210,6 +279,58 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         return { upcomingClasses: upcoming, pastClasses: past };
     }, [allScheduledClasses]);
 
+    const packagesWithUsage = useMemo(() => {
+        return classPackages.map(pkg => {
+            const usedCount = allScheduledClasses.filter(c => c.packageId === pkg.id).length;
+            const remainingCount = pkg.packageSize - usedCount;
+            return { ...pkg, usedCount, remainingCount };
+        }).sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+    }, [classPackages, allScheduledClasses]);
+
+    const { monthName, monthlyClasses } = useMemo(() => {
+        const targetDate = new Date();
+        targetDate.setUTCHours(0, 0, 0, 0);
+        targetDate.setDate(1);
+        targetDate.setMonth(targetDate.getMonth() + monthOffset);
+
+        const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        const monthStart = targetDate;
+        const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+        const individualClassesInMonth = allScheduledClasses.filter(c => {
+            const classDate = new Date(c.date);
+            return classDate >= monthStart && classDate <= monthEnd;
+        });
+
+        const groupClassInstancesInMonth: (ScheduledClass & {isGroup: true, groupName: string})[] = [];
+        classGroups.forEach(group => {
+            if (group.status !== 'active' || group.schedule.type !== 'recurring' || !group.schedule.days) return;
+            for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
+                const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[d.getUTCDay()];
+                const timeInfo = group.schedule.days[dayOfWeek];
+                if (timeInfo) {
+                    groupClassInstancesInMonth.push({
+                        id: `group-${group.id}-${d.toISOString().split('T')[0]}`,
+                        date: d.toISOString().split('T')[0],
+                        time: timeInfo.start,
+                        studentId: student.id,
+                        professionalId: group.professionalId,
+                        discipline: group.discipline || 'Turma',
+                        isGroup: true,
+                        groupName: group.name,
+                        // Dummy fields to satisfy type
+                        type: 'Aula Regular', content: '', duration: 0, reportRegistered: false, status: 'scheduled'
+                    });
+                }
+            }
+        });
+        
+        const combined = [...individualClassesInMonth, ...groupClassInstancesInMonth]
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
+
+        return { monthName, monthlyClasses: combined };
+    }, [monthOffset, allScheduledClasses, classGroups, student.id]);
+
     const updateStatus = async (newStatus: Student['status']) => {
         const studentRef = db.collection("students").doc(student.id);
         try {
@@ -217,10 +338,47 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             showToast(`Status do aluno atualizado para "${newStatus}"!`, 'success');
         } catch (error: any) {
             console.error("Error updating student status: ", error);
-            if (error.code === 'permission-denied') showToast("Você não tem permissão para alterar o status.", "error");
-            else showToast("Falha ao atualizar status.", 'error');
+            showToast("Falha ao atualizar status.", 'error');
         }
     };
+    
+    const handlePaymentStatusChange = async (classId: string, newStatus: ScheduledClass['paymentStatus']) => {
+        const classToUpdate = allScheduledClasses.find(c => c.id === classId);
+        if (!classToUpdate) return;
+    
+        const originalStatus = classToUpdate.paymentStatus;
+        const originalPackageId = classToUpdate.packageId;
+    
+        setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: newStatus } : c));
+    
+        try {
+            if (newStatus === 'package') {
+                const availablePackage = packagesWithUsage.find(p => p.status === 'active' && p.remainingCount > 0);
+    
+                if (!availablePackage) {
+                    showToast('Aluno não possui créditos de pacote disponíveis.', 'error');
+                    setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: originalStatus } : c));
+                    return;
+                }
+                
+                await db.collection('scheduledClasses').doc(classId).update({ paymentStatus: 'package', packageId: availablePackage.id });
+                showToast('Aula debitada do pacote.', 'success');
+
+            } else {
+                let updateData: any = { paymentStatus: newStatus };
+                if (originalStatus === 'package' || originalPackageId) {
+                    updateData.packageId = firebase.firestore.FieldValue.delete();
+                    showToast('Crédito do pacote estornado.', 'info');
+                }
+                await db.collection('scheduledClasses').doc(classId).update(updateData);
+                showToast('Status da aula atualizado.', 'success');
+            }
+        } catch (error) {
+            showToast('Erro ao atualizar status da aula.', 'error');
+            setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: originalStatus, packageId: originalPackageId } : c));
+        }
+    };
+
 
     const getStatusStyles = (status: Student['status']) => ({ matricula: 'bg-cyan-100 text-cyan-800', prospeccao: 'bg-amber-100 text-amber-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
     const getStatusText = (status: Student['status']) => ({ matricula: 'Matriculado', prospeccao: 'Prospecção', inativo: 'Inativo' }[status]);
@@ -253,13 +411,40 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 
                 {showAllInfo && (<section><StudentInfoDisplay student={student} /></section>)}
 
+                 <section>
+                    <div className="flex items-center justify-between mb-4">
+                         <h3 className="text-xl font-semibold text-zinc-700">Aulas do Mês</h3>
+                         <div className="flex items-center gap-2">
+                            <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
+                            <span className="font-semibold text-lg text-zinc-800 capitalize">{monthName}</span>
+                            <button onClick={() => setMonthOffset(monthOffset + 1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronRightIcon /></button>
+                        </div>
+                    </div>
+                     <div className="border rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-zinc-200">
+                            <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase w-48">Status Pagamento</th></tr></thead>
+                            <tbody className="bg-white divide-y divide-zinc-200">{monthlyClasses.map(aula => (<tr key={aula.id} className={(aula as any).isGroup ? 'bg-zinc-50' : ''}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {aula.time}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{aula.discipline} {(aula as any).isGroup && <span className="text-xs font-normal text-zinc-500">({(aula as any).groupName})</span>}</td><td className="px-4 py-3 text-sm text-zinc-600">{professionals.find(p => p.id === aula.professionalId)?.name || 'N/A'}</td><td className="px-4 py-3 text-sm">
+                                {!(aula as any).isGroup ? (
+                                    <select value={aula.paymentStatus || 'pending'} onChange={e => handlePaymentStatusChange(aula.id, e.target.value as any)} className="w-full text-sm p-1 border-zinc-300 rounded-md focus:ring-secondary focus:border-secondary">
+                                        <option value="pending">Pendente</option>
+                                        <option value="paid">Paga</option>
+                                        <option value="package">Pacote</option>
+                                        <option value="free">Gratuita</option>
+                                    </select>
+                                ) : (<span className="text-zinc-400">N/A</span>)}
+                            </td></tr>))}</tbody>
+                        </table>
+                        {monthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada neste mês.</p>}
+                    </div>
+                </section>
+
                 <section>
-                    <div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Próximas Aulas</h3></div>
+                    <div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Próximas Aulas Individuais</h3></div>
                     <div className="space-y-3">{upcomingClasses.length > 0 ? upcomingClasses.map(aula => (<div key={aula.id} className="bg-zinc-50 p-3 rounded-lg flex items-center justify-between"><div><p className="font-bold text-zinc-800">{aula.discipline}</p><p className="text-sm text-zinc-500">Prof. {professionals.find(p=>p.id === aula.professionalId)?.name || 'N/A'}</p></div><div className="text-right text-sm text-zinc-600"><p>{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p><p className="flex items-center justify-end gap-1"><ClockIcon/> {aula.time}</p></div></div>)) : <p className="text-zinc-500 text-sm p-4 text-center">Nenhuma aula agendada.</p>}</div>
                 </section>
 
                 <section>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Histórico de Aulas</h3>
+                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Histórico de Aulas Individuais</h3>
                     <div className="border rounded-lg overflow-hidden">
                         <table className="min-w-full divide-y divide-zinc-200">
                             <thead className="bg-zinc-50"><tr><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th scope="col" className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
@@ -268,10 +453,22 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                         {pastClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhum histórico de aulas encontrado.</p>}
                     </div>
                 </section>
+
+                <section>
+                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Histórico de Aulas em Turma</h3>
+                    <div className="border rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-zinc-200">
+                            <thead className="bg-zinc-50"><tr><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Turma</th><th scope="col" className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
+                            <tbody className="bg-white divide-y divide-zinc-200">{groupReports.map(report => (<tr key={report.id}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(report.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{classGroups.find(g => g.id === report.groupId)?.name || 'Turma não encontrada'}</td><td className="px-4 py-3 text-right text-sm"><button onClick={() => setSelectedGroupReport(report)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Relatório</button></td></tr>))}</tbody>
+                        </table>
+                        {groupReports.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhum relatório de aulas em turma encontrado.</p>}
+                    </div>
+                </section>
             </main>
         </div>
         <ManageStudentModal isOpen={isAccessModalOpen} onClose={() => setIsAccessModalOpen(false)} onInactivate={() => updateStatus('inativo')} student={student} onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} />
         <ClassReportModal aula={selectedClassReport} onClose={() => setSelectedClassReport(null)} professionals={professionals}/>
+        <GroupReportModal report={selectedGroupReport} group={classGroups.find(g => g.id === selectedGroupReport?.groupId)} onClose={() => setSelectedGroupReport(null)} />
         <style>{`
             @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out forwards; }
             @keyframes fade-in-down { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } } .animate-fade-in-down { animation: fade-in-down 0.2s ease-out forwards; }

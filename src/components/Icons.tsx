@@ -35,13 +35,16 @@ import {
   ClipboardDocumentIcon as HeroClipboardDocumentIcon,
   ChevronLeftIcon as HeroChevronLeftIcon,
   ChevronRightIcon as HeroChevronRightIcon,
+  ArchiveBoxIcon as HeroArchiveBoxIcon,
   ArchiveBoxXMarkIcon as HeroArchiveBoxXMarkIcon,
   UserGroupIcon as HeroUserGroupIcon,
   FunnelIcon as HeroFunnelIcon,
   EyeIcon as HeroEyeIcon,
   EyeSlashIcon as HeroEyeSlashIcon,
   ArrowUpIcon as HeroArrowUpIcon,
-  ArrowDownIcon as HeroArrowDownIcon
+  ArrowDownIcon as HeroArrowDownIcon,
+  ClipboardDocumentCheckIcon as HeroClipboardDocumentCheckIcon,
+  XCircleIcon as HeroXCircleIcon
 } from '@heroicons/react/24/outline';
 import {
   CheckBadgeIcon as HeroCheckBadgeIcon,
@@ -187,6 +190,10 @@ export const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className =
   <HeroCheckIcon className={className} {...props} />
 );
 
+export const ArchiveBoxIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+  <HeroArchiveBoxIcon className={className} {...props} />
+);
+
 export const ArchiveBoxXMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
   <HeroArchiveBoxXMarkIcon className={className} {...props} />
 );
@@ -229,4 +236,12 @@ export const TrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className =
 
 export const SparklesIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
   <HeroSparklesIcon className={className} {...props} />
+);
+
+export const ClipboardDocumentCheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+  <HeroClipboardDocumentCheckIcon className={className} {...props} />
+);
+
+export const XCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+  <HeroXCircleIcon className={className} {...props} />
 );

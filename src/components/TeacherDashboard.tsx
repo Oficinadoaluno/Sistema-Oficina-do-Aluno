@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
-import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport } from '../types';
+import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -9,13 +9,222 @@ import ClassReportFormModal from './ClassReportFormModal';
 import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
-    LockClosedIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon, ChartPieIcon
+    LockClosedIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon, ChartPieIcon,
+    ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
+
+// --- Group Student Report Modal ---
+const activityOptions = ['Trabalho', 'Tarefas', 'Estudo', 'Outro'];
+
+interface GroupStudentReportModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (reportData: Omit<GroupStudentDailyReport, 'id' | 'groupId' | 'studentId' | 'date'>) => void;
+    student: Student;
+    date: string;
+    existingReport: GroupStudentDailyReport | null;
+}
+
+const GroupStudentReportModal: React.FC<GroupStudentReportModalProps> = ({ isOpen, onClose, onSave, student, date, existingReport }) => {
+    const [subjects, setSubjects] = useState<{ discipline: string; activity: string }[]>([{ discipline: '', activity: 'Estudo' }]);
+    const [observations, setObservations] = useState('');
+
+    useEffect(() => {
+        if (existingReport) {
+            setSubjects(existingReport.subjects.length > 0 ? existingReport.subjects : [{ discipline: '', activity: 'Estudo' }]);
+            setObservations(existingReport.observations || '');
+        } else {
+            setSubjects([{ discipline: '', activity: 'Estudo' }]);
+            setObservations('');
+        }
+    }, [existingReport, isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleSubjectChange = (index: number, field: 'discipline' | 'activity', value: string) => {
+        const newSubjects = [...subjects];
+        newSubjects[index][field] = value;
+        setSubjects(newSubjects);
+    };
+
+    const addSubject = () => setSubjects([...subjects, { discipline: '', activity: 'Estudo' }]);
+    const removeSubject = (index: number) => {
+        if (subjects.length > 1) setSubjects(subjects.filter((_, i) => i !== index));
+    };
+
+    const handleSave = () => {
+        onSave({
+            subjects: subjects.filter(s => s.discipline.trim() !== ''),
+            observations,
+        });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <header className="p-4 border-b">
+                    <h3 className="font-bold text-zinc-800">Relatório de {student.name}</h3>
+                    <p className="text-sm text-zinc-500">Data: {new Date(date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                </header>
+                <main className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    <div>
+                        <label className={labelStyle}>Matérias e Atividades</label>
+                        <div className="space-y-2">
+                            {subjects.map((s, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <input type="text" placeholder="Disciplina" value={s.discipline} onChange={e => handleSubjectChange(i, 'discipline', e.target.value)} className={inputStyle} />
+                                    <select value={s.activity} onChange={e => handleSubjectChange(i, 'activity', e.target.value)} className={`${inputStyle} w-40`}>
+                                        {activityOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <button type="button" onClick={() => removeSubject(i)} className="text-red-500 hover:text-red-700 p-2 disabled:opacity-50" disabled={subjects.length <= 1}><TrashIcon/></button>
+                                </div>
+                            ))}
+                        </div>
+                         <button type="button" onClick={addSubject} className="text-sm font-semibold text-secondary hover:underline mt-2 flex items-center gap-1"><PlusIcon className="h-4 w-4"/> Adicionar Matéria</button>
+                    </div>
+                     <div>
+                        <label className={labelStyle}>Observações e Ocorrências</label>
+                        <textarea value={observations} onChange={e => setObservations(e.target.value)} rows={4} className={inputStyle}></textarea>
+                    </div>
+                </main>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 rounded-lg">Cancelar</button>
+                    <button type="button" onClick={handleSave} className="py-2 px-6 bg-secondary text-white rounded-lg">Salvar</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
+
+// --- Group Session Manager ---
+interface GroupSessionManagerProps {
+    group: ClassGroup;
+    students: Student[];
+    onBack: () => void;
+}
+
+const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, students: allStudents, onBack }) => {
+    const { showToast } = useContext(ToastContext);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [attendance, setAttendance] = useState<Map<string, GroupAttendance>>(new Map());
+    const [reports, setReports] = useState<Map<string, GroupStudentDailyReport>>(new Map());
+    const [isLoading, setIsLoading] = useState(true);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [studentForReport, setStudentForReport] = useState<Student | null>(null);
+
+    const groupStudents = useMemo(() => allStudents.filter(s => group.studentIds.includes(s.id)), [allStudents, group.studentIds]);
+
+    useEffect(() => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        setIsLoading(true);
+        
+        const fetchSessionData = async () => {
+            try {
+                const attendanceQuery = db.collection('groupAttendance').where('groupId', '==', group.id).where('date', '==', dateStr);
+                const reportsQuery = db.collection('groupStudentDailyReports').where('groupId', '==', group.id).where('date', '==', dateStr);
+
+                const [attendanceSnap, reportsSnap] = await Promise.all([attendanceQuery.get(), reportsQuery.get()]);
+
+                const newAttendance = new Map<string, GroupAttendance>();
+                attendanceSnap.forEach(doc => newAttendance.set(doc.data().studentId, {id: doc.id, ...doc.data()} as GroupAttendance));
+                setAttendance(newAttendance);
+
+                const newReports = new Map<string, GroupStudentDailyReport>();
+                reportsSnap.forEach(doc => newReports.set(doc.data().studentId, {id: doc.id, ...doc.data()} as GroupStudentDailyReport));
+                setReports(newReports);
+
+            } catch (error) {
+                showToast("Erro ao carregar dados da turma.", "error");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchSessionData();
+    }, [group.id, currentDate, showToast]);
+
+    const handleAttendanceChange = async (studentId: string, status: GroupAttendance['status']) => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const existingRecord = attendance.get(studentId);
+
+        const newAttendance = new Map(attendance);
+        
+        try {
+            if (existingRecord) {
+                await db.collection('groupAttendance').doc(existingRecord.id).update({ status });
+                newAttendance.set(studentId, { ...existingRecord, status });
+            } else {
+                const newRecordRef = await db.collection('groupAttendance').add({ groupId: group.id, studentId, date: dateStr, status });
+                newAttendance.set(studentId, { id: newRecordRef.id, groupId: group.id, studentId, date: dateStr, status });
+            }
+            setAttendance(newAttendance);
+        } catch (error) {
+            showToast("Erro ao salvar presença.", "error");
+        }
+    };
+    
+    const handleSaveReport = async (reportData: Omit<GroupStudentDailyReport, 'id' | 'groupId' | 'studentId' | 'date'>) => {
+        if (!studentForReport) return;
+        
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const existingReport = reports.get(studentForReport.id);
+        const reportToSave = { ...reportData, groupId: group.id, studentId: studentForReport.id, date: dateStr };
+
+        try {
+            if (existingReport) {
+                await db.collection('groupStudentDailyReports').doc(existingReport.id).update(sanitizeFirestore(reportToSave));
+            } else {
+                await db.collection('groupStudentDailyReports').add(sanitizeFirestore(reportToSave));
+            }
+            showToast("Relatório salvo!", "success");
+        } catch (error) {
+             showToast("Erro ao salvar relatório.", "error");
+        }
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
+             {studentForReport && <GroupStudentReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onSave={handleSaveReport} student={studentForReport} date={currentDate.toISOString().split('T')[0]} existingReport={reports.get(studentForReport.id) || null} />}
+            <header className="flex items-center gap-4 mb-4">
+                <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 p-2 rounded-full hover:bg-zinc-100"><ArrowLeftIcon/></button>
+                <div>
+                    <h2 className="text-2xl font-bold text-zinc-800">{group.name}</h2>
+                    <p className="text-sm text-zinc-500">Gerenciamento de Turma</p>
+                </div>
+            </header>
+            <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={() => setCurrentDate(d => new Date(d.setDate(d.getDate() - 1)))} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
+                <span className="font-semibold text-lg">{currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</span>
+                <button onClick={() => setCurrentDate(d => new Date(d.setDate(d.getDate() + 1)))} className="p-2 rounded-full hover:bg-zinc-100"><ChevronRightIcon /></button>
+            </div>
+            <div className="flex-grow overflow-y-auto border rounded-lg">
+                <table className="min-w-full divide-y">
+                    <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Presença</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Relatório</th></tr></thead>
+                    <tbody className="divide-y">{groupStudents.map(student => {
+                        const studentAttendance = attendance.get(student.id)?.status;
+                        const hasReport = reports.has(student.id);
+                        return (
+                            <tr key={student.id} className="hover:bg-zinc-50">
+                                <td className="px-4 py-2 font-medium">{student.name}</td>
+                                <td className="px-4 py-2"><div className="flex items-center gap-2 text-sm">{['present', 'absent', 'justified'].map(s => <button key={s} onClick={() => handleAttendanceChange(student.id, s as any)} className={`px-2 py-0.5 rounded-full font-semibold ${studentAttendance === s ? 'bg-secondary text-white' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}>{s === 'present' ? 'P' : s === 'absent' ? 'F' : 'J'}</button>)}</div></td>
+                                <td className="px-4 py-2">
+                                    {studentAttendance === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-cyan-100 text-cyan-700' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
+                                </td>
+                            </tr>
+                        );
+                    })}</tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 
 const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: Professional }> = ({ isOpen, onClose, user }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
@@ -119,7 +328,7 @@ const DashboardCard: React.FC<{ title: string; value: string | number; icon: Rea
 
 // --- Componente Principal ---
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
-type View = 'dashboard' | 'availability';
+type View = 'dashboard' | 'availability' | 'groupSession';
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
@@ -129,6 +338,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportContext, setReportContext] = useState<any>(null);
+    const [selectedGroup, setSelectedGroup] = useState<ClassGroup | null>(null);
 
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
@@ -238,6 +448,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         });
         setIsReportModalOpen(true);
     };
+    
+    const handleViewGroup = (group: ClassGroup) => {
+        setSelectedGroup(group);
+        setView('groupSession');
+    };
 
     const navItems = [
         { id: 'dashboard', label: 'Painel', icon: ChartPieIcon },
@@ -247,12 +462,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const pageTitles: Record<View, string> = {
         dashboard: 'Meu Painel',
         availability: 'Disponibilidade Semanal',
+        groupSession: 'Gerenciar Turma',
     };
 
     const renderContent = () => {
         switch (view) {
             case 'availability':
                 return <WeeklyAvailabilityComponent initialAvailability={currentUser.availability || {}} onSave={handleSaveAvailability} />;
+            case 'groupSession':
+                return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} />;
             case 'dashboard':
             default:
                 return (
@@ -305,7 +523,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                             <aside className="space-y-6">
                                 <div className="bg-white border p-4 rounded-lg">
                                     <h3 className="text-lg font-semibold text-zinc-700 mb-2">Minhas Turmas</h3>
-                                    <ul className="space-y-2">{classGroups.length > 0 ? classGroups.map(g => <li key={g.id} className="font-semibold">{g.name}</li>) : <p className="text-sm text-zinc-500">Nenhuma turma atribuída.</p>}</ul>
+                                    <ul className="space-y-2">{classGroups.length > 0 ? classGroups.map(g => (
+                                        <li key={g.id}>
+                                            <button onClick={() => handleViewGroup(g)} className="font-semibold text-left w-full hover:bg-zinc-100 p-2 rounded-md transition-colors">{g.name}</button>
+                                        </li>
+                                    )) : <p className="text-sm text-zinc-500">Nenhuma turma atribuída.</p>}</ul>
                                 </div>
                             </aside>
                         </div>

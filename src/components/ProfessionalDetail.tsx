@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Professional, WeeklyAvailability, DayOfWeek, ScheduledClass, ClassGroup } from '../types';
-import ProfessionalFinancialModal from './ProfessionalFinancialModal';
+import { Professional, WeeklyAvailability, DayOfWeek } from '../types';
 import WeeklyAvailabilityComponent from './WeeklyAvailability';
 import { db } from '../firebase';
 import { ToastContext } from '../App';
 import { 
-    ArrowLeftIcon, CurrencyDollarIcon, KeyIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon, 
-    UserPlusIcon, PencilIcon, XMarkIcon
+    ArrowLeftIcon, KeyIcon, CalendarDaysIcon, UserMinusIcon, 
+    UserPlusIcon, PencilIcon
 } from './Icons';
 
 const formatPhoneForDisplay = (phone?: string): string => {
@@ -29,7 +28,6 @@ const InfoItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
 interface ManageProfessionalModalProps { isOpen: boolean; onClose: () => void; onInactivate: () => void; professional: Professional; onEdit: () => void; }
 const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpen, onClose, onInactivate, professional, onEdit }) => {
     if (!isOpen) return null;
-    // TODO: Connect login/password to Firebase Auth
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
@@ -49,45 +47,8 @@ interface ProfessionalDetailProps { professional: Professional; onBack: () => vo
 const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, onBack, onEdit }) => {
     const { showToast } = useContext(ToastContext);
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-    const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
     
-    const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
-    const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
-
-    useEffect(() => {
-        const createErrorHandler = (context: string) => (error: any) => {
-            console.error(`Firestore (${context}) Error:`, error);
-            if (error.code === 'permission-denied') {
-                showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
-            } else if (error.code === 'failed-precondition') {
-                showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
-            } else if (error.code === 'unavailable') {
-                showToast("Erro de conexão. Verifique sua internet.", "error");
-            }
-        };
-
-        const fetchData = async () => {
-            try {
-                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", professional.id);
-                const qGroups = db.collection("classGroups").where("professionalId", "==", professional.id);
-                
-                const [classesSnap, groupsSnap] = await Promise.all([
-                    qClasses.get(),
-                    qGroups.get()
-                ]);
-
-                setScheduledClasses(classesSnap.docs.map(d=>({id: d.id, ...d.data()})) as ScheduledClass[]);
-                setClassGroups(groupsSnap.docs.map(d=>({id: d.id, ...d.data()})) as ClassGroup[]);
-
-            } catch (error) {
-                createErrorHandler('dados do profissional')(error);
-            }
-        };
-
-        fetchData();
-    }, [professional.id, showToast]);
-
     const updateStatus = async (newStatus: Professional['status']) => {
         try {
             const profRef = db.collection("professionals").doc(professional.id);
@@ -119,46 +80,7 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
     };
 
     const getStatusStyles = (status: Professional['status']) => ({ ativo: 'bg-cyan-100 text-cyan-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
-    const dayNameToIndex: Record<DayOfWeek, number> = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const getDayOfWeekCountInMonthUntilDate = (year: number, month: number, dayOfWeek: number, limitDate: Date): number => {
-        let count = 0;
-        const d = new Date(year, month, 1);
-        while (d.getMonth() === month && d < limitDate) {
-            if (d.getDay() === dayOfWeek) {
-                count++;
-            }
-            d.setDate(d.getDate() + 1);
-        }
-        return count;
-    };
     
-    const individualHours = scheduledClasses
-    .filter(c => {
-        const classDateTime = new Date(`${c.date}T${c.time || '00:00'}`);
-        return classDateTime < now && c.status !== 'canceled' && c.status !== 'rescheduled';
-    })
-    .reduce((t, c) => t + (c.duration / 60), 0);
-
-    const groupHours = classGroups.filter(g => g.status === 'active').reduce((t, g) => {
-        let h = 0;
-        if (g.schedule.type === 'recurring' && g.schedule.days) {
-            for (const day of Object.keys(g.schedule.days)) {
-                const idx = dayNameToIndex[day as DayOfWeek];
-                if (idx !== undefined) {
-                    h += getDayOfWeekCountInMonthUntilDate(currentYear, currentMonth, idx, now) * g.creditsToDeduct;
-                }
-            }
-        }
-        return t + h;
-    }, 0);
-
-    const totalHours = individualHours + groupHours;
-    const estimatedEarnings = (individualHours * (professional.hourlyRateIndividual || 0)) + (groupHours * (professional.hourlyRateGroup || 0));
-
     return (
         <>
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
@@ -176,17 +98,14 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto space-y-8 pr-2 -mr-2">
-                <section className="bg-neutral p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4"><div className="bg-primary/10 p-3 rounded-full"><CurrencyDollarIcon className="h-8 w-8 text-primary" /></div><div><h3 className="text-sm font-medium text-zinc-500 uppercase">Ganhos Previstos ({now.toLocaleString('pt-BR', { month: 'long' })})</h3><p className="text-4xl font-bold text-primary">R$ {estimatedEarnings.toFixed(2).replace('.',',')}</p></div></div>
-                    <div className="flex items-center justify-around gap-4 p-2 sm:border-l sm:pl-4"><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Individual</h3><p className="text-xl font-bold text-zinc-700">{individualHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Turma</h3><p className="text-xl font-bold text-zinc-700">{groupHours.toFixed(1)}h</p></div><div className="text-center"><h3 className="text-xs font-medium text-zinc-500 uppercase">Total</h3><p className="text-xl font-bold text-zinc-700">{totalHours.toFixed(1)}h</p></div></div>
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto"><button onClick={() => setIsFinancialModalOpen(true)} className="flex-1 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Financeiro</button><button onClick={() => setShowAllInfo(!showAllInfo)} className="flex-1 py-2 px-4 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300">{showAllInfo ? 'Ocultar' : 'Mostrar'} Detalhes</button></div>
+                <section className="bg-neutral p-4 rounded-lg">
+                    <button onClick={() => setShowAllInfo(!showAllInfo)} className="w-full py-2 px-4 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300">{showAllInfo ? 'Ocultar' : 'Mostrar'} Detalhes Cadastrais</button>
                 </section>
                 {showAllInfo && (<section className="animate-fade-in-fast space-y-6"><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Pessoais e Contato</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Nome Completo" value={professional.name} /><InfoItem label="Email" value={professional.email} /><InfoItem label="Celular" value={formatPhoneForDisplay(professional.phone)} /><InfoItem label="Endereço" value={professional.address} /><InfoItem label="CPF" value={professional.cpf} /><InfoItem label="Data de Nascimento" value={professional.birthDate ? new Date(professional.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined} /></div></fieldset><fieldset className="border-t pt-4"><legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados Acadêmicos e Financeiros</legend><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"><InfoItem label="Formação" value={professional.education} /><InfoItem label="Colégio Atual" value={professional.currentSchool} /><InfoItem label="Valor Hora/Aula Individual" value={professional.hourlyRateIndividual?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Valor Hora/Aula Turma" value={professional.hourlyRateGroup?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /><InfoItem label="Certificações" value={professional.certifications} /><InfoItem label="Chave PIX" value={professional.pixKey} /><InfoItem label="Banco" value={professional.bank} /><InfoItem label="Agência" value={professional.agency} /><InfoItem label="Conta" value={professional.account} /></div></fieldset></section>)}
                 <section><div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Disponibilidade Semanal</h3></div><WeeklyAvailabilityComponent initialAvailability={professional.availability || {}} onSave={handleSaveAvailability} /></section>
             </main>
         </div>
         <ManageProfessionalModal isOpen={isAccessModalOpen} onClose={() => setIsAccessModalOpen(false)} onInactivate={() => updateStatus('inativo')} professional={professional} onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} />
-        <ProfessionalFinancialModal isOpen={isFinancialModalOpen} onClose={() => setIsFinancialModalOpen(false)} professional={professional} />
         <style>{`@keyframes fade-in-fast{from{opacity:0}to{opacity:1}}.animate-fade-in-fast{animation:fade-in-fast .2s ease-out forwards}@keyframes fade-in-down{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}.animate-fade-in-down{animation:fade-in-down .2s ease-out forwards}`}</style>
         </>
     );

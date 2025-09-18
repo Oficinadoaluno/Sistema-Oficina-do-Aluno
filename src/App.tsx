@@ -123,18 +123,10 @@ const AppRouter: React.FC = () => {
 
   if (authUser && userData) {
     if (selectedRole === UserRole.Admin) {
-      return (
-        <main className="min-h-screen bg-neutral font-sans">
-           <AdminDashboard onLogout={handleLogout} currentUser={userData as Collaborator} />
-        </main>
-      );
+      return <AdminDashboard onLogout={handleLogout} currentUser={userData as Collaborator} />;
     }
     if (selectedRole === UserRole.Teacher) {
-      return (
-         <main className="min-h-screen bg-neutral font-sans">
-           <TeacherDashboard onLogout={handleLogout} currentUser={userData as Professional} />
-        </main>
-      )
+      return <TeacherDashboard onLogout={handleLogout} currentUser={userData as Professional} />;
     }
     return <LoadingScreen message="Verificando permissões..." />;
   }

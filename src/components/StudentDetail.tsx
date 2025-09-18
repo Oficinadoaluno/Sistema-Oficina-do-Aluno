@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { Student, Collaborator, ScheduledClass, ContinuityItem, Professional } from '../types';
-import FinancialModal from './FinancialModal';
+import { Student, Collaborator, ScheduledClass, Professional } from '../types';
 import { db } from '../firebase';
 import { ToastContext } from '../App';
 import {
-    ArrowLeftIcon, CreditCardIcon, KeyIcon, CheckBadgeIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon,
+    ArrowLeftIcon, KeyIcon, CheckBadgeIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon,
     UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon
 } from './Icons';
 import InfoItem from './InfoItem';
@@ -68,9 +67,8 @@ interface ClassReportModalProps {
     aula: ScheduledClass | null;
     onClose: () => void;
     professionals: Professional[];
-    continuityItems: ContinuityItem[];
 }
-const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, professionals, continuityItems }) => {
+const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, professionals }) => {
     if (!aula || !aula.report) return null;
 
     const report = aula.report;
@@ -89,22 +87,23 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                 </div>
                 <div className="mt-4 pt-4 border-t max-h-[60vh] overflow-y-auto pr-2 space-y-4">
                     <InfoItem label="Humor do Aluno" value={<span className="text-2xl">{report.mood}</span>} />
+                    {report.initialObservations && (
+                        <InfoItem label="Observações Iniciais (Diagnóstico)" value={<p className="whitespace-pre-wrap">{report.initialObservations}</p>} />
+                    )}
                     <div>
                         <h4 className="text-sm font-medium text-zinc-500">Conteúdo Abordado</h4>
                         <div className="p-3 bg-zinc-50 rounded-md mt-1 space-y-2">{(report.contents && report.contents.length > 0) ? report.contents.map((c, index) => (<div key={index}><p className="font-semibold text-zinc-800">{c.discipline}</p><p className="text-zinc-700 pl-2">{c.content}</p></div>)) : <p className="text-zinc-500">Nenhum conteúdo especificado.</p>}</div>
                     </div>
-                    <InfoItem label="Descrição da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
-                    <div className="grid grid-cols-2 gap-4"><InfoItem label="Habilidades" value={report.skills} /><InfoItem label="Dificuldades" value={report.difficulties} /></div>
+                    <InfoItem label="Observações Gerais da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
                     <div>
-                        <h4 className="text-sm font-medium text-zinc-500">Plano de Continuidade</h4>
-                        <div className="p-3 bg-zinc-50 rounded-md mt-1 space-y-2">
-                           {report.continuityUpdates && report.continuityUpdates.length > 0 && <div><strong>Atualizações:</strong><ul className="list-disc pl-5">{report.continuityUpdates.map(upd => { const item = continuityItems.find(i => i.id === upd.id); return <li key={upd.id}>"{item?.description}" → {upd.newStatus.replace('_', ' ')}</li>; })}</ul></div>}
-                           {report.continuityCreated && report.continuityCreated.length > 0 && (<div><strong>Novos itens criados:</strong><ul className="list-disc pl-5 mt-1 space-y-1">{report.continuityCreated.map((item, index) => (<li key={index}>{item.description}<span className="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-zinc-200 text-zinc-700">Status inicial: {item.status.replace('_', ' ')}</span></li>))}</ul></div>)}
+                        <h4 className="text-sm font-medium text-zinc-500">Próximos Passos / Tópicos a Revisar</h4>
+                        <div className="p-3 bg-zinc-50 rounded-md mt-1">
+                           {report.nextSteps && report.nextSteps.length > 0 ? (
+                                <ul className="list-disc pl-5 space-y-1 text-zinc-700">
+                                    {report.nextSteps.map((step, index) => <li key={index}>{step}</li>)}
+                                </ul>
+                           ) : <p className="text-zinc-500">Nenhum próximo passo definido.</p>}
                         </div>
-                    </div>
-                     <div>
-                        <h4 className="text-sm font-medium text-zinc-500">Exercícios</h4>
-                        {report.exercisesDismissed ? (<div className="p-3 bg-amber-50 rounded-md mt-1"><p className="font-semibold text-amber-800">Exercícios dispensados</p><p className="text-amber-700">{report.dismissalReason}</p></div>) : (<div className="p-3 bg-cyan-50 rounded-md mt-1"><p className="font-semibold text-cyan-800">Instruções</p><p className="text-cyan-700">{report.exerciseInstructions}</p></div>)}
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Fechar</button></div>
@@ -130,16 +129,10 @@ const CopyableInfoItem: React.FC<{ label: string; value?: string }> = ({ label, 
     );
 };
 
-const StudentInfoDisplay: React.FC<{student: Student; continuityItems: ContinuityItem[]}> = ({ student, continuityItems }) => {
+const StudentInfoDisplay: React.FC<{student: Student}> = ({ student }) => {
     const age = student.birthDate ? calculateAge(student.birthDate) : null;
     const formattedBirthDate = student.birthDate ? new Date(student.birthDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : undefined;
-    const activeContinuityItems = continuityItems.filter(i => i.studentId === student.id && i.status !== 'concluido');
-    const getStatusStyles = (status: ContinuityItem['status']) => ({
-        'em_andamento': 'bg-blue-100 text-blue-800',
-        'nao_iniciado': 'bg-amber-100 text-amber-800',
-        'concluido': 'bg-cyan-100 text-cyan-800'
-    }[status]);
-
+    
     return (
         <div className="space-y-6 animate-fade-in-fast">
              <fieldset className="border-t pt-4">
@@ -149,10 +142,6 @@ const StudentInfoDisplay: React.FC<{student: Student; continuityItems: Continuit
                     <InfoItem label="Data de Nascimento" value={age !== null && formattedBirthDate ? `${formattedBirthDate} (${age} anos)` : formattedBirthDate} />
                     <InfoItem label="Colégio" value={student.school} /><InfoItem label="Unidade" value={student.schoolUnit} /><InfoItem label="Ano/Série" value={student.grade} /><InfoItem label="Principal Objetivo" value={student.objective} /><InfoItem label="Telefone" value={formatPhoneForDisplay(student.phone)} /><InfoItem label="Email" value={student.email} /><CopyableInfoItem label="Login da Escola" value={student.schoolLogin} /><CopyableInfoItem label="Senha da Escola" value={student.schoolPassword} /><InfoItem label="Material Didático" value={student.didacticMaterial} /><InfoItem label="Neurodivergência/Limitações" value={student.neurodiversity} /><InfoItem label="Medicamentos e Instruções" value={student.medications} />
                 </div>
-            </fieldset>
-             <fieldset className="border-t pt-4">
-                <legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Plano de Continuidade</legend>
-                <div className="pt-2 space-y-2">{activeContinuityItems.length > 0 ? activeContinuityItems.map(item => (<div key={item.id} className="p-3 bg-zinc-50 rounded-lg flex justify-between items-center"><p className="text-zinc-800">{item.description}</p><span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusStyles(item.status)}`}>{item.status.replace('_', ' ')}</span></div>)) : <p className="text-zinc-500 text-sm">Nenhum item de continuidade ativo.</p>}</div>
             </fieldset>
              <fieldset className="border-t pt-4">
                 <legend className="text-lg font-semibold text-zinc-700 -mt-8 px-2 bg-white">Dados dos Responsáveis</legend>
@@ -172,12 +161,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
 
     const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-    const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [showAllInfo, setShowAllInfo] = useState(false);
     const [selectedClassReport, setSelectedClassReport] = useState<ScheduledClass | null>(null);
     const [allScheduledClasses, setAllScheduledClasses] = useState<ScheduledClass[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
-    const [continuityItems, setContinuityItems] = useState<ContinuityItem[]>([]);
 
     useEffect(() => {
         const createSpecificErrorHandler = (context: string) => (error: any) => {
@@ -200,10 +187,6 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 const classes = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
                 classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                 setAllScheduledClasses(classes);
-
-                const qContinuity = db.collection("continuityItems").where("studentId", "==", student.id);
-                const continuitySnap = await qContinuity.get();
-                setContinuityItems(continuitySnap.docs.map(d => ({id: d.id, ...d.data()})) as ContinuityItem[]);
 
                 const qProfessionals = db.collection("professionals");
                 const professionalsSnap = await qProfessionals.get();
@@ -261,15 +244,14 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             </header>
 
             <main className="flex-grow overflow-y-auto space-y-8 pr-2 -mr-2">
-                <section className="bg-neutral p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4"><div className="bg-primary/10 p-3 rounded-full"><CreditCardIcon className="h-8 w-8 text-primary" /></div><div><h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Saldo de Créditos</h3><p className="text-4xl font-bold text-primary">{student.credits || 0}</p></div></div>
-                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <button onClick={() => setShowAllInfo(!showAllInfo)} className="flex-1 text-secondary hover:text-secondary-dark font-semibold text-sm flex items-center gap-1 justify-center"><span>{showAllInfo ? 'Ocultar' : 'Mostrar'} informações</span><ChevronDownIcon className={`h-4 w-4 transition-transform ${showAllInfo ? 'rotate-180' : ''}`} /></button>
-                        <button onClick={() => setIsFinancialModalOpen(true)} className="flex-1 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Financeiro</button>
-                    </div>
+                <section className="bg-neutral p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <button onClick={() => setShowAllInfo(!showAllInfo)} className="w-full text-secondary hover:text-secondary-dark font-semibold text-sm flex items-center gap-1 justify-center">
+                        <span>{showAllInfo ? 'Ocultar' : 'Mostrar'} todas as informações</span>
+                        <ChevronDownIcon className={`h-4 w-4 transition-transform ${showAllInfo ? 'rotate-180' : ''}`} />
+                    </button>
                 </section>
                 
-                {showAllInfo && (<section><StudentInfoDisplay student={student} continuityItems={continuityItems} /></section>)}
+                {showAllInfo && (<section><StudentInfoDisplay student={student} /></section>)}
 
                 <section>
                     <div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Próximas Aulas</h3></div>
@@ -289,8 +271,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             </main>
         </div>
         <ManageStudentModal isOpen={isAccessModalOpen} onClose={() => setIsAccessModalOpen(false)} onInactivate={() => updateStatus('inativo')} student={student} onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} />
-        <FinancialModal isOpen={isFinancialModalOpen} onClose={() => setIsFinancialModalOpen(false)} student={student} currentUser={currentUser} />
-        <ClassReportModal aula={selectedClassReport} onClose={() => setSelectedClassReport(null)} professionals={professionals} continuityItems={continuityItems}/>
+        <ClassReportModal aula={selectedClassReport} onClose={() => setSelectedClassReport(null)} professionals={professionals}/>
         <style>{`
             @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out forwards; }
             @keyframes fade-in-down { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } } .animate-fade-in-down { animation: fade-in-down 0.2s ease-out forwards; }

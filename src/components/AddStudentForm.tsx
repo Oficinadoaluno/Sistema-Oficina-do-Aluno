@@ -28,15 +28,21 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [cpfError, setCpfError] = useState('');
 
+    // Common fields
     const [status, setStatus] = useState<Student['status']>('prospeccao');
     const [fullName, setFullName] = useState('');
+    const [objective, setObjective] = useState('');
+
+    // Simplified form field
+    const [guardianName, setGuardianName] = useState('');
+    
+    // Full form fields
     const [birthDate, setBirthDate] = useState('');
     const [school, setSchool] = useState('');
     const [schoolUnit, setSchoolUnit] = useState('');
     const [grade, setGrade] = useState('');
     const [otherGrade, setOtherGrade] = useState('');
     const [neurodiversity, setNeurodiversity] = useState('');
-    const [objective, setObjective] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [schoolLogin, setSchoolLogin] = useState('');
@@ -78,80 +84,79 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
             setGuardianMobile(phoneMask(studentToEdit.guardianMobile || ''));
             setGuardianEmail(studentToEdit.guardianEmail || '');
             setGuardianCpf(studentToEdit.guardianCpf || '');
+            // For simplified form context
+            setGuardianName(studentToEdit.guardian || '');
         } else {
             // Reset form for new entry
             setStatus('prospeccao');
             setFullName('');
-            setBirthDate('');
-            setSchool('');
-            setSchoolUnit('');
-            setGrade('');
-            setOtherGrade('');
-            setNeurodiversity('');
             setObjective('');
-            setPhone('');
-            setEmail('');
-            setSchoolLogin('');
-            setSchoolPassword('');
-            setDidacticMaterial('');
-            setMedications('');
-            setMotherName('');
-            setFatherName('');
-            setFinancialGuardian('mae');
-            setOtherGuardianName('');
-            setGuardianAddress('');
-            setGuardianPhone('');
-            setGuardianMobile('');
-            setGuardianEmail('');
-            setGuardianCpf('');
+            setGuardianName('');
         }
     }, [studentToEdit]);
 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setCpfError('');
-
-        if (guardianCpf && !validateCPF(guardianCpf)) {
-            setCpfError('CPF do responsável inválido.');
-            showToast('Por favor, corrija o CPF do responsável.', 'error');
-            return;
-        }
-
+        
         if (!fullName.trim() || !objective.trim()) {
-            showToast('Por favor, preencha os campos obrigatórios: Nome Completo e Principal Objetivo.', 'error');
+            showToast('Por favor, preencha os campos obrigatórios (*).', 'error');
             return;
         }
-        setIsSubmitting(true);
 
-        const studentData = {
-          name: fullName,
-          guardian: motherName || fatherName || otherGuardianName || '',
-          school,
-          grade: grade === 'Outro' ? otherGrade : grade,
-          status,
-          credits: studentToEdit?.credits ?? 0,
-          hasMonthlyPlan: studentToEdit?.hasMonthlyPlan ?? false,
-          birthDate,
-          schoolUnit,
-          neurodiversity,
-          objective,
-          phone: onlyDigits(phone),
-          email,
-          schoolLogin,
-          schoolPassword,
-          didacticMaterial,
-          medications,
-          motherName,
-          fatherName,
-          financialGuardian,
-          otherGuardianName: financialGuardian === 'outro' ? otherGuardianName : undefined,
-          guardianAddress,
-          guardianPhone: onlyDigits(guardianPhone),
-          guardianMobile: onlyDigits(guardianMobile),
-          guardianEmail,
-          guardianCpf: onlyDigits(guardianCpf),
-        };
+        if (!isEditing && !guardianName.trim()) {
+            showToast('O nome do responsável é obrigatório.', 'error');
+            return;
+        }
+        
+        setIsSubmitting(true);
+        
+        let studentData: any;
+
+        if (isEditing) {
+             if (guardianCpf && !validateCPF(guardianCpf)) {
+                setCpfError('CPF do responsável inválido.');
+                showToast('Por favor, corrija o CPF do responsável.', 'error');
+                setIsSubmitting(false);
+                return;
+            }
+            studentData = {
+              name: fullName,
+              guardian: motherName || fatherName || otherGuardianName || '',
+              school,
+              grade: grade === 'Outro' ? otherGrade : grade,
+              status,
+              birthDate,
+              schoolUnit,
+              neurodiversity,
+              objective,
+              phone: onlyDigits(phone),
+              email,
+              schoolLogin,
+              schoolPassword,
+              didacticMaterial,
+              medications,
+              motherName,
+              fatherName,
+              financialGuardian,
+              otherGuardianName: financialGuardian === 'outro' ? otherGuardianName : undefined,
+              guardianAddress,
+              guardianPhone: onlyDigits(guardianPhone),
+              guardianMobile: onlyDigits(guardianMobile),
+              guardianEmail,
+              guardianCpf: onlyDigits(guardianCpf),
+            };
+        } else {
+            studentData = {
+                name: fullName,
+                guardian: guardianName,
+                motherName: guardianName,
+                objective,
+                status,
+                credits: 0,
+                hasMonthlyPlan: false,
+            };
+        }
         
         const sanitizedData = sanitizeFirestore(studentData);
 
@@ -177,6 +182,69 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
             setIsSubmitting(false);
         }
     };
+    
+    const renderFullForm = () => (
+        <>
+            <fieldset>
+                <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Dados do Aluno</legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="md:col-span-2"><label htmlFor="fullName" className={labelStyle}>Nome Completo <span className="text-red-500">*</span></label><input type="text" id="fullName" className={inputStyle} required value={fullName} onChange={e => setFullName(e.target.value)} disabled={isSubmitting} /></div>
+                    <div><label htmlFor="birthDate" className={labelStyle}>Data de Nascimento</label><input type="date" id="birthDate" className={inputStyle} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={isSubmitting}/></div>
+                    <div><label htmlFor="school" className={labelStyle}>Colégio</label><input type="text" id="school" className={inputStyle} value={school} onChange={e => setSchool(e.target.value)} disabled={isSubmitting}/></div>
+                    <div><label htmlFor="schoolUnit" className={labelStyle}>Unidade</label><input type="text" id="schoolUnit" className={inputStyle} value={schoolUnit} onChange={e => setSchoolUnit(e.target.value)} disabled={isSubmitting}/></div>
+                    <div><label htmlFor="grade" className={labelStyle}>Ano/Série</label><select id="grade" className={inputStyle} value={grade} onChange={e => setGrade(e.target.value)} disabled={isSubmitting}><option value="">Selecione...</option>{gradeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+                    {grade === 'Outro' && (<div><label htmlFor="otherGrade" className={labelStyle}>Qual?</label><input type="text" id="otherGrade" className={inputStyle} placeholder="Digite a série" value={otherGrade} onChange={e => setOtherGrade(e.target.value)} disabled={isSubmitting} /></div>)}
+                    <div className="md:col-span-2"><label htmlFor="neurodiversity" className={labelStyle}>Neurodivergência/Deficiências/Limitações</label><textarea id="neurodiversity" rows={3} className={inputStyle} value={neurodiversity} onChange={e => setNeurodiversity(e.target.value)} disabled={isSubmitting}></textarea></div>
+                     <div className="md:col-span-2"><label htmlFor="objective" className={labelStyle}>Principal Objetivo <span className="text-red-500">*</span></label><input type="text" id="objective" className={inputStyle} required value={objective} onChange={e => setObjective(e.target.value)} disabled={isSubmitting} /></div>
+                    <div><label htmlFor="phone" className={labelStyle}>Telefone</label><input type="tel" id="phone" className={inputStyle} value={phone} onChange={e => setPhone(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
+                    <div><label htmlFor="email" className={labelStyle}>Email</label><input type="email" id="email" className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting}/></div>
+                     <div><label htmlFor="schoolLogin" className={labelStyle}>Login do Sistema da Escola</label><input type="text" id="schoolLogin" className={inputStyle} value={schoolLogin} onChange={e => setSchoolLogin(e.target.value)} disabled={isSubmitting}/></div>
+                     <div><label htmlFor="schoolPassword" className={labelStyle}>Senha do Sistema da Escola</label><input type="text" id="schoolPassword" className={inputStyle} value={schoolPassword} onChange={e => setSchoolPassword(e.target.value)} disabled={isSubmitting}/></div>
+                     <div className="md:col-span-2"><label htmlFor="didacticMaterial" className={labelStyle}>Material Didático/Editora</label><input type="text" id="didacticMaterial" className={inputStyle} value={didacticMaterial} onChange={e => setDidacticMaterial(e.target.value)} disabled={isSubmitting}/></div>
+                    <div className="md:col-span-2"><label htmlFor="medications" className={labelStyle}>Medicamentos e Instruções</label><textarea id="medications" rows={3} className={inputStyle} value={medications} onChange={e => setMedications(e.target.value)} disabled={isSubmitting}></textarea></div>
+                </div>
+            </fieldset>
+            
+             <fieldset>
+                <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Dados dos Responsáveis</legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div><label htmlFor="motherName" className={labelStyle}>Nome da Mãe</label><input type="text" id="motherName" className={inputStyle} value={motherName} onChange={e => setMotherName(e.target.value)} disabled={isSubmitting}/></div>
+                     <div><label htmlFor="fatherName" className={labelStyle}>Nome do Pai</label><input type="text" id="fatherName" className={inputStyle} value={fatherName} onChange={e => setFatherName(e.target.value)} disabled={isSubmitting}/></div>
+                     <div><label htmlFor="financialGuardian" className={labelStyle}>Responsável Financeiro</label><select id="financialGuardian" className={inputStyle} value={financialGuardian} onChange={e => setFinancialGuardian(e.target.value as NonNullable<Student['financialGuardian']>)} disabled={isSubmitting}><option value="mae">Mãe</option><option value="pai">Pai</option><option value="outro">Outro</option></select></div>
+                    {financialGuardian === 'outro' && (<div><label htmlFor="otherGuardianName" className={labelStyle}>Nome do Responsável Financeiro</label><input type="text" id="otherGuardianName" className={inputStyle} value={otherGuardianName} onChange={e => setOtherGuardianName(e.target.value)} disabled={isSubmitting}/></div>)}
+                     <div className="md:col-span-2"><label htmlFor="guardianAddress" className={labelStyle}>Endereço</label><input type="text" id="guardianAddress" className={inputStyle} value={guardianAddress} onChange={e => setGuardianAddress(e.target.value)} disabled={isSubmitting}/></div>
+                      <div><label htmlFor="guardianPhone" className={labelStyle}>Telefone do Responsável</label><input type="tel" id="guardianPhone" className={inputStyle} value={guardianPhone} onChange={e => setGuardianPhone(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
+                     <div><label htmlFor="guardianMobile" className={labelStyle}>Celular do Responsável</label><input type="tel" id="guardianMobile" className={inputStyle} value={guardianMobile} onChange={e => setGuardianMobile(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
+                    <div><label htmlFor="guardianEmail" className={labelStyle}>Email do Responsável</label><input type="email" id="guardianEmail" className={inputStyle} value={guardianEmail} onChange={e => setGuardianEmail(e.target.value)} disabled={isSubmitting}/></div>
+                    <div>
+                        <label htmlFor="guardianCpf" className={labelStyle}>CPF do Responsável</label>
+                        <input type="text" id="guardianCpf" className={inputStyle} value={guardianCpf} onChange={e => setGuardianCpf(e.target.value)} disabled={isSubmitting} />
+                         {cpfError && <p className="text-sm text-red-600 mt-1">{cpfError}</p>}
+                    </div>
+                </div>
+             </fieldset>
+        </>
+    );
+
+    const renderSimpleForm = () => (
+        <fieldset>
+            <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Dados Essenciais</legend>
+             <div className="space-y-4">
+                <div>
+                    <label htmlFor="fullName" className={labelStyle}>Nome Completo do Aluno <span className="text-red-500">*</span></label>
+                    <input type="text" id="fullName" className={inputStyle} required value={fullName} onChange={e => setFullName(e.target.value)} disabled={isSubmitting} />
+                </div>
+                 <div>
+                    <label htmlFor="guardianName" className={labelStyle}>Nome do Responsável <span className="text-red-500">*</span></label>
+                    <input type="text" id="guardianName" className={inputStyle} required value={guardianName} onChange={e => setGuardianName(e.target.value)} disabled={isSubmitting} />
+                </div>
+                <div>
+                    <label htmlFor="objective" className={labelStyle}>Principal Objetivo <span className="text-red-500">*</span></label>
+                    <input type="text" id="objective" className={inputStyle} required value={objective} onChange={e => setObjective(e.target.value)} disabled={isSubmitting} />
+                </div>
+             </div>
+        </fieldset>
+    );
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
@@ -195,45 +263,8 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
                         <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="status" value="matricula" checked={status === 'matricula'} onChange={(e) => setStatus(e.target.value as Student['status'])} className="h-4 w-4 text-secondary focus:ring-secondary" disabled={isSubmitting} /> <span className="font-medium text-zinc-700">Matrícula</span></label>
                     </div>
                 </fieldset>
-
-                <fieldset>
-                    <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Dados do Aluno</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div className="md:col-span-2"><label htmlFor="fullName" className={labelStyle}>Nome Completo <span className="text-red-500">*</span></label><input type="text" id="fullName" className={inputStyle} required value={fullName} onChange={e => setFullName(e.target.value)} disabled={isSubmitting} /></div>
-                        <div><label htmlFor="birthDate" className={labelStyle}>Data de Nascimento</label><input type="date" id="birthDate" className={inputStyle} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={isSubmitting}/></div>
-                        <div><label htmlFor="school" className={labelStyle}>Colégio</label><input type="text" id="school" className={inputStyle} value={school} onChange={e => setSchool(e.target.value)} disabled={isSubmitting}/></div>
-                        <div><label htmlFor="schoolUnit" className={labelStyle}>Unidade</label><input type="text" id="schoolUnit" className={inputStyle} value={schoolUnit} onChange={e => setSchoolUnit(e.target.value)} disabled={isSubmitting}/></div>
-                        <div><label htmlFor="grade" className={labelStyle}>Ano/Série</label><select id="grade" className={inputStyle} value={grade} onChange={e => setGrade(e.target.value)} disabled={isSubmitting}><option value="">Selecione...</option>{gradeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
-                        {grade === 'Outro' && (<div><label htmlFor="otherGrade" className={labelStyle}>Qual?</label><input type="text" id="otherGrade" className={inputStyle} placeholder="Digite a série" value={otherGrade} onChange={e => setOtherGrade(e.target.value)} disabled={isSubmitting} /></div>)}
-                        <div className="md:col-span-2"><label htmlFor="neurodiversity" className={labelStyle}>Neurodivergência/Deficiências/Limitações</label><textarea id="neurodiversity" rows={3} className={inputStyle} value={neurodiversity} onChange={e => setNeurodiversity(e.target.value)} disabled={isSubmitting}></textarea></div>
-                         <div className="md:col-span-2"><label htmlFor="objective" className={labelStyle}>Principal Objetivo <span className="text-red-500">*</span></label><input type="text" id="objective" className={inputStyle} required value={objective} onChange={e => setObjective(e.target.value)} disabled={isSubmitting} /></div>
-                        <div><label htmlFor="phone" className={labelStyle}>Telefone</label><input type="tel" id="phone" className={inputStyle} value={phone} onChange={e => setPhone(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
-                        <div><label htmlFor="email" className={labelStyle}>Email</label><input type="email" id="email" className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting}/></div>
-                         <div><label htmlFor="schoolLogin" className={labelStyle}>Login do Sistema da Escola</label><input type="text" id="schoolLogin" className={inputStyle} value={schoolLogin} onChange={e => setSchoolLogin(e.target.value)} disabled={isSubmitting}/></div>
-                         <div><label htmlFor="schoolPassword" className={labelStyle}>Senha do Sistema da Escola</label><input type="text" id="schoolPassword" className={inputStyle} value={schoolPassword} onChange={e => setSchoolPassword(e.target.value)} disabled={isSubmitting}/></div>
-                         <div className="md:col-span-2"><label htmlFor="didacticMaterial" className={labelStyle}>Material Didático/Editora</label><input type="text" id="didacticMaterial" className={inputStyle} value={didacticMaterial} onChange={e => setDidacticMaterial(e.target.value)} disabled={isSubmitting}/></div>
-                        <div className="md:col-span-2"><label htmlFor="medications" className={labelStyle}>Medicamentos e Instruções</label><textarea id="medications" rows={3} className={inputStyle} value={medications} onChange={e => setMedications(e.target.value)} disabled={isSubmitting}></textarea></div>
-                    </div>
-                </fieldset>
                 
-                 <fieldset>
-                    <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Dados dos Responsáveis</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div><label htmlFor="motherName" className={labelStyle}>Nome da Mãe</label><input type="text" id="motherName" className={inputStyle} value={motherName} onChange={e => setMotherName(e.target.value)} disabled={isSubmitting}/></div>
-                         <div><label htmlFor="fatherName" className={labelStyle}>Nome do Pai</label><input type="text" id="fatherName" className={inputStyle} value={fatherName} onChange={e => setFatherName(e.target.value)} disabled={isSubmitting}/></div>
-                         <div><label htmlFor="financialGuardian" className={labelStyle}>Responsável Financeiro</label><select id="financialGuardian" className={inputStyle} value={financialGuardian} onChange={e => setFinancialGuardian(e.target.value as NonNullable<Student['financialGuardian']>)} disabled={isSubmitting}><option value="mae">Mãe</option><option value="pai">Pai</option><option value="outro">Outro</option></select></div>
-                        {financialGuardian === 'outro' && (<div><label htmlFor="otherGuardianName" className={labelStyle}>Nome do Responsável Financeiro</label><input type="text" id="otherGuardianName" className={inputStyle} value={otherGuardianName} onChange={e => setOtherGuardianName(e.target.value)} disabled={isSubmitting}/></div>)}
-                         <div className="md:col-span-2"><label htmlFor="guardianAddress" className={labelStyle}>Endereço</label><input type="text" id="guardianAddress" className={inputStyle} value={guardianAddress} onChange={e => setGuardianAddress(e.target.value)} disabled={isSubmitting}/></div>
-                          <div><label htmlFor="guardianPhone" className={labelStyle}>Telefone do Responsável</label><input type="tel" id="guardianPhone" className={inputStyle} value={guardianPhone} onChange={e => setGuardianPhone(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
-                         <div><label htmlFor="guardianMobile" className={labelStyle}>Celular do Responsável</label><input type="tel" id="guardianMobile" className={inputStyle} value={guardianMobile} onChange={e => setGuardianMobile(phoneMask(e.target.value))} disabled={isSubmitting} /></div>
-                        <div><label htmlFor="guardianEmail" className={labelStyle}>Email do Responsável</label><input type="email" id="guardianEmail" className={inputStyle} value={guardianEmail} onChange={e => setGuardianEmail(e.target.value)} disabled={isSubmitting}/></div>
-                        <div>
-                            <label htmlFor="guardianCpf" className={labelStyle}>CPF do Responsável</label>
-                            <input type="text" id="guardianCpf" className={inputStyle} value={guardianCpf} onChange={e => setGuardianCpf(e.target.value)} disabled={isSubmitting} />
-                             {cpfError && <p className="text-sm text-red-600 mt-1">{cpfError}</p>}
-                        </div>
-                    </div>
-                 </fieldset>
+                {isEditing ? renderFullForm() : renderSimpleForm()}
 
                 <div className="flex justify-end items-center gap-4 pt-4 border-t">
                     <button type="button" onClick={onCancel} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>

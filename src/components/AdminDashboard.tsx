@@ -4,43 +4,17 @@ import ProfessionalList from './ProfessionalList';
 import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
-import FinancialView from './FinancialView';
-import { Collaborator, Student, Professional } from '../types'; 
+import { Collaborator } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { ToastContext } from '../App';
 import { 
-    LogoPlaceholder, UserIcon, ChevronDownIcon, BirthdayIcon, BookOpenIcon, UsersIcon, 
-    CurrencyDollarIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, UserPlusIcon, 
-    DocumentTextIcon, IdentificationIcon, LockClosedIcon, BanknotesIcon, XMarkIcon, CalendarDaysIcon
+    LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
+    Cog6ToothIcon, ArrowRightOnRectangleIcon,
+    IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
-
-// --- Funções Auxiliares ---
-const calculateAge = (birthDateString?: string): number | null => {
-    if (!birthDateString) return null;
-    try {
-        const birthDate = new Date(birthDateString);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age;
-    } catch (e) { return null; }
-};
-
-const phoneMask = (v: string): string => {
-  if (!v) return "";
-  v = v.replace(/\D/g, ''); v = v.substring(0, 11);
-  if (v.length > 10) v = v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  else if (v.length > 6) v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
-  else v = v.replace(/^(\d*)/, '($1');
-  return v;
-};
 
 // --- Modais de Perfil ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
@@ -50,7 +24,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [name, setName] = useState(user.name);
     const [email, setEmail] = useState(user.email || '');
-    const [phone, setPhone] = useState(phoneMask(user.phone || ''));
+    const [phone, setPhone] = useState(user.phone || '');
     const [address, setAddress] = useState(user.address || '');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -59,7 +33,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
         setIsSaving(true);
         try {
             const userRef = db.collection("collaborators").doc(user.id);
-            const dataToUpdate = { name, email, phone: phone.replace(/\D/g, ''), address };
+            const dataToUpdate = { name, email, phone, address };
             await userRef.update(sanitizeFirestore(dataToUpdate));
             showToast('Dados atualizados com sucesso!', 'success');
             onClose();
@@ -80,7 +54,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
                 <div className="space-y-4">
                     <div><label htmlFor="admin-name" className={labelStyle}>Nome</label><input id="admin-name" type="text" className={inputStyle} value={name} onChange={e => setName(e.target.value)} /></div>
                     <div><label htmlFor="admin-email" className={labelStyle}>Email</label><input id="admin-email" type="email" className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} /></div>
-                    <div><label htmlFor="admin-phone" className={labelStyle}>Telefone</label><input id="admin-phone" type="tel" className={inputStyle} value={phone} onChange={e => setPhone(phoneMask(e.target.value))} /></div>
+                    <div><label htmlFor="admin-phone" className={labelStyle}>Telefone</label><input id="admin-phone" type="tel" className={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} /></div>
                     <div><label htmlFor="admin-address" className={labelStyle}>Endereço</label><input id="admin-address" type="text" className={inputStyle} value={address} onChange={e => setAddress(e.target.value)} /></div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
@@ -158,88 +132,42 @@ const DashboardCard: React.FC<DashboardCardProps> = ({ title, value, icon: Icon,
 
 // --- Componente Principal ---
 interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator; }
-type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'financial' | 'settings';
+type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
-    const [birthdays, setBirthdays] = useState<any[]>([]);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-    
-    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const menuRef = useRef<HTMLDivElement>(null);
 
     const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? false;
-    const canAccessFinancial = currentUser?.adminPermissions?.canAccessFinancial ?? false;
-
+    
     useEffect(() => {
-        if (!currentUser || !currentUser.id) return;
-
-        const fetchNotifications = async () => {
-             try {
-                const q = db.collection("notifications").where("recipientUid", "==", currentUser.id);
-                const snapshot = await q.get();
-                const notificationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-                
-                notificationsData.sort((a, b) => {
-                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
-                    return dateB - dateA;
-                });
-
-                setNotifications(notificationsData.slice(0, 10)); // Limit to 10 most recent
-            } catch (error: any) {
-                console.error("Firestore (Notifications) Error:", error);
-                if (error.code === 'permission-denied') {
-                    showToast("Você não tem permissão para ver notificações.", "error");
-                } else if (error.code === 'failed-precondition') {
-                    showToast("Erro de configuração do banco de dados (índice de notificações ausente).", "error");
-                } else if (error.code === 'unavailable') {
-                    showToast("Erro de conexão ao buscar notificações.", "error");
-                }
-            }
-        };
-        fetchNotifications();
-        
-        const fetchBirthdays = async () => {
-            try {
-                const studentsSnap = await db.collection("students").get();
-                const professionalsSnap = await db.collection("professionals").get();
-                
-                const today = new Date();
-                const todayMonthDay = `${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-                
-                const allPeople = [
-                    ...studentsSnap.docs.map(d => ({...(d.data() as Student), type: 'student'})),
-                    ...professionalsSnap.docs.map(d => ({...(d.data() as Professional), type: 'professional'}))
-                ];
-                
-                const todayBirthdays = allPeople.filter(p => p.birthDate && p.birthDate.substring(5) === todayMonthDay);
-                setBirthdays(todayBirthdays);
-            } catch (error: any) {
-                 if (error.code === 'permission-denied') {
-                    console.warn("Permissão negada para buscar aniversariantes.");
-                    showToast('Não foi possível carregar os aniversariantes devido a permissões.', 'info');
-                } else {
-                    console.error("Erro ao buscar aniversariantes:", error);
-                }
-            }
-        };
-        fetchBirthdays();
-
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsMenuOpen(false);
         };
         document.addEventListener("mousedown", handleClickOutside);
-        
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [currentUser, showToast]);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-    const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+    const navItems = [
+        { id: 'dashboard', label: 'Painel', icon: ChartPieIcon, canAccess: true },
+        { id: 'students', label: 'Alunos', icon: BookOpenIcon, canAccess: true },
+        { id: 'professionals', label: 'Profissionais', icon: UserIcon, canAccess: true },
+        { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
+        { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: true },
+        { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
+    ];
+
+    const pageTitles: Record<View, string> = {
+        dashboard: 'Painel de Controle',
+        students: 'Gestão de Alunos',
+        professionals: 'Gestão de Profissionais',
+        classes: 'Gestão de Turmas',
+        calendar: 'Agenda',
+        settings: 'Configurações'
+    };
 
     const renderContent = () => {
         switch (view) {
@@ -248,14 +176,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
-            case 'financial': return <FinancialView onBack={() => setView('dashboard')} />;
+            case 'dashboard':
             default: return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-view">
                     <DashboardCard title="Alunos" value="Gerenciar matrículas" icon={BookOpenIcon} color="secondary" onClick={() => setView('students')} />
                     <DashboardCard title="Profissionais" value="Gerenciar equipe" icon={UserIcon} color="secondary" onClick={() => setView('professionals')} />
                     <DashboardCard title="Turmas" value="Visualizar e montar" icon={UsersIcon} color="secondary" onClick={() => setView('classes')} />
                     <DashboardCard title="Agenda" value="Visualizar aulas" icon={CalendarDaysIcon} color="secondary" onClick={() => setView('calendar')} />
-                    <DashboardCard title="Financeiro" value="Contas e recebimentos" icon={CurrencyDollarIcon} color="secondary" onClick={canAccessFinancial ? () => setView('financial') : undefined} disabled={!canAccessFinancial}/>
                     <DashboardCard title="Configurações" value="Ajustes do sistema" icon={Cog6ToothIcon} color="secondary" onClick={canAccessSettings ? () => setView('settings') : undefined} disabled={!canAccessSettings}/>
                 </div>
             );
@@ -263,13 +190,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     };
 
     return (
-        <div className="min-h-screen bg-neutral">
-            <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-40">
-                <div className="flex items-center gap-4">
+        <div className="flex h-screen bg-neutral font-sans">
+            {/* Sidebar */}
+            <aside className="w-64 bg-white p-4 shadow-lg flex-shrink-0 flex flex-col">
+                <div className="flex items-center gap-3 mb-8 px-2">
                     <LogoPlaceholder />
-                    <h1 className="text-xl font-semibold text-zinc-700">Portal Oficina do Aluno</h1>
+                    <h1 className="text-xl font-semibold text-zinc-700">Oficina do Aluno</h1>
                 </div>
-                <div className="flex items-center gap-4">
+                <nav className="flex-grow">
+                    <ul className="space-y-2">
+                        {navItems.map(item => item.canAccess && (
+                            <li key={item.id}>
+                                <button onClick={() => setView(item.id as View)} className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${view === item.id ? 'bg-secondary/10 text-secondary' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                                    <item.icon className="h-5 w-5" />
+                                    <span>{item.label}</span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+            </aside>
+            
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Header */}
+                <header className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0 z-10">
+                    <h2 className="text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
                     <div className="relative" ref={menuRef}>
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">
                             <span className="font-semibold">{currentUser.name}</span>
@@ -284,10 +230,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                             </div>
                         )}
                     </div>
-                </div>
-            </header>
-            
-            <main className="p-6">{renderContent()}</main>
+                </header>
+                
+                {/* Scrollable Content Area */}
+                <main className="flex-1 overflow-y-auto p-6">
+                    {renderContent()}
+                </main>
+            </div>
 
             <UserProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={currentUser} />
             <ChangePasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />

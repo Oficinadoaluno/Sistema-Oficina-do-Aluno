@@ -103,28 +103,12 @@ export interface Transaction {
 }
 
 // --- Continuity and Report Types ---
-export type ContinuityStatus = 'nao_iniciado' | 'em_andamento' | 'concluido';
-
-export interface ContinuityItem {
-  id: string;
-  studentId: string;
-  description: string;
-  status: ContinuityStatus;
-  createdBy: string; // professionalId
-  createdAt: string; // YYYY-MM-DD
-}
-
 export interface ClassReport {
+  mood?: string; // emoji character or custom text
   contents: { discipline: string; content: string }[];
   description: string;
-  continuityCreated?: { description: string; status: ContinuityStatus }[];
-  continuityUpdates?: { id: string; newStatus: ContinuityStatus }[];
-  mood?: string; // emoji character or custom text
-  skills?: string;
-  difficulties?: string;
-  exerciseInstructions?: string;
-  exercisesDismissed: boolean;
-  dismissalReason?: string;
+  initialObservations?: string; // Only for the first report for a student
+  nextSteps?: string[]; // Replaces continuity plan
 }
 
 export interface PastClassForProfessional {
@@ -134,41 +118,6 @@ export interface PastClassForProfessional {
     date: string;
     report: string;
 }
-
-// --- Diagnostic Report Types ---
-export interface SchoolGrade {
-  discipline: string;
-  grade: string;
-  observations?: string;
-}
-
-export interface DiagnosticReport {
-  anamnesis: {
-    studentComplaint: string;
-    familyComplaint: string;
-    neurodiversityInfo: string;
-    therapies: string;
-    medications: string;
-  };
-  academicPerformance: {
-    gradingSystem: string;
-    grades: SchoolGrade[];
-    observations: string;
-  };
-  pedagogicalAnalysis: {
-    favoriteSubjects: string;
-    difficultSubjects: string;
-    learningProfile: string;
-    observedSkills: string;
-    observedDifficulties: string;
-  };
-  actionPlan: {
-    initialImpression: string;
-    recommendedApproach: string;
-    initialContinuityPlan: { description: string }[];
-  };
-}
-
 
 // --- Agenda Types ---
 export interface ScheduledClass {
@@ -186,7 +135,6 @@ export interface ScheduledClass {
   status: 'scheduled' | 'completed' | 'canceled' | 'rescheduled';
   statusChangeReason?: string;
   report?: ClassReport;
-  diagnosticReport?: DiagnosticReport;
 }
 
 // --- Class Group Types ---

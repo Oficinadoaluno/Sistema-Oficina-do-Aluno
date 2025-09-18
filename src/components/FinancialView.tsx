@@ -340,9 +340,9 @@ const FinancialView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex items-center gap-4">
-                        <div className="bg-green-100 p-3 rounded-full"><ArrowUpIcon className="h-6 w-6 text-green-600" /></div>
-                        <div><h4 className="text-sm font-medium text-green-800">Receitas</h4><p className="text-2xl font-bold text-green-700">R$ {totalIncome.toFixed(2).replace('.', ',')}</p></div>
+                     <div className="bg-cyan-50 border border-cyan-200 p-4 rounded-lg flex items-center gap-4">
+                        <div className="bg-cyan-100 p-3 rounded-full"><ArrowUpIcon className="h-6 w-6 text-cyan-600" /></div>
+                        <div><h4 className="text-sm font-medium text-cyan-800">Receitas</h4><p className="text-2xl font-bold text-cyan-700">R$ {totalIncome.toFixed(2).replace('.', ',')}</p></div>
                     </div>
                      <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center gap-4">
                         <div className="bg-red-100 p-3 rounded-full"><ArrowDownIcon className="h-6 w-6 text-red-600" /></div>
@@ -380,7 +380,7 @@ const FinancialView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                     <td className="px-4 py-3 text-sm font-medium text-zinc-800">{source}</td>
                                     <td className="px-4 py-3 text-sm text-zinc-600">{description}</td>
                                     <td className="px-4 py-3 text-sm text-zinc-600">{registeredBy}</td>
-                                    <td className={`px-4 py-3 text-sm font-bold text-right ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                                    <td className={`px-4 py-3 text-sm font-bold text-right ${isIncome ? 'text-cyan-600' : 'text-red-600'}`}>
                                         {isIncome ? '+' : '-'} R$ {tx.amount.toFixed(2).replace('.', ',')}
                                     </td>
                                 </tr>

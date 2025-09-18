@@ -111,7 +111,7 @@ const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({ isOpen, o
                                                 autoFocus
                                                 onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                                             />
-                                            <button onClick={handleSaveEdit} className="p-1 text-green-600 hover:bg-green-100 rounded-full"><CheckIcon /></button>
+                                            <button onClick={handleSaveEdit} className="p-1 text-cyan-600 hover:bg-cyan-100 rounded-full"><CheckIcon /></button>
                                             <button onClick={handleCancelEdit} className="p-1 text-zinc-500 hover:bg-zinc-100 rounded-full"><XMarkIcon className="h-5 w-5" /></button>
                                         </div>
                                     ) : (

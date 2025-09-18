@@ -118,7 +118,7 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
         }
     };
 
-    const getStatusStyles = (status: Professional['status']) => ({ ativo: 'bg-green-100 text-green-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
+    const getStatusStyles = (status: Professional['status']) => ({ ativo: 'bg-cyan-100 text-cyan-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
     const dayNameToIndex: Record<DayOfWeek, number> = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
     const now = new Date();
     const currentMonth = now.getMonth();

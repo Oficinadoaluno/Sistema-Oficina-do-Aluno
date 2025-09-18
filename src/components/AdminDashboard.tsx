@@ -251,7 +251,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'financial': return <FinancialView onBack={() => setView('dashboard')} />;
             default: return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-view">
-                    <div className="md:col-span-2"><h2 className="text-3xl font-bold text-zinc-800">Painel Administrativo</h2></div>
                     <DashboardCard title="Alunos" value="Gerenciar matrículas" icon={BookOpenIcon} color="secondary" onClick={() => setView('students')} />
                     <DashboardCard title="Profissionais" value="Gerenciar equipe" icon={UserIcon} color="secondary" onClick={() => setView('professionals')} />
                     <DashboardCard title="Turmas" value="Visualizar e montar" icon={UsersIcon} color="secondary" onClick={() => setView('classes')} />

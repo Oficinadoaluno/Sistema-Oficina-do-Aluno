@@ -104,7 +104,7 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                     </div>
                      <div>
                         <h4 className="text-sm font-medium text-zinc-500">Exercícios</h4>
-                        {report.exercisesDismissed ? (<div className="p-3 bg-amber-50 rounded-md mt-1"><p className="font-semibold text-amber-800">Exercícios dispensados</p><p className="text-amber-700">{report.dismissalReason}</p></div>) : (<div className="p-3 bg-green-50 rounded-md mt-1"><p className="font-semibold text-green-800">Instruções</p><p className="text-green-700">{report.exerciseInstructions}</p></div>)}
+                        {report.exercisesDismissed ? (<div className="p-3 bg-amber-50 rounded-md mt-1"><p className="font-semibold text-amber-800">Exercícios dispensados</p><p className="text-amber-700">{report.dismissalReason}</p></div>) : (<div className="p-3 bg-cyan-50 rounded-md mt-1"><p className="font-semibold text-cyan-800">Instruções</p><p className="text-cyan-700">{report.exerciseInstructions}</p></div>)}
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Fechar</button></div>
@@ -123,7 +123,7 @@ const CopyableInfoItem: React.FC<{ label: string; value?: string }> = ({ label, 
             <div className="flex items-center gap-2 group">
                 <p className="text-zinc-800 flex-grow truncate" title={value}>{value}</p>
                 <button onClick={handleCopy} className={`text-zinc-400 hover:text-secondary p-1 rounded-md transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}`} title={copied ? "Copiado!" : "Copiar"}>
-                    {copied ? (<CheckBadgeIcon className="h-5 w-5 text-green-500" />) : (<ClipboardDocumentIcon className="h-5 w-5" />)}
+                    {copied ? (<CheckBadgeIcon className="h-5 w-5 text-cyan-500" />) : (<ClipboardDocumentIcon className="h-5 w-5" />)}
                 </button>
             </div>
         </div>
@@ -137,7 +137,7 @@ const StudentInfoDisplay: React.FC<{student: Student; continuityItems: Continuit
     const getStatusStyles = (status: ContinuityItem['status']) => ({
         'em_andamento': 'bg-blue-100 text-blue-800',
         'nao_iniciado': 'bg-amber-100 text-amber-800',
-        'concluido': 'bg-green-100 text-green-800'
+        'concluido': 'bg-cyan-100 text-cyan-800'
     }[status]);
 
     return (
@@ -239,7 +239,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         }
     };
 
-    const getStatusStyles = (status: Student['status']) => ({ matricula: 'bg-green-100 text-green-800', prospeccao: 'bg-amber-100 text-amber-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
+    const getStatusStyles = (status: Student['status']) => ({ matricula: 'bg-cyan-100 text-cyan-800', prospeccao: 'bg-amber-100 text-amber-800', inativo: 'bg-zinc-200 text-zinc-700' }[status]);
     const getStatusText = (status: Student['status']) => ({ matricula: 'Matriculado', prospeccao: 'Prospecção', inativo: 'Inativo' }[status]);
 
     return (
@@ -254,7 +254,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {student.status === 'prospeccao' && (<button onClick={() => updateStatus('matricula')} className="flex items-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-lg"><CheckBadgeIcon/><span>Converter para Matriculado</span></button>)}
+                    {student.status === 'prospeccao' && (<button onClick={() => updateStatus('matricula')} className="flex items-center gap-2 text-sm bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 px-3 rounded-lg"><CheckBadgeIcon/><span>Converter para Matriculado</span></button>)}
                     {student.status === 'inativo' && (<button onClick={() => updateStatus('matricula')} className="flex items-center gap-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded-lg"><UserPlusIcon /><span>Reativar Aluno</span></button>)}
                     <button onClick={() => setIsAccessModalOpen(true)} className="flex items-center gap-2 text-sm bg-zinc-600 hover:bg-zinc-700 text-white font-semibold py-2 px-3 rounded-lg"><KeyIcon /><span>Gerenciar</span></button>
                 </div>

@@ -51,7 +51,7 @@ export const ToastContext = createContext<ToastContextType>({ showToast: () => {
 
 const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type, onClose }) => {
     const theme = {
-        success: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', icon: <CheckCircleIcon className="h-6 w-6 text-green-500" /> },
+        success: { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300', icon: <CheckCircleIcon className="h-6 w-6 text-cyan-500" /> },
         error: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', icon: <ExclamationTriangleIcon className="h-6 w-6 text-red-500" /> },
         info: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', icon: <InformationCircleIcon className="h-6 w-6 text-blue-500" /> }
     };

@@ -73,7 +73,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             <span>Dar Baixa</span>
                         </button>
                     ) : (
-                         <button onClick={handleReactivate} className="flex items-center gap-2 text-sm bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors">
+                         <button onClick={handleReactivate} className="flex items-center gap-2 text-sm bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors">
                             <CheckBadgeIcon />
                             <span>Reativar</span>
                         </button>
@@ -87,7 +87,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <InfoItem label="Disciplina" value={group.discipline || 'N/A'} />
                         <InfoItem label="Créditos por Aula" value={group.creditsToDeduct} />
-                        <InfoItem label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${group.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-zinc-200 text-zinc-700'}`}>{group.status === 'active' ? 'Ativa' : 'Arquivada'}</span>} />
+                        <InfoItem label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${group.status === 'active' ? 'bg-cyan-100 text-cyan-800' : 'bg-zinc-200 text-zinc-700'}`}>{group.status === 'active' ? 'Ativa' : 'Arquivada'}</span>} />
                     </div>
                     {group.description && <InfoItem label="Descrição" value={group.description} className="mt-4" />}
                 </div>
@@ -136,7 +136,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                                             <td className="px-4 py-3 font-medium text-zinc-800">{student.name}</td>
                                             <td className="px-4 py-3">
                                                 {student.hasMonthlyPlan ? (
-                                                    <span className="flex items-center gap-2 text-sm text-green-700">
+                                                    <span className="flex items-center gap-2 text-sm text-cyan-700">
                                                         <CheckBadgeIcon /> Mensalidade Ativa
                                                     </span>
                                                 ) : hasStatusWarning ? (

@@ -177,11 +177,18 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const reportToSave = { ...reportData, groupId: group.id, studentId: studentForReport.id, date: dateStr };
 
         try {
+            let savedReportId = existingReport?.id;
             if (existingReport) {
                 await db.collection('groupStudentDailyReports').doc(existingReport.id).update(sanitizeFirestore(reportToSave));
             } else {
-                await db.collection('groupStudentDailyReports').add(sanitizeFirestore(reportToSave));
+                const docRef = await db.collection('groupStudentDailyReports').add(sanitizeFirestore(reportToSave));
+                savedReportId = docRef.id;
             }
+
+            const newReports = new Map(reports);
+            newReports.set(studentForReport.id, { id: savedReportId!, ...reportToSave });
+            setReports(newReports);
+            
             showToast("Relatório salvo!", "success");
         } catch (error) {
              showToast("Erro ao salvar relatório.", "error");

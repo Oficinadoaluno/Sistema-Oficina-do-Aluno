@@ -77,7 +77,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const targetYear = targetDate.getFullYear();
         const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-        const getFilteredData = <T extends { date: string }>(data: T[]) => 
+        // FIX: The generic constraint was too broad, causing TypeScript to lose specific type information.
+        // By constraining T to Transaction | ScheduledClass, we ensure the compiler knows about
+        // properties like 'type', 'amount', 'status', etc., after the filter is applied.
+        const getFilteredData = <T extends Transaction | ScheduledClass>(data: T[]) => 
             data.filter(item => {
                 if (!item.date) return false;
                 const itemDate = new Date(item.date);
@@ -85,23 +88,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             });
 
         // Payment Records
-        const paymentTransactions = getFilteredData(transactions).filter((tx: Transaction) => tx.type === 'payment');
-        // FIX: Add explicit type to `tx` parameter to ensure correct type inference.
-        const totalPayments = paymentTransactions.reduce((sum, tx: Transaction) => sum + tx.amount, 0);
+        const paymentTransactions = getFilteredData(transactions).filter(tx => tx.type === 'payment');
+        const totalPayments = paymentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
         // Remunerations
         const profRemunerations = professionals.map(prof => {
-            const completedClasses = getFilteredData(scheduledClasses).filter((c: ScheduledClass) => c.professionalId === prof.id && c.status === 'completed');
-            // FIX: Add explicit type to `c` parameter to ensure correct type inference.
-            const totalHours = completedClasses.reduce((sum, c: ScheduledClass) => sum + (c.duration / 60), 0);
+            const completedClasses = getFilteredData(scheduledClasses).filter(c => c.professionalId === prof.id && c.status === 'completed');
+            const totalHours = completedClasses.reduce((sum, c) => sum + (c.duration / 60), 0);
             const earnings = totalHours * (prof.hourlyRateIndividual || 0); // Assuming individual rate
             return { ...prof, classCount: completedClasses.length, earnings };
         });
 
         const monthlyRevenue = getFilteredData(transactions)
-            .filter((tx: Transaction) => tx.type === 'credit' || tx.type === 'monthly')
-            // FIX: Add explicit type to `tx` parameter to ensure correct type inference in chained methods.
-            .reduce((sum, tx: Transaction) => sum + tx.amount, 0);
+            .filter(tx => tx.type === 'credit' || tx.type === 'monthly')
+            .reduce((sum, tx) => sum + tx.amount, 0);
 
         const collabRemunerations = collaborators.map(collab => {
             let earnings = 0;

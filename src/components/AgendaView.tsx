@@ -376,7 +376,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 const endDate = new Date(currentDate); endDate.setMonth(currentDate.getMonth() + 1);
                 
                 for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
+                    const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[d.getUTCDay()];
                     const time = group.schedule.days[dayOfWeek];
                     if (time) {
                         const dateStr = d.toISOString().split('T')[0];

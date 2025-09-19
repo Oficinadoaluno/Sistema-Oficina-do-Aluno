@@ -17,6 +17,13 @@
       ]
     },
     {
+      "collectionGroup": "scheduledClasses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "packageId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [

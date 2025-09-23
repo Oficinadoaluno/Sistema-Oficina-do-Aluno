@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { UserRole } from '../types';
-import { ArrowLeftIcon } from './Icons';
 import { auth } from '../firebase';
 
 const LogoPlaceholder: React.FC = () => (
@@ -9,35 +7,21 @@ const LogoPlaceholder: React.FC = () => (
   </div>
 );
 
-interface LoginFormProps {
-  role: UserRole;
-  onBack: () => void;
-  onLoginSuccess: () => void;
-}
+interface LoginFormProps {}
 
-const themeConfig = {
-  [UserRole.Admin]: {
-    textColor: 'text-primary',
-    focusRingColor: 'focus:ring-primary',
-    focusBorderColor: 'focus:border-primary',
-    bgColor: 'bg-primary',
-    hoverBgColor: 'hover:bg-primary-dark',
-  },
-  [UserRole.Teacher]: {
-    textColor: 'text-secondary',
-    focusRingColor: 'focus:ring-secondary',
-    focusBorderColor: 'focus:border-secondary',
-    bgColor: 'bg-secondary',
-    hoverBgColor: 'hover:bg-secondary-dark',
-  },
+const theme = {
+  textColor: 'text-primary',
+  focusRingColor: 'focus:ring-primary',
+  focusBorderColor: 'focus:border-primary',
+  bgColor: 'bg-primary',
+  hoverBgColor: 'hover:bg-primary-dark',
 };
 
-const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
+const LoginForm: React.FC<LoginFormProps> = () => {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const theme = themeConfig[role] || themeConfig[UserRole.Admin];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,21 +45,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
 
   return (
     <div className="w-full animate-fade-in">
-       <button
-        onClick={onBack}
-        className="absolute top-6 left-6 text-zinc-400 hover:text-zinc-600 transition-colors"
-        aria-label="Voltar para seleção de perfil"
-        disabled={isLoading}
-      >
-        <ArrowLeftIcon className="h-5 w-5" />
-      </button>
-      
       <LogoPlaceholder />
 
       <div className="text-center">
-         <h2 className="text-3xl font-bold text-zinc-800">
-            <span className={theme.textColor}>{role}</span>
-         </h2>
+         <h1 className="text-2xl font-light text-zinc-600">
+          Portal
+          <span className="block text-4xl font-bold text-primary">Oficina do Aluno</span>
+        </h1>
       </div>
       
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">

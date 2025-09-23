@@ -12,7 +12,8 @@
     "react-dom": "^19.1.1",
     "react": "^19.1.1",
     "firebase": "^12.2.1",
-    "@heroicons/react": "^2.2.0"
+    "@heroicons/react": "^2.2.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

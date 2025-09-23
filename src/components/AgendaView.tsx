@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, ClassPackage } from '../types';
 import { db } from '../firebase';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon, BuildingOffice2Icon, ComputerDesktopIcon
 } from './Icons';
 import { ToastContext } from '../App';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -47,6 +47,7 @@ const ScheduleClassModal: React.FC<{
     const [customDiscipline, setCustomDiscipline] = useState('');
     const [content, setContent] = useState('');
     const [duration, setDuration] = useState(90);
+    const [location, setLocation] = useState<'online' | 'presencial'>('presencial');
     const [status, setStatus] = useState<ScheduledClass['status']>('scheduled');
     const [statusChangeReason, setStatusChangeReason] = useState('');
     const [packageId, setPackageId] = useState<string | undefined>(undefined);
@@ -67,6 +68,7 @@ const ScheduleClassModal: React.FC<{
             setCustomDiscipline(isCustom ? classToEdit.discipline : '');
             setContent(classToEdit.content || '');
             setDuration(classToEdit.duration || 90);
+            setLocation(classToEdit.location || 'presencial');
             setStatus(classToEdit.status || 'scheduled');
             setStatusChangeReason(classToEdit.statusChangeReason || '');
             setPackageId(classToEdit.packageId);
@@ -75,6 +77,7 @@ const ScheduleClassModal: React.FC<{
             setDate(new Date().toISOString().split('T')[0]);
             setTime(''); setStudentId(''); setProfessionalId(''); setType('Aula Regular');
             setDiscipline(''); setCustomDiscipline(''); setContent(''); setDuration(90);
+            setLocation('presencial');
             setStatus('scheduled'); setStatusChangeReason('');
             setPackageId(undefined);
         }
@@ -130,6 +133,7 @@ const ScheduleClassModal: React.FC<{
         await onSchedule({
             date, time, studentId, professionalId,
             type, discipline: finalDiscipline, content, duration,
+            location,
             reportRegistered: classToEdit?.reportRegistered || false,
             status,
             statusChangeReason: (status === 'canceled' || status === 'rescheduled') ? statusChangeReason : undefined,
@@ -250,6 +254,17 @@ const ScheduleClassModal: React.FC<{
                         <div>
                            <label htmlFor="duration" className={labelStyle}>Duração (minutos)</label>
                            <input type="number" id="duration" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className={inputStyle} />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className={labelStyle}>Local da Aula</label>
+                            <div className="flex items-center gap-4 bg-zinc-100 p-2 rounded-lg">
+                                <button type="button" onClick={() => setLocation('presencial')} className={`flex-1 flex items-center justify-center gap-2 py-1 rounded-md text-sm font-semibold ${location === 'presencial' ? 'bg-white shadow' : 'hover:bg-white/50'}`}>
+                                    <BuildingOffice2Icon className="h-5 w-5" /> Presencial
+                                </button>
+                                <button type="button" onClick={() => setLocation('online')} className={`flex-1 flex items-center justify-center gap-2 py-1 rounded-md text-sm font-semibold ${location === 'online' ? 'bg-white shadow' : 'hover:bg-white/50'}`}>
+                                    <ComputerDesktopIcon className="h-5 w-5" /> Online
+                                </button>
+                            </div>
                         </div>
                     </div>
                      {studentActivePackages.length > 0 && (
@@ -561,7 +576,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                                         <p className={`font-bold truncate ${styles.text} ${styles.decoration}`}>
                                                                             {student?.name || 'Aluno não encontrado'}
                                                                         </p>
-                                                                        <p className={`text-zinc-600 truncate ${styles.decoration}`}>{cls.discipline} às {cls.time}</p>
+                                                                        <div className="flex items-center gap-1">
+                                                                            {cls.location === 'online' && <ComputerDesktopIcon className="h-3 w-3 flex-shrink-0" />}
+                                                                            {cls.location === 'presencial' && <BuildingOffice2Icon className="h-3 w-3 flex-shrink-0" />}
+                                                                            <p className={`text-zinc-600 truncate ${styles.decoration}`}>{cls.discipline} às {cls.time}</p>
+                                                                        </div>
                                                                     </button>
                                                                 );
                                                             })}
@@ -615,7 +634,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         return (
                                             <tr key={cls.id}>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">Individual</span></td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${cls.location === 'online' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{cls.location === 'online' ? 'Online' : 'Presencial'}</span></td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">

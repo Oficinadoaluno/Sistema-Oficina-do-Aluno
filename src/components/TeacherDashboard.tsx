@@ -221,7 +221,7 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
                                 <td className="px-4 py-2 font-medium">{student.name}</td>
                                 <td className="px-4 py-2"><div className="flex items-center gap-2 text-sm">{['present', 'absent', 'justified'].map(s => <button key={s} onClick={() => handleAttendanceChange(student.id, s as any)} className={`px-2 py-0.5 rounded-full font-semibold ${studentAttendance === s ? 'bg-secondary text-white' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}>{s === 'present' ? 'P' : s === 'absent' ? 'F' : 'J'}</button>)}</div></td>
                                 <td className="px-4 py-2">
-                                    {studentAttendance === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-cyan-100 text-cyan-700' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
+                                    {studentAttendance === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-secondary/10 text-secondary-dark' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
                                 </td>
                             </tr>
                         );
@@ -498,7 +498,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                                 <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
-                                                        <p className="text-sm text-zinc-600">{c.discipline}</p>
+                                                        <p className="text-sm text-zinc-600 flex items-center">{c.discipline} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
@@ -518,7 +518,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                                 <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
                                                     <div>
                                                         <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
-                                                        <p className="text-sm text-amber-700">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                                        <p className="text-sm text-amber-700 flex items-center">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
                                                     </div>
                                                     <button onClick={() => handleOpenReportModal(c)} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-secondary-dark">Lançar Relatório</button>
                                                 </div>

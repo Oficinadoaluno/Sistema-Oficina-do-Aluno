@@ -73,7 +73,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             <span>Dar Baixa</span>
                         </button>
                     ) : (
-                         <button onClick={handleReactivate} className="flex items-center gap-2 text-sm bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors">
+                         <button onClick={handleReactivate} className="flex items-center gap-2 text-sm bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-3 rounded-lg transition-colors">
                             <CheckBadgeIcon />
                             <span>Reativar</span>
                         </button>
@@ -86,7 +86,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                 <div className={`p-4 rounded-lg ${colorStyle.bg}`}>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <InfoItem label="Disciplina" value={group.discipline || 'N/A'} />
-                        <InfoItem label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${group.status === 'active' ? 'bg-cyan-100 text-cyan-800' : 'bg-zinc-200 text-zinc-700'}`}>{group.status === 'active' ? 'Ativa' : 'Arquivada'}</span>} />
+                        <InfoItem label="Status" value={<span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${group.status === 'active' ? 'bg-secondary/10 text-secondary-dark' : 'bg-zinc-200 text-zinc-700'}`}>{group.status === 'active' ? 'Ativa' : 'Arquivada'}</span>} />
                     </div>
                     {group.description && <InfoItem label="Descrição" value={group.description} className="mt-4" />}
                 </div>

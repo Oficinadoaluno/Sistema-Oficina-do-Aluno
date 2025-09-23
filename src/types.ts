@@ -147,6 +147,7 @@ export interface ScheduledClass {
   discipline: string;
   content: string;
   duration: number; // in minutes
+  location?: 'online' | 'presencial';
   reportRegistered: boolean;
   status: 'scheduled' | 'completed' | 'canceled' | 'rescheduled';
   statusChangeReason?: string;

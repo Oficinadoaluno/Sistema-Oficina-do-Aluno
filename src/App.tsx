@@ -113,8 +113,6 @@ const AppRouter: React.FC = () => {
     return () => unsubscribe();
   }, [showToast]);
   
-  const handleRoleSelect = (role: UserRole) => setSelectedRole(role);
-  const handleBack = () => setSelectedRole(null);
   const handleLogout = async () => await auth.signOut();
 
   if (loadingAuth) {
@@ -130,18 +128,11 @@ const AppRouter: React.FC = () => {
     }
     return <LoadingScreen message="Verificando permissões..." />;
   }
-
-  const renderLoginContent = () => {
-    if (selectedRole) {
-      return <LoginForm role={selectedRole} onBack={handleBack} onLoginSuccess={() => {}} />;
-    }
-    return <RoleSelector onRoleSelect={handleRoleSelect} />;
-  };
   
   return (
     <main className="min-h-screen bg-neutral flex flex-col items-center justify-center p-4 font-sans">
-      <div className={`w-full ${selectedRole ? 'max-w-lg' : 'max-w-xl'} bg-white rounded-2xl shadow-xl p-8 sm:p-12 transition-all duration-500 relative`}>
-        {renderLoginContent()}
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-8 sm:p-12 transition-all duration-500 relative">
+        <LoginForm />
       </div>
       <footer className="absolute bottom-4 text-zinc-500 text-sm">
         © {new Date().getFullYear()} Oficina do Aluno. Todos os direitos reservados.
@@ -153,33 +144,6 @@ const AppRouter: React.FC = () => {
     </main>
   );
 };
-
-const buttonThemeConfig = {
-  [UserRole.Admin]: { bgColor: 'bg-secondary', hoverBgColor: 'hover:bg-secondary-dark', shadowColor: 'hover:shadow-secondary/30' },
-  [UserRole.Teacher]: { bgColor: 'bg-secondary', hoverBgColor: 'hover:bg-secondary-dark', shadowColor: 'hover:shadow-secondary/30' },
-};
-
-const RoleButton: React.FC<{ role: UserRole; onClick: (role: UserRole) => void; }> = ({ role, onClick }) => {
-  const theme = buttonThemeConfig[role];
-  return (
-    <button onClick={() => onClick(role)} className={`w-full flex items-center justify-center py-4 px-4 text-white font-semibold text-lg rounded-xl transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg ${theme.bgColor} ${theme.hoverBgColor} ${theme.shadowColor}`}>
-      {role}
-    </button>
-  );
-};
-
-const RoleSelector: React.FC<{ onRoleSelect: (role: UserRole) => void }> = ({ onRoleSelect }) => (
-    <div className="text-center animate-fade-in">
-        <h1 className="text-2xl font-light text-zinc-600">
-          Portal
-          <span className="block text-4xl font-bold text-primary">Oficina do Aluno</span>
-        </h1>
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <RoleButton role={UserRole.Admin} onClick={onRoleSelect} />
-            <RoleButton role={UserRole.Teacher} onClick={onRoleSelect} />
-        </div>
-    </div>
-);
 
 const AppWithProviders: React.FC = () => {
     const [toasts, setToasts] = useState<ToastMessage[]>([]);

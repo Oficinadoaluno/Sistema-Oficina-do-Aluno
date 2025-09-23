@@ -164,19 +164,6 @@ const DashboardContent: React.FC = () => {
         return students.filter(s => s.status === 'matricula').length;
     }, [students]);
 
-    const todaysBirthdays = useMemo(() => {
-        const today = new Date();
-        const todayMonth = today.getMonth() + 1;
-        const todayDate = today.getDate();
-        
-        const people = [...students, ...professionals];
-        return people.filter(p => {
-            if (!p.birthDate) return false;
-            const birthDate = new Date(p.birthDate);
-            return birthDate.getUTCMonth() + 1 === todayMonth && birthDate.getUTCDate() === todayDate;
-        }).map(p => ({ name: p.name, role: 'school' in p ? 'Aluno(a)' : 'Profissional' }));
-    }, [students, professionals]);
-
     const todaysClasses = useMemo(() => {
         const todayStr = new Date().toISOString().split('T')[0];
         return scheduledClasses
@@ -205,65 +192,47 @@ const DashboardContent: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-fade-in-view">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <MetricCard title="Aulas de Hoje" value={todaysClasses.length} icon={CalendarDaysIcon} />
                 <MetricCard title="Aulas a Faturar" value={classesToBill.length} icon={BanknotesIcon} />
-                <MetricCard title="Aniversariantes do Dia" value={todaysBirthdays.length} icon={BirthdayIcon} />
                 <MetricCard title="Alunos Ativos" value={activeStudentsCount} icon={UsersIcon} />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <section className="lg:col-span-2 space-y-6">
-                     <div>
-                        <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-zinc-500"/> Aulas de Hoje</h3>
-                        <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
-                            {todaysClasses.length > 0 ? todaysClasses.map(c => {
-                                const student = students.find(s => s.id === c.studentId);
-                                const professional = professionals.find(p => p.id === c.professionalId);
-                                return (
-                                    <div key={c.id} className="flex items-center gap-4 text-sm">
-                                        <div className="flex items-center gap-2 font-semibold text-secondary w-20"><ClockIcon className="h-4 w-4" /> {c.time}</div>
-                                        <div className="flex-grow">
-                                            <p className="font-bold text-zinc-800">{student?.name || 'Aluno não encontrado'}</p>
-                                            <p className="text-zinc-500">{c.discipline} com {professional?.name || 'Prof. não encontrado'}</p>
-                                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div>
+                    <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-zinc-500"/> Aulas de Hoje</h3>
+                    <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
+                        {todaysClasses.length > 0 ? todaysClasses.map(c => {
+                            const student = students.find(s => s.id === c.studentId);
+                            const professional = professionals.find(p => p.id === c.professionalId);
+                            return (
+                                <div key={c.id} className="flex items-center gap-4 text-sm">
+                                    <div className="flex items-center gap-2 font-semibold text-secondary w-20"><ClockIcon className="h-4 w-4" /> {c.time}</div>
+                                    <div className="flex-grow">
+                                        <p className="font-bold text-zinc-800">{student?.name || 'Aluno não encontrado'}</p>
+                                        <p className="text-zinc-500">{c.discipline} com {professional?.name || 'Prof. não encontrado'}</p>
                                     </div>
-                                );
-                            }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula agendada para hoje.</p>}
-                        </div>
-                    </div>
-                     <div>
-                        <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BanknotesIcon className="h-5 w-5 text-amber-500" /> Aulas a Faturar</h3>
-                        <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
-                            {classesToBill.length > 0 ? classesToBill.map(c => {
-                                const student = students.find(s => s.id === c.studentId);
-                                return (
-                                    <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
-                                        <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
-                                            <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
-                                        </div>
-                                    </div>
-                                );
-                            }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula pendente de faturamento.</p>}
-                        </div>
-                    </div>
-                </section>
-
-                <aside>
-                    <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BirthdayIcon className="h-5 w-5 text-zinc-500"/> Aniversariantes do Dia</h3>
-                    <div className="bg-white border rounded-lg p-4 space-y-3">
-                        {todaysBirthdays.length > 0 ? todaysBirthdays.map((p, index) => (
-                           <div key={index} className="flex items-center gap-3 text-sm">
-                                <BirthdayIcon className="h-5 w-5 text-primary" />
-                                <div>
-                                    <p className="font-bold text-zinc-800">{p.name}</p>
-                                    <p className="text-zinc-500 text-xs">{p.role}</p>
                                 </div>
-                            </div>
-                        )) : <p className="text-zinc-500">Nenhum aniversário hoje.</p>}
+                            );
+                        }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula agendada para hoje.</p>}
                     </div>
-                </aside>
+                </div>
+                 <div>
+                    <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BanknotesIcon className="h-5 w-5 text-amber-500" /> Aulas a Faturar</h3>
+                    <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
+                        {classesToBill.length > 0 ? classesToBill.map(c => {
+                            const student = students.find(s => s.id === c.studentId);
+                            return (
+                                <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                                    <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
+                                        <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                    </div>
+                                </div>
+                            );
+                        }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula pendente de faturamento.</p>}
+                    </div>
+                </div>
             </div>
         </div>
     );

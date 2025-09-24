@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
@@ -369,7 +370,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
+                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id).orderBy("date", "asc");
                 const classesSnap = await qClasses.get();
                 const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
                 setScheduledClasses(classesData);

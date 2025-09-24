@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional, Transaction, ScheduledClass } from '../types';
 import { db } from '../firebase';
@@ -99,7 +100,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const completedClasses = scheduledClasses.filter(c => c.status === 'completed');
         const classesInMonth = getFilteredData(completedClasses);
         
-        // FIX: Explicitly type 'cls' as ScheduledClass to resolve incorrect type inference.
         const totalDuration = completedClasses.reduce((sum, cls: ScheduledClass) => sum + (cls.duration || 0), 0);
         const avgClassDuration = completedClasses.length > 0 ? (totalDuration / completedClasses.length).toFixed(0) : 0;
         
@@ -110,7 +110,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const avgMonthlyStudents = uniqueStudentsInMonth.size;
         const avgWeeklyStudents = (avgMonthlyStudents / 4.33).toFixed(1);
 
-        // FIX: Explicitly type 'cls' as ScheduledClass to resolve incorrect type inference.
         const disciplineCounts = classesInMonth.reduce((acc, cls: ScheduledClass) => {
             acc[cls.discipline] = (acc[cls.discipline] || 0) + 1;
             return acc;
@@ -121,7 +120,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             acc[cls.studentId] = (acc[cls.studentId] || 0) + (cls.duration || 0) / 60;
             return acc;
         }, {} as Record<string, number>);
-        // FIX: Explicitly type the destructured array from Object.entries to resolve 'unknown' type for 'hours'.
+        
         const topStudentsData = Object.entries(studentHours).map(([studentId, hours]: [string, number]) => ({ studentName: studentMap.get(studentId) || 'Aluno desconhecido', hours: hours.toFixed(1) })).sort((a, b) => Number(b.hours) - Number(a.hours)).slice(0, 10);
         
         const profClassCounts = classesInMonth.reduce((acc, cls: ScheduledClass) => {
@@ -130,7 +129,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         }, {} as Record<string, number>);
         const classesByProfData = Object.entries(profClassCounts).map(([profId, Aulas]) => ({ name: professionalMap.get(profId) || 'Professor desconhecido', Aulas })).sort((a, b) => b.Aulas - a.Aulas);
 
-        // FIX: Explicitly type 'cls' as ScheduledClass to resolve incorrect type inference.
         const locationCounts = classesInMonth.reduce((acc, cls: ScheduledClass) => {
             const loc = cls.location || 'presencial';
             acc[loc] = (acc[loc] || 0) + 1;
@@ -145,7 +143,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         // --- Remunerations ---
         const profRemunerations = professionals.map(prof => {
             const profClassesInMonth = classesInMonth.filter(c => c.professionalId === prof.id);
-            // FIX: Explicitly type 'c' as ScheduledClass to resolve incorrect type inference.
             const totalHours = profClassesInMonth.reduce((sum, c: ScheduledClass) => sum + (c.duration / 60), 0);
             const earnings = totalHours * (prof.hourlyRateIndividual || 0); 
             return { ...prof, classCount: profClassesInMonth.length, earnings };

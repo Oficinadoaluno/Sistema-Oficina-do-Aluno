@@ -1,3 +1,4 @@
+
 {
   "indexes": [
     {
@@ -21,6 +22,13 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "packageId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "scheduledClasses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "ASCENDING" }
       ]
     },
     {

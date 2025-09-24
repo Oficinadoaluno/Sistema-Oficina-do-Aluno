@@ -206,7 +206,7 @@ export interface GroupStudentDailyReport {
 
 
 // --- System & Collaborator Types ---
-export type SystemPanel = 'admin' | 'teacher' | 'student';
+export type SystemPanel = 'admin' | 'teacher';
 
 export interface AdminPermissions {
     canAccessStudents: boolean;

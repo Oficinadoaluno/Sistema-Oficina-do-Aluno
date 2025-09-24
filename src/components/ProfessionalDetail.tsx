@@ -31,10 +31,10 @@ const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpe
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-zinc-800 mb-4">Gerenciar Profissional</h3>
+                <h3 className="text-xl font-bold text-zinc-800 mb-4">Gerenciar Professor</h3>
                  <div className="mt-6 border-t pt-4 space-y-2">
                      <button onClick={onEdit} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-secondary-dark hover:bg-secondary/10"><PencilIcon /><span>Editar Dados Cadastrais</span></button>
-                    {professional.status !== 'inativo' && (<button onClick={() => { onInactivate(); onClose(); }} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-red-600 hover:bg-red-50"><UserMinusIcon /><span>Inativar Profissional</span></button>)}
+                    {professional.status !== 'inativo' && (<button onClick={() => { onInactivate(); onClose(); }} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-red-600 hover:bg-red-50"><UserMinusIcon /><span>Inativar Professor</span></button>)}
                 </div>
                 <div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Fechar</button></div>
             </div>
@@ -53,11 +53,11 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
         try {
             const profRef = db.collection("professionals").doc(professional.id);
             await profRef.update({ status: newStatus });
-            showToast(`Profissional ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
+            showToast(`Professor ${newStatus === 'ativo' ? 'reativado' : 'inativado'}.`, 'success');
         } catch (error: any) {
             console.error("Error updating professional status:", error);
             if (error.code === 'permission-denied') {
-                showToast("Você não tem permissão para alterar o status do profissional.", "error");
+                showToast("Você não tem permissão para alterar o status do professor.", "error");
             } else {
                 showToast("Ocorreu um erro ao atualizar o status.", "error");
             }

@@ -149,7 +149,7 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
 
             <div className="border-b">
                 <nav className="-mb-px flex space-x-6">
-                    <TabButton label="Profissionais" icon={UserIcon} isActive={activeTab === 'professionals'} onClick={() => setActiveTab('professionals')} />
+                    <TabButton label="Professores" icon={UserIcon} isActive={activeTab === 'professionals'} onClick={() => setActiveTab('professionals')} />
                     {canManageUsers && <TabButton label="Usuários do Sistema" icon={UserGroupIcon} isActive={activeTab === 'collaborators'} onClick={() => setActiveTab('collaborators')} />}
                 </nav>
             </div>
@@ -158,8 +158,8 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
             {activeTab === 'professionals' && (
                 <div className="flex-grow flex flex-col pt-4">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                        <h3 className="text-xl font-semibold text-zinc-700">Profissionais<span className="text-lg font-normal text-zinc-500 ml-2">({filteredProfessionals.length} encontrados)</span></h3>
-                        <button onClick={() => setProfView('add')} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg"><PlusIcon className="h-5 w-5" /><span>Novo Profissional</span></button>
+                        <h3 className="text-xl font-semibold text-zinc-700">Professores<span className="text-lg font-normal text-zinc-500 ml-2">({filteredProfessionals.length} encontrados)</span></h3>
+                        <button onClick={() => setProfView('add')} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg"><PlusIcon className="h-5 w-5" /><span>Novo Professor</span></button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div className="relative md:col-span-2"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><MagnifyingGlassIcon className="h-5 w-5 text-zinc-400" /></div><input type="text" placeholder="Buscar por nome..." value={profSearchTerm} onChange={(e) => setProfSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg" /></div>

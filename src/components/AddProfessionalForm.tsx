@@ -155,7 +155,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             if (isEditing && professionalToEdit) {
                 const profRef = db.collection("professionals").doc(professionalToEdit.id);
                 await profRef.update(sanitizedData);
-                showToast('Dados do profissional atualizados!', 'success');
+                showToast('Dados do professor atualizados!', 'success');
                 onBack();
             } else {
                 const creationAppName = `user-creation-prof-${Date.now()}`;
@@ -169,7 +169,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
 
                     const newProfessionalData = { ...sanitizedData, status: 'ativo' as const };
                     await db.collection("professionals").doc(uid).set(newProfessionalData);
-                    showToast('Profissional cadastrado com sucesso!', 'success');
+                    showToast('Professor cadastrado com sucesso!', 'success');
                     onBack();
                 } finally {
                     await tempAuth.signOut();
@@ -183,7 +183,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             } else if (error.code === 'permission-denied') {
                 showToast("Erro de permissão. Verifique as regras de segurança do Firestore.", "error");
             } else {
-                showToast("Ocorreu um erro ao salvar o profissional. Tente novamente.", 'error');
+                showToast("Ocorreu um erro ao salvar o professor. Tente novamente.", 'error');
             }
         } finally {
             setIsSubmitting(false);
@@ -226,7 +226,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         <div><label htmlFor="agency" className={labelStyle}>Agência</label><input type="text" id="agency" value={agency} onChange={e => setAgency(e.target.value)} className={inputStyle} disabled={isSubmitting}/></div>
                         <div><label htmlFor="account" className={labelStyle}>Conta Corrente</label><input type="text" id="account" value={account} onChange={e => setAccount(e.target.value)} className={inputStyle} disabled={isSubmitting}/></div>
                         <div><label htmlFor="hourlyRateIndividual" className={labelStyle}>Valor Hora/Aula Individual (R$)</label><input type="number" id="hourlyRateIndividual" value={hourlyRateIndividual} onChange={e => setHourlyRateIndividual(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 80" step="0.01" disabled={isSubmitting}/></div>
-                        <div><label htmlFor="hourlyRateGroup" className={labelStyle}>Valor Hora/Aula Turma (R$)</label><input type="number" id="hourlyRateGroup" value={hourlyRateGroup} onChange={e => setHourlyRateGroup(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 65" step="0.01" disabled={isSubmitting}/></div>
+                        <div><label htmlFor="hourlyRateGroup" className={labelStyle}>Valor Fixo Mensal (R$)</label><input type="number" id="hourlyRateGroup" value={hourlyRateGroup} onChange={e => setHourlyRateGroup(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 1500" step="0.01" disabled={isSubmitting}/></div>
                         <div className="md:col-span-2"><label htmlFor="fixedSalary" className={labelStyle}>Salário Fixo (R$)</label><input type="number" id="fixedSalary" value={fixedSalary} onChange={e => setFixedSalary(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 2000" step="0.01" disabled={isSubmitting}/></div>
                     </div>
                 </fieldset>
@@ -267,7 +267,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
             <div className="flex items-center gap-4 mb-6">
                 <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors"><ArrowLeftIcon className="h-6 w-6" /></button>
-                <h2 className="text-2xl font-bold text-zinc-800">{isEditing ? 'Editar Profissional' : 'Cadastrar Novo Profissional'}</h2>
+                <h2 className="text-2xl font-bold text-zinc-800">{isEditing ? 'Editar Professor' : 'Cadastrar Novo Professor'}</h2>
             </div>
             
             <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto pr-2 flex flex-col">
@@ -276,7 +276,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
 
                 <div className="flex justify-end items-center gap-4 pt-4 border-t mt-8">
                     <button type="button" onClick={onBack} disabled={isSubmitting} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
-                    <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">{isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Profissional')}</button>
+                    <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">{isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Professor')}</button>
                 </div>
             </form>
         </div>

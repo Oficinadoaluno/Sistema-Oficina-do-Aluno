@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional, Transaction, ScheduledClass } from '../types';
 import { db } from '../firebase';
@@ -170,7 +171,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     
     const getPaymentDescription = (tx: Transaction): string => {
         if (tx.description) return tx.description;
-        if (tx.professionalId) return `Pagamento para ${professionalMap.get(tx.professionalId) || 'Profissional'} (${tx.month || tx.category || 'N/A'})`;
+        if (tx.professionalId) return `Pagamento para ${professionalMap.get(tx.professionalId) || 'Professor'} (${tx.month || tx.category || 'N/A'})`;
         if (tx.sourceDest) return `Pagamento para ${tx.sourceDest}`;
         return `Pagamento (${tx.category || 'Geral'})`;
     };
@@ -333,7 +334,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         </div>
                         <div className="space-y-6">
                             <div>
-                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Profissionais</h4>
+                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Professores</h4>
                                 <div className="border rounded-lg overflow-hidden">
                                      <table className="min-w-full divide-y divide-zinc-200">
                                         <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Aulas Concluídas</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>

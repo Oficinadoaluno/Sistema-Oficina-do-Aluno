@@ -304,9 +304,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? true;
-    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? true;
-    const canAccessAgenda = currentUser?.adminPermissions?.canAccessAgenda ?? true;
+    const userRole = currentUser.role?.toLowerCase() || '';
+    const canAccessSettings = userRole.includes('diretor');
+    const canAccessPackages = userRole.includes('diretor') || userRole.includes('secretaria');
+    const canAccessAgenda = userRole.includes('diretor') || userRole.includes('secretaria');
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -323,7 +324,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
         { id: 'packages', label: 'Pacotes', icon: ArchiveBoxIcon, canAccess: canAccessPackages },
         { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: canAccessAgenda },
-        { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
+        { id: 'settings', label: 'Relatórios e Finanças', icon: Cog6ToothIcon, canAccess: canAccessSettings },
     ];
 
     const pageTitles: Record<View, string> = {
@@ -333,7 +334,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         classes: 'Gestão de Turmas',
         packages: 'Gestão de Pacotes de Aulas',
         calendar: 'Agenda',
-        settings: 'Configurações'
+        settings: 'Relatórios e Finanças'
     };
 
     const renderContent = () => {

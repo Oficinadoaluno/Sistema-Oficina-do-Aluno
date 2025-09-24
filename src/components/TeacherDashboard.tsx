@@ -388,9 +388,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
 
                 if (studentIds.size > 0) {
                     const studentIdArray = Array.from(studentIds);
-                    const qStudents = db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", studentIdArray);
-                    const studentsSnap = await qStudents.get();
-                    setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
+                    const studentPromises = [];
+                    // Firestore 'in' queries support up to 10 elements per query in older versions.
+                    // Chunking the array ensures the query will not fail with a large number of students.
+                    for (let i = 0; i < studentIdArray.length; i += 10) {
+                        const chunk = studentIdArray.slice(i, i + 10);
+                        studentPromises.push(
+                            db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", chunk).get()
+                        );
+                    }
+                    const studentSnapshots = await Promise.all(studentPromises);
+                    const studentsData = studentSnapshots.flatMap(snap => 
+                        snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
+                    );
+                    setStudents(studentsData);
                 } else {
                     setStudents([]);
                 }

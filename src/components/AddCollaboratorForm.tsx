@@ -169,7 +169,11 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             </div>
                             <div>
                                 <label htmlFor="collaboratorRole" className={labelStyle}>Função <span className="text-red-500">*</span></label>
-                                <input id="collaboratorRole" type="text" value={role} onChange={e => setRole(e.target.value)} className={inputStyle} placeholder="Ex: Secretária, Coordenador" required />
+                                <select id="collaboratorRole" value={role} onChange={e => setRole(e.target.value)} className={inputStyle} required>
+                                    <option value="" disabled>Selecione a função</option>
+                                    <option value="secretaria">Secretaria</option>
+                                    <option value="diretoria">Diretoria</option>
+                                </select>
                             </div>
                              <div>
                                 <label htmlFor="collaboratorPhone" className={labelStyle}>Telefone</label>
@@ -217,10 +221,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             <label className={checkboxLabelStyle}>
                                 <input type="checkbox" checked={systemAccess.includes('teacher')} onChange={() => handleSystemAccessChange('teacher')} className={checkboxInputStyle} />
                                 Painel do Professor
-                            </label>
-                            <label className={checkboxLabelStyle}>
-                                <input type="checkbox" checked={systemAccess.includes('student')} onChange={() => handleSystemAccessChange('student')} className={checkboxInputStyle} />
-                                Painel do Aluno
                             </label>
                         </div>
                     </fieldset>

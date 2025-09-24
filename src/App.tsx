@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
 import { UserRole, Collaborator, Professional } from './types';
 import LoginForm from './components/LoginForm';
 import AdminDashboard from './components/AdminDashboard';
@@ -147,14 +147,17 @@ const AppRouter: React.FC = () => {
 
 const AppWithProviders: React.FC = () => {
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
-    const showToast = (message: string, type: ToastType = 'info') => {
+    
+    const removeToast = useCallback((id: number) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, []);
+
+    const showToast = useCallback((message: string, type: ToastType = 'info') => {
         const id = Date.now() + Math.random();
         setToasts(prev => [...prev.slice(-4), { id, message, type }]);
         setTimeout(() => removeToast(id), 5000);
-    };
-    const removeToast = (id: number) => {
-        setToasts(prev => prev.filter(toast => toast.id !== id));
-    };
+    }, [removeToast]);
+
 
     return (
         <ToastContext.Provider value={{ showToast }}>

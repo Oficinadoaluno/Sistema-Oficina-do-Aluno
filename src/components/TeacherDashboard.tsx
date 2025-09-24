@@ -1,5 +1,6 @@
 
-import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
+
+import React, { useState, useRef, useEffect, useMemo, useContext, useCallback } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -354,7 +355,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const createSpecificErrorHandler = (context: string) => (error: any) => {
+    const createSpecificErrorHandler = useCallback((context: string) => (error: any) => {
         console.error(`Firestore (${context}) Error:`, error);
         if (error.code === 'permission-denied') {
             showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
@@ -365,7 +366,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         } else {
             showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
         }
-    };
+    }, [showToast]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -398,7 +399,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             }
         };
         fetchData();
-    }, [currentUser.id]);
+    }, [currentUser.id, createSpecificErrorHandler]);
 
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {

@@ -62,6 +62,7 @@ export interface Professional {
   account?: string;
   hourlyRateIndividual?: number;
   hourlyRateGroup?: number;
+  fixedSalary?: number;
   // System Access
   login?: string;
   availability?: WeeklyAvailability;

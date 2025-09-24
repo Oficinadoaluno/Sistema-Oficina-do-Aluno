@@ -131,15 +131,27 @@ const ClassGroupView: React.FC<ClassGroupViewProps> = ({ onBack }) => {
     };
 
     if (selectedGroup) {
-        return <ClassGroupDetail
-            group={selectedGroup}
-            onBack={() => setSelectedGroup(null)}
-            students={students}
-            professional={professionals.find(p => p.id === selectedGroup.professionalId)}
-            onEdit={() => handleOpenModal(selectedGroup)}
-            onArchive={handleArchiveGroup}
-            onReactivate={handleReactivateGroup}
-        />
+        return (
+            <>
+                <ClassGroupDetail
+                    group={selectedGroup}
+                    onBack={() => setSelectedGroup(null)}
+                    students={students}
+                    professional={professionals.find(p => p.id === selectedGroup.professionalId)}
+                    onEdit={() => handleOpenModal(selectedGroup)}
+                    onArchive={handleArchiveGroup}
+                    onReactivate={handleReactivateGroup}
+                />
+                <AddClassGroupForm
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onSave={handleSaveGroup}
+                    groupToEdit={groupToEdit}
+                    students={students}
+                    professionals={professionals}
+                />
+            </>
+        );
     }
 
     const visibleGroups = groups.filter(g => g.status === activeTab);

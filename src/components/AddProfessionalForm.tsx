@@ -44,6 +44,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     const [account, setAccount] = useState('');
     const [hourlyRateIndividual, setHourlyRateIndividual] = useState<number | ''>('');
     const [hourlyRateGroup, setHourlyRateGroup] = useState<number | ''>('');
+    const [fixedSalary, setFixedSalary] = useState<number | ''>('');
     
 
     useEffect(() => {
@@ -64,6 +65,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setAccount(professionalToEdit.account || '');
             setHourlyRateIndividual(professionalToEdit.hourlyRateIndividual || '');
             setHourlyRateGroup(professionalToEdit.hourlyRateGroup || '');
+            setFixedSalary(professionalToEdit.fixedSalary || '');
             setLogin(professionalToEdit.login || '');
             setPassword('');
         } else {
@@ -133,6 +135,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                 account,
                 hourlyRateIndividual: Number(hourlyRateIndividual) || undefined,
                 hourlyRateGroup: Number(hourlyRateGroup) || undefined,
+                fixedSalary: Number(fixedSalary) || undefined,
                 login,
                 availability: professionalToEdit?.availability || {},
             };
@@ -224,6 +227,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         <div><label htmlFor="account" className={labelStyle}>Conta Corrente</label><input type="text" id="account" value={account} onChange={e => setAccount(e.target.value)} className={inputStyle} disabled={isSubmitting}/></div>
                         <div><label htmlFor="hourlyRateIndividual" className={labelStyle}>Valor Hora/Aula Individual (R$)</label><input type="number" id="hourlyRateIndividual" value={hourlyRateIndividual} onChange={e => setHourlyRateIndividual(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 80" step="0.01" disabled={isSubmitting}/></div>
                         <div><label htmlFor="hourlyRateGroup" className={labelStyle}>Valor Hora/Aula Turma (R$)</label><input type="number" id="hourlyRateGroup" value={hourlyRateGroup} onChange={e => setHourlyRateGroup(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 65" step="0.01" disabled={isSubmitting}/></div>
+                        <div className="md:col-span-2"><label htmlFor="fixedSalary" className={labelStyle}>Salário Fixo (R$)</label><input type="number" id="fixedSalary" value={fixedSalary} onChange={e => setFixedSalary(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} placeholder="Ex: 2000" step="0.01" disabled={isSubmitting}/></div>
                     </div>
                 </fieldset>
                 <fieldset>

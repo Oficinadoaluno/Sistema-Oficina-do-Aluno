@@ -54,8 +54,8 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
         fetchStudents();
     }, [showToast]);
 
-    const schools = useMemo(() => [...new Set(students.map(s => s.school))].sort(), [students]);
-    const grades = useMemo(() => [...new Set(students.map(s => s.grade))].sort(), [students]);
+    const schools = useMemo(() => [...new Set(students.map(s => s.school).filter(Boolean))].sort(), [students]);
+    const grades = useMemo(() => [...new Set(students.map(s => s.grade).filter(Boolean))].sort(), [students]);
 
     const filteredStudents = useMemo(() => students.filter(student => {
         const matchesSearch = searchTerm === '' ||

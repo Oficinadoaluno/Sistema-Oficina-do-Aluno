@@ -144,7 +144,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const profRemunerations = professionals.map(prof => {
             const profClassesInMonth = classesInMonth.filter(c => c.professionalId === prof.id);
             const totalHours = profClassesInMonth.reduce((sum, c: ScheduledClass) => sum + (c.duration / 60), 0);
-            const earnings = totalHours * (prof.hourlyRateIndividual || 0); 
+            const earnings = (totalHours * (prof.hourlyRateIndividual || 0)) + (prof.fixedSalary || 0); 
             return { ...prof, classCount: profClassesInMonth.length, earnings };
         });
 
@@ -248,7 +248,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <h4 className="font-semibold text-zinc-700 mb-4 flex items-center gap-2"><AcademicCapIcon className="h-5 w-5 text-secondary" />Top 10 Alunos (Horas de Aula Totais)</h4>
                                 <ul className="space-y-2">
                                     {reportMetrics.topStudentsData.map((s, i) => (
-                                        <li key={i} className="flex justify-between items-center text-sm p-2 rounded-md even:bg-zinc-50">
+                                        <li key={s.studentName || i} className="flex justify-between items-center text-sm p-2 rounded-md even:bg-zinc-50">
                                             <span className="font-medium text-zinc-800">{i + 1}. {s.studentName}</span>
                                             <span className="font-bold text-secondary">{s.hours} h</span>
                                         </li>

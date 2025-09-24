@@ -60,7 +60,7 @@ const Toast: React.FC<ToastMessage & { onClose: () => void }> = ({ message, type
         <div className={`flex items-start w-full gap-3 p-4 rounded-lg shadow-lg border ${currentTheme.bg} ${currentTheme.border} animate-toast-in`}>
             <div className="flex-shrink-0">{currentTheme.icon}</div>
             <div className={`flex-grow text-sm font-semibold ${currentTheme.text}`}>{message}</div>
-            <button onClick={onClose} className="p-1 -mt-1 -mr-1 rounded-full hover:bg-black/10"><XMarkIcon className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} className="p-1 -mt-1 -mr-1 rounded-full hover:bg-black/10"><XMarkIcon className="h-5 w-5" /></button>
         </div>
     );
 };
@@ -148,7 +148,7 @@ const AppRouter: React.FC = () => {
 const AppWithProviders: React.FC = () => {
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const showToast = (message: string, type: ToastType = 'info') => {
-        const id = Date.now();
+        const id = Date.now() + Math.random();
         setToasts(prev => [...prev.slice(-4), { id, message, type }]);
         setTimeout(() => removeToast(id), 5000);
     };

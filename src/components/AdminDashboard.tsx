@@ -133,6 +133,23 @@ const MetricCard: React.FC<{ title: string; value: string | number; icon: React.
     </div>
 );
 
+const robustCalculateAge = (birthDateString?: string): number | null => {
+    if (!birthDateString || !/^\d{4}-\d{2}-\d{2}$/.test(birthDateString)) return null;
+
+    const [year, month, day] = birthDateString.split('-').map(Number);
+    
+    const today = new Date();
+    const birthDate = new Date(year, month - 1, day);
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    
+    if (m < 0 || (m === 0 && today.getDate() < day)) {
+        age--;
+    }
+    return age;
+};
+
 // --- Componente de Conteúdo do Dashboard ---
 const DashboardContent: React.FC = () => {
     const [loading, setLoading] = useState(true);
@@ -162,6 +179,30 @@ const DashboardContent: React.FC = () => {
 
     const activeStudentsCount = useMemo(() => {
         return students.filter(s => s.status === 'matricula').length;
+    }, [students]);
+    
+    const monthBirthdays = useMemo(() => {
+        if (!students || students.length === 0) return [];
+        const today = new Date();
+        const currentMonth = today.getMonth();
+
+        return students
+            .filter(student => {
+                if (!student.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(student.birthDate)) return false;
+                const [_year, month, _day] = student.birthDate.split('-').map(Number);
+                return (month - 1) === currentMonth;
+            })
+            .map(student => {
+                const [_year, _month, day] = student.birthDate.split('-').map(Number);
+                const age = robustCalculateAge(student.birthDate);
+                return {
+                    id: student.id,
+                    name: student.name,
+                    day: day,
+                    age: age,
+                };
+            })
+            .sort((a, b) => a.day - b.day);
     }, [students]);
 
     const todaysClasses = useMemo(() => {
@@ -197,7 +238,7 @@ const DashboardContent: React.FC = () => {
                 <MetricCard title="Aulas a Faturar" value={classesToBill.length} icon={BanknotesIcon} />
                 <MetricCard title="Alunos Ativos" value={activeStudentsCount} icon={UsersIcon} />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                  <div>
                     <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-zinc-500"/> Aulas de Hoje</h3>
                     <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
@@ -233,6 +274,20 @@ const DashboardContent: React.FC = () => {
                         }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula pendente de faturamento.</p>}
                     </div>
                 </div>
+                 <div>
+                    <h3 className="text-lg font-semibold text-zinc-700 mb-2 flex items-center gap-2"><BirthdayIcon className="h-5 w-5 text-pink-500"/> Aniversariantes do Mês</h3>
+                    <div className="bg-white border rounded-lg p-4 space-y-3 max-h-80 overflow-y-auto">
+                        {monthBirthdays.length > 0 ? monthBirthdays.map(b => (
+                            <div key={b.id} className="flex items-start gap-3 text-sm p-2 bg-pink-50/50 rounded-md">
+                                <BirthdayIcon className="h-5 w-5 text-pink-500 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-bold text-pink-800">{b.name}</p>
+                                    <p className="text-pink-700">Dia {b.day} {b.age !== null ? `— completando ${b.age + 1} anos` : ''}</p>
+                                </div>
+                            </div>
+                        )) : <p className="text-zinc-500 text-center py-4">Nenhum aniversário este mês.</p>}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -250,7 +305,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const menuRef = useRef<HTMLDivElement>(null);
 
     const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? false;
-    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? true;
+    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? false;
+    const canAccessAgenda = currentUser?.adminPermissions?.canAccessAgenda ?? false;
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -266,7 +322,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         { id: 'professionals', label: 'Equipe', icon: UserIcon, canAccess: true },
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
         { id: 'packages', label: 'Pacotes', icon: ArchiveBoxIcon, canAccess: canAccessPackages },
-        { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: true },
+        { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: canAccessAgenda },
         { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, canAccess: canAccessSettings },
     ];
 

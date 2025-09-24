@@ -14,16 +14,6 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 const checkboxLabelStyle = "flex items-center gap-2 text-sm text-zinc-700 cursor-pointer";
 const checkboxInputStyle = "h-4 w-4 rounded text-secondary focus:ring-secondary";
 
-const allAdminPermissions: { key: keyof AdminPermissions; label: string }[] = [
-    { key: 'canAccessStudents', label: 'Alunos' },
-    { key: 'canAccessProfessionals', label: 'Profissionais' },
-    { key: 'canAccessClassGroups', label: 'Turmas' },
-    { key: 'canAccessPackages', label: 'Pacotes' },
-    { key: 'canAccessAgenda', label: 'Agenda' },
-    { key: 'canAccessFinancial', label: 'Financeiro' },
-    { key: 'canAccessSettings', label: 'Configurações' },
-];
-
 const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,24 +33,10 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
     const [agency, setAgency] = useState('');
     const [account, setAccount] = useState('');
     const [systemAccess, setSystemAccess] = useState<SystemPanel[]>([]);
-    const [adminPermissions, setAdminPermissions] = useState<AdminPermissions>({
-        canAccessStudents: false,
-        canAccessProfessionals: false,
-        canAccessClassGroups: false,
-        canAccessAgenda: false,
-        canAccessFinancial: false,
-        canAccessSettings: false,
-        canAccessPackages: false,
-    });
     const [remunerationType, setRemunerationType] = useState<'fixed' | 'commission' | undefined>(undefined);
     const [fixedSalary, setFixedSalary] = useState<number | ''>('');
     const [commissionPercentage, setCommissionPercentage] = useState<number | ''>('');
     const [cpfError, setCpfError] = useState('');
-
-    const emptyPermissions = {
-        canAccessStudents: false, canAccessProfessionals: false, canAccessClassGroups: false,
-        canAccessAgenda: false, canAccessFinancial: false, canAccessSettings: false, canAccessPackages: false,
-    };
 
     useEffect(() => {
         if (collaboratorToEdit) {
@@ -89,7 +65,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 setSystemAccess([]);
             }
 
-            setAdminPermissions(collaboratorToEdit.adminPermissions || emptyPermissions);
             setRemunerationType(collaboratorToEdit.remunerationType);
             setFixedSalary(collaboratorToEdit.fixedSalary || '');
             setCommissionPercentage(collaboratorToEdit.commissionPercentage || '');
@@ -109,7 +84,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             setAgency('');
             setAccount('');
             setSystemAccess([]);
-            setAdminPermissions(emptyPermissions);
             setRemunerationType(undefined);
             setFixedSalary('');
             setCommissionPercentage('');
@@ -122,10 +96,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 ? prev.filter(p => p !== panel)
                 : [...prev, panel]
         );
-    };
-
-    const handleAdminPermissionChange = (key: keyof AdminPermissions) => {
-        setAdminPermissions(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -153,7 +123,15 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 agency,
                 account,
                 systemAccess,
-                adminPermissions: systemAccess.includes('admin') ? adminPermissions : undefined,
+                adminPermissions: systemAccess.includes('admin') ? {
+                    canAccessStudents: true,
+                    canAccessProfessionals: true,
+                    canAccessClassGroups: true,
+                    canAccessAgenda: true,
+                    canAccessFinancial: true,
+                    canAccessSettings: true,
+                    canAccessPackages: true,
+                } : undefined,
                 remunerationType,
                 fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,
                 commissionPercentage: remunerationType === 'commission' ? Number(commissionPercentage) : undefined,
@@ -246,28 +224,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                             </label>
                         </div>
                     </fieldset>
-
-                    {/* Admin Permissions (Conditional) */}
-                    {systemAccess.includes('admin') && (
-                        <fieldset className="animate-fade-in-fast">
-                            <legend className="text-lg font-semibold text-zinc-700 mb-2">Permissões do Painel Administrativo</legend>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-3 bg-zinc-50 rounded-lg">
-                                {allAdminPermissions.map(({ key, label }) => (
-                                    <label key={key} className={checkboxLabelStyle}>
-                                        <input
-                                            type="checkbox"
-                                            checked={adminPermissions[key]}
-                                            onChange={() => handleAdminPermissionChange(key)}
-                                            className={checkboxInputStyle}
-                                            disabled={key === 'canAccessSettings' && collaboratorToEdit?.role?.toLowerCase() !== 'diretor(a)'}
-                                        />
-                                        <span>{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                             <p className="text-xs text-zinc-500 mt-2">A permissão de "Configurações" só pode ser gerenciada por um(a) Diretor(a).</p>
-                        </fieldset>
-                    )}
                     
                      {/* Remuneration & Financial */}
                     <fieldset>

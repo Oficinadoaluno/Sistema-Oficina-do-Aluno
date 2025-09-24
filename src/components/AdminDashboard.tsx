@@ -304,9 +304,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? false;
-    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? false;
-    const canAccessAgenda = currentUser?.adminPermissions?.canAccessAgenda ?? false;
+    const canAccessSettings = currentUser?.adminPermissions?.canAccessSettings ?? true;
+    const canAccessPackages = currentUser?.adminPermissions?.canAccessPackages ?? true;
+    const canAccessAgenda = currentUser?.adminPermissions?.canAccessAgenda ?? true;
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {

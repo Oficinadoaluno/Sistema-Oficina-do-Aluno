@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { Collaborator, Student, Professional, Transaction, ScheduledClass } from '../types';
 import { db } from '../firebase';
-// FIX: Add missing CalendarDaysIcon import
 import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon } from './Icons';
 import { ToastContext } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';

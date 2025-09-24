@@ -80,7 +80,7 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
                             <ul className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
                                 {filteredStudents.map(s => (
                                     <li key={s.id} className="px-3 py-2 cursor-pointer hover:bg-zinc-100"
-                                        onMouseDown={() => { setStudentId(s.id); setStudentSearch(''); setIsStudentDropdownOpen(false); }}>
+                                        onMouseDown={(e) => { e.preventDefault(); setStudentId(s.id); setStudentSearch(''); setIsStudentDropdownOpen(false); }}>
                                         {s.name}
                                     </li>
                                 ))}

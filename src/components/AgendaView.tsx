@@ -9,8 +9,8 @@ import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 // --- Constants & Types ---
 const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); // 08:00 to 20:00
-const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
-const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
+const inputStyle = "w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
+const labelStyle = "block text-xs font-medium text-zinc-600 mb-1";
 
 interface DisplayIndividualClass extends ScheduledClass {
     classType: 'individual';
@@ -35,7 +35,7 @@ const ScheduleClassModal: React.FC<{
     students: Student[];
     professionals: Professional[];
     allDisciplines: string[];
-    allPackages: (ClassPackage & { usedCount: number })[];
+    allPackages: (ClassPackage & { usedHours: number })[];
 }> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines, allPackages }) => {
     
     const [date, setDate] = useState('');
@@ -125,7 +125,7 @@ const ScheduleClassModal: React.FC<{
 
     const studentActivePackages = useMemo(() => {
         if (!studentId) return [];
-        return allPackages.filter(p => p.studentId === studentId && p.status === 'active');
+        return allPackages.filter(p => p.studentId === studentId && p.status === 'active' && (p.totalHours - p.usedHours) > 0);
     }, [studentId, allPackages]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -273,9 +273,9 @@ const ScheduleClassModal: React.FC<{
                              <select id="package-select" value={packageId || ''} onChange={e => setPackageId(e.target.value || undefined)} className={inputStyle}>
                                  <option value="">Não (aula avulsa)</option>
                                  {studentActivePackages.map(pkg => {
-                                     const remaining = pkg.packageSize - pkg.usedCount;
+                                     const remaining = pkg.totalHours - pkg.usedHours;
                                      return <option key={pkg.id} value={pkg.id}>
-                                         Pacote de {pkg.packageSize} aulas ({remaining} restantes) - Comprado em {new Date(pkg.purchaseDate).toLocaleDateString('pt-BR', {timeZone:'UTC'})}
+                                         Pacote de {pkg.totalHours} horas ({remaining.toFixed(2)} restantes) - Comprado em {new Date(pkg.purchaseDate).toLocaleDateString('pt-BR', {timeZone:'UTC'})}
                                      </option>;
                                  })}
                              </select>
@@ -339,6 +339,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [classToEdit, setClassToEdit] = useState<ScheduledClass | null>(null);
+    const [filterType, setFilterType] = useState('');
+    const [filterDetail, setFilterDetail] = useState('');
+    const [filterProfessional, setFilterProfessional] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -411,8 +415,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         return allDisplayClasses.filter(c => c.date === dateStr);
     }, [currentDate, allDisplayClasses]);
 
-    const monthlyClasses = useMemo(() => {
-        return allDisplayClasses
+    const allMonthlyClasses = useMemo(() => {
+        // Filter out group classes from this list as per user request.
+        // They will still appear in the daily view at the top.
+        const individualClasses = allDisplayClasses.filter(c => c.classType === 'individual');
+    
+        return individualClasses
             .filter(c => {
                 const classDate = new Date(c.date);
                 return classDate.getMonth() === currentDate.getMonth() && classDate.getFullYear() === currentDate.getFullYear();
@@ -420,6 +428,33 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [currentDate, allDisplayClasses]);
     
+    const filteredMonthlyClasses = useMemo(() => {
+        return allMonthlyClasses.filter(cls => {
+            // Since allMonthlyClasses now only contains individual classes, no need to check cls.classType
+            const individualClass = cls as DisplayIndividualClass;
+
+            if (filterProfessional && individualClass.professionalId !== filterProfessional) return false;
+
+            if (filterDetail) {
+                const studentName = students.find(s => s.id === individualClass.studentId)?.name || '';
+                if (!studentName.toLowerCase().includes(filterDetail.toLowerCase())) return false;
+            }
+
+            if (filterType) {
+                if (filterType === 'group') return false; // Always false now
+                if (filterType === 'individual') { /* This is always true */ }
+                if (filterType === 'online' && individualClass.location !== 'online') return false;
+                if (filterType === 'presencial' && individualClass.location !== 'presencial') return false;
+            }
+
+            if (filterStatus) {
+                if (individualClass.status !== filterStatus) return false;
+            }
+
+            return true;
+        });
+    }, [allMonthlyClasses, filterType, filterDetail, filterProfessional, filterStatus, students]);
+
     const professorsWithDailyClasses = useMemo(() => {
         const professionalIdsWithClasses = new Set(dailyClasses.map(c => c.professionalId));
         return professionals.filter(p => p.status === 'ativo' && professionalIdsWithClasses.has(p.id));
@@ -427,8 +462,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
 
     const packagesWithUsage = useMemo(() => {
         return allPackages.map(pkg => {
-            const usedCount = scheduledClasses.filter(c => c.packageId === pkg.id).length;
-            return { ...pkg, usedCount };
+            const usedHours = scheduledClasses.filter(c => c.packageId === pkg.id).reduce((sum, currentClass) => sum + (currentClass.duration / 60), 0);
+            return { ...pkg, usedHours };
         });
     }, [allPackages, scheduledClasses]);
 
@@ -601,47 +636,70 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 </section>
                 
                 <section>
-                     <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({monthlyClasses.length} total)</h3>
+                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({filteredMonthlyClasses.length} total)</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-zinc-50 rounded-lg">
+                        <div>
+                            <label className={labelStyle}>Tipo</label>
+                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className={inputStyle}>
+                                <option value="">Todos</option>
+                                <option value="individual">Individual</option>
+                                <option value="online">Online</option>
+                                <option value="presencial">Presencial</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelStyle}>Detalhe (Aluno)</label>
+                            <input type="text" value={filterDetail} onChange={e => setFilterDetail(e.target.value)} placeholder="Buscar..." className={inputStyle} />
+                        </div>
+                        <div>
+                            <label className={labelStyle}>Professor</label>
+                            <select value={filterProfessional} onChange={e => setFilterProfessional(e.target.value)} className={inputStyle}>
+                                <option value="">Todos</option>
+                                {professionals.filter(p => p.status === 'ativo').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelStyle}>Status</label>
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputStyle}>
+                                <option value="">Todos</option>
+                                <option value="scheduled">Agendada</option>
+                                <option value="completed">Concluída</option>
+                                <option value="canceled">Cancelada</option>
+                                <option value="rescheduled">Remarcada</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="border rounded-lg overflow-hidden">
-                        {monthlyClasses.length > 0 ? (
+                        {filteredMonthlyClasses.length > 0 ? (
                             <table className="min-w-full divide-y divide-zinc-200">
                                 <thead className="bg-zinc-50">
                                     <tr>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Detalhe</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
                                         <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-zinc-200">
-                                    {monthlyClasses.map(cls => {
-                                        const professional = professionals.find(p => p.id === cls.professionalId);
-                                        if (cls.classType === 'group') {
-                                            return (
-                                                <tr key={cls.id}>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm"><span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary-dark">Turma</span></td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{cls.group.name}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-400">N/A</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm"></td>
-                                                </tr>
-                                            )
-                                        }
-                                        const student = students.find(s => s.id === cls.studentId);
+                                    {filteredMonthlyClasses.map(cls => {
+                                        const individualClass = cls as DisplayIndividualClass;
+                                        const professional = professionals.find(p => p.id === individualClass.professionalId);
+                                        const student = students.find(s => s.id === individualClass.studentId);
                                         return (
-                                            <tr key={cls.id}>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${cls.location === 'online' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{cls.location === 'online' ? 'Online' : 'Presencial'}</span></td>
+                                            <tr key={individualClass.id}>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(individualClass.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {individualClass.time}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${individualClass.location === 'online' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{individualClass.location === 'online' ? 'Online' : 'Presencial'}</span></td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                    {getStatusBadge(cls)}
+                                                    {getStatusBadge(individualClass)}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
-                                                    <button onClick={() => openScheduleModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>
+                                                    <button onClick={() => openScheduleModal(individualClass)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button>
                                                 </td>
                                             </tr>
                                         )
@@ -649,7 +707,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                 </tbody>
                             </table>
                         ) : (
-                           <p className="p-6 text-center text-zinc-500">Nenhuma aula agendada para este mês.</p>
+                           <p className="p-6 text-center text-zinc-500">{allMonthlyClasses.length > 0 ? 'Nenhuma aula encontrada com os filtros aplicados.' : 'Nenhuma aula agendada para este mês.'}</p>
                         )}
                     </div>
                 </section>

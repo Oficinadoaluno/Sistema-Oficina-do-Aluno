@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useRef, useEffect, useMemo, useContext, useCallback } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
@@ -371,9 +372,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id).orderBy("date", "asc");
+                // FIX: The original query required a composite index. By sorting on the client,
+                // we make the query more robust against missing index deployments.
+                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
                 const classesSnap = await qClasses.get();
                 const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
+                
+                // Sort by date on the client
+                classesData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                
                 setScheduledClasses(classesData);
 
                 const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
@@ -389,7 +396,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                 if (studentIds.size > 0) {
                     const studentIdArray = Array.from(studentIds);
                     const studentPromises = [];
-                    // Firestore 'in' queries support up to 10 elements per query in older versions.
+                    // Firestore 'in' queries support up to 30 elements per query.
                     // Chunking the array ensures the query will not fail with a large number of students.
                     for (let i = 0; i < studentIdArray.length; i += 10) {
                         const chunk = studentIdArray.slice(i, i + 10);
@@ -443,8 +450,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
 
     const { upcomingClasses, pastClasses } = useMemo(() => {
         const todayStr = new Date().toISOString().split('T')[0];
-        const all = scheduledClasses
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const all = scheduledClasses; // Already sorted
         return {
             upcomingClasses: all.filter(c => c.date >= todayStr),
             pastClasses: all.filter(c => c.date < todayStr),

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { db } from '../firebase';
-import { Student, ClassPackage, ScheduledClass } from '../types';
+import { Student, ClassPackage, ScheduledClass, Collaborator } from '../types';
 import { ToastContext } from '../App';
 import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -17,7 +17,7 @@ interface RegisterPackageModalProps {
 }
 const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onClose, onSave, students }) => {
     const [studentId, setStudentId] = useState('');
-    const [packageSize, setPackageSize] = useState<number | ''>('');
+    const [totalHours, setTotalHours] = useState<number | ''>('');
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [valuePaid, setValuePaid] = useState<number | ''>('');
     const [observations, setObservations] = useState('');
@@ -45,12 +45,12 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const selectedStudent = students.find(s => s.id === studentId);
-        if (!selectedStudent || !packageSize) return;
+        if (!selectedStudent || !totalHours) return;
 
         await onSave({
             studentId,
             studentName: selectedStudent.name,
-            packageSize: Number(packageSize),
+            totalHours: Number(totalHours),
             purchaseDate,
             valuePaid: Number(valuePaid) || undefined,
             observations
@@ -88,8 +88,8 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
                         )}
                     </div>
                     <div>
-                        <label htmlFor="packageSize" className={labelStyle}>Quantidade de Aulas <span className="text-red-500">*</span></label>
-                        <input id="packageSize" type="number" value={packageSize} onChange={e => setPackageSize(Number(e.target.value))} className={inputStyle} required />
+                        <label htmlFor="totalHours" className={labelStyle}>Quantidade de Horas <span className="text-red-500">*</span></label>
+                        <input id="totalHours" type="number" value={totalHours} onChange={e => setTotalHours(Number(e.target.value))} className={inputStyle} required />
                     </div>
                     <div>
                         <label htmlFor="purchaseDate" className={labelStyle}>Data da Compra <span className="text-red-500">*</span></label>
@@ -114,8 +114,10 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
 };
 
 // --- Package Detail View ---
+type PackageWithUsage = ClassPackage & { usedHours: number; remainingHours: number };
+
 interface PackageDetailProps {
-    pkg: ClassPackage;
+    pkg: PackageWithUsage;
     usedClasses: ScheduledClass[];
     onBack: () => void;
 }
@@ -131,9 +133,9 @@ const PackageDetail: React.FC<PackageDetailProps> = ({ pkg, usedClasses, onBack 
             </header>
             <main className="flex-grow overflow-y-auto space-y-6">
                 <div className="bg-zinc-50 p-4 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className="text-sm font-medium text-zinc-500">Aulas Contratadas</p><p className="text-zinc-800 font-bold text-lg">{pkg.packageSize}</p></div>
-                    <div><p className="text-sm font-medium text-zinc-500">Aulas Utilizadas</p><p className="text-zinc-800 font-bold text-lg">{usedClasses.length}</p></div>
-                    <div><p className="text-sm font-medium text-zinc-500">Aulas Restantes</p><p className="text-zinc-800 font-bold text-lg">{pkg.packageSize - usedClasses.length}</p></div>
+                    <div><p className="text-sm font-medium text-zinc-500">Horas Contratadas</p><p className="text-zinc-800 font-bold text-lg">{pkg.totalHours}</p></div>
+                    <div><p className="text-sm font-medium text-zinc-500">Horas Utilizadas</p><p className="text-zinc-800 font-bold text-lg">{pkg.usedHours.toFixed(2)}</p></div>
+                    <div><p className="text-sm font-medium text-zinc-500">Horas Restantes</p><p className="text-zinc-800 font-bold text-lg">{pkg.remainingHours.toFixed(2)}</p></div>
                     <div><p className="text-sm font-medium text-zinc-500">Data da Compra</p><p className="text-zinc-800 font-bold text-lg">{new Date(pkg.purchaseDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p></div>
                 </div>
                 <section>
@@ -156,15 +158,15 @@ const PackageDetail: React.FC<PackageDetailProps> = ({ pkg, usedClasses, onBack 
 };
 
 // --- Main Packages View ---
-interface PackagesViewProps { onBack: () => void; }
-const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }) => {
+interface PackagesViewProps { onBack: () => void; currentUser: Collaborator; }
+const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, currentUser }) => {
     const { showToast } = useContext(ToastContext);
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [packages, setPackages] = useState<ClassPackage[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedPackage, setSelectedPackage] = useState<ClassPackage | null>(null);
+    const [selectedPackage, setSelectedPackage] = useState<PackageWithUsage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -190,11 +192,11 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }
         fetchData();
     }, [showToast]);
 
-    const packagesWithUsage = useMemo(() => {
+    const packagesWithUsage = useMemo((): PackageWithUsage[] => {
         return packages.map(pkg => {
-            const usedCount = scheduledClasses.filter(c => c.packageId === pkg.id).length;
-            const remainingCount = pkg.packageSize - usedCount;
-            return { ...pkg, usedCount, remainingCount };
+            const usedHours = scheduledClasses.filter(c => c.packageId === pkg.id).reduce((sum, currentClass) => sum + (currentClass.duration / 60), 0);
+            const remainingHours = pkg.totalHours - usedHours;
+            return { ...pkg, usedHours, remainingHours };
         });
     }, [packages, scheduledClasses]);
 
@@ -208,6 +210,18 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }
         try {
             const dataToSave = { ...newPackageData, status: 'active' as const };
             await db.collection('classPackages').add(sanitizeFirestore(dataToSave));
+
+            if (newPackageData.valuePaid && newPackageData.valuePaid > 0) {
+                const transactionData = {
+                    type: 'credit' as const,
+                    date: newPackageData.purchaseDate,
+                    amount: newPackageData.valuePaid,
+                    studentId: newPackageData.studentId,
+                    description: `Compra de pacote de ${newPackageData.totalHours} horas para ${newPackageData.studentName}`,
+                    registeredById: currentUser.id,
+                };
+                await db.collection('transactions').add(sanitizeFirestore(transactionData as any));
+            }
             showToast('Pacote registrado com sucesso!', 'success');
         } catch (error) {
             console.error("Error saving package:", error);
@@ -215,7 +229,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }
         }
     };
 
-    const handleViewDetails = (pkg: ClassPackage) => {
+    const handleViewDetails = (pkg: PackageWithUsage) => {
         setSelectedPackage(pkg);
         setView('detail');
     };
@@ -252,7 +266,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }
                         <thead className="bg-zinc-50 sticky top-0">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Aulas</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Progresso (Horas)</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Progresso</th>
                                 <th className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
                             </tr>
@@ -261,10 +275,10 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard }
                             {filteredPackages.map(pkg => (
                                 <tr key={pkg.id} className="hover:bg-zinc-50">
                                     <td className="px-6 py-4 font-medium">{pkg.studentName}</td>
-                                    <td className="px-6 py-4 text-sm text-zinc-600">{pkg.usedCount} de {pkg.packageSize}</td>
+                                    <td className="px-6 py-4 text-sm text-zinc-600">{pkg.usedHours.toFixed(1)} de {pkg.totalHours}</td>
                                     <td className="px-6 py-4">
                                         <div className="w-full bg-zinc-200 rounded-full h-2.5">
-                                            <div className="bg-secondary h-2.5 rounded-full" style={{ width: `${(pkg.usedCount / pkg.packageSize) * 100}%` }}></div>
+                                            <div className={`h-2.5 rounded-full ${pkg.remainingHours <= 3 ? 'bg-red-500' : 'bg-secondary'}`} style={{ width: `${(pkg.usedHours / pkg.totalHours) * 100}%` }}></div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right text-sm">

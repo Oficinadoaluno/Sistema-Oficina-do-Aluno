@@ -129,7 +129,7 @@ export interface ClassPackage {
   id: string;
   studentId: string;
   studentName: string; // denormalized for easy display
-  packageSize: number;
+  totalHours: number;
   purchaseDate: string; // YYYY-MM-DD
   valuePaid?: number;
   observations?: string;

@@ -281,9 +281,9 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
 
     const packagesWithUsage = useMemo(() => {
         return classPackages.map(pkg => {
-            const usedCount = allScheduledClasses.filter(c => c.packageId === pkg.id).length;
-            const remainingCount = pkg.packageSize - usedCount;
-            return { ...pkg, usedCount, remainingCount };
+            const usedHours = allScheduledClasses.filter(c => c.packageId === pkg.id).reduce((sum, currentClass) => sum + (currentClass.duration / 60), 0);
+            const remainingHours = pkg.totalHours - usedHours;
+            return { ...pkg, usedHours, remainingHours };
         }).sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
     }, [classPackages, allScheduledClasses]);
 
@@ -353,10 +353,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     
         try {
             if (newStatus === 'package') {
-                const availablePackage = packagesWithUsage.find(p => p.status === 'active' && p.remainingCount > 0);
+                const availablePackage = packagesWithUsage.find(p => p.status === 'active' && p.remainingHours > 0);
     
                 if (!availablePackage) {
-                    showToast('Aluno não possui créditos de pacote disponíveis.', 'error');
+                    showToast('Aluno não possui créditos de horas disponíveis.', 'error');
                     setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: originalStatus } : c));
                     return;
                 }

@@ -343,7 +343,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'professionals': return <ProfessionalList onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
-            case 'packages': return <PackagesView onBack={() => setView('dashboard')} />;
+            case 'packages': return <PackagesView onBack={() => setView('dashboard')} currentUser={currentUser} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
             default: return <DashboardContent />;

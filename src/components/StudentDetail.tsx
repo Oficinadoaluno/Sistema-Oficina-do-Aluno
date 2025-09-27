@@ -7,7 +7,7 @@ import { ToastContext } from '../App';
 import {
     ArrowLeftIcon, KeyIcon, CheckBadgeIcon, CalendarDaysIcon, ClockIcon, UserMinusIcon,
     UserPlusIcon, ChevronDownIcon, PencilIcon, XMarkIcon, ClipboardDocumentIcon,
-    ChevronLeftIcon, ChevronRightIcon
+    ChevronLeftIcon, ChevronRightIcon, SparklesIcon
 } from './Icons';
 import InfoItem from './InfoItem';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -219,6 +219,34 @@ const StudentInfoDisplay: React.FC<{student: Student}> = ({ student }) => {
     );
 }
 
+const AISummaryDisplay: React.FC<{ summaryData?: Student['aiSummary'] }> = ({ summaryData }) => {
+    if (!summaryData?.summary) {
+        return (
+            <div className="bg-violet-50 border border-violet-200 p-4 rounded-lg text-center">
+                <SparklesIcon className="h-8 w-8 text-violet-400 mx-auto mb-2" />
+                <h4 className="font-semibold text-violet-800">Análise de Desempenho (IA)</h4>
+                <p className="text-sm text-violet-600 mt-1">A análise de IA será gerada após o registro de um novo relatório de aula.</p>
+            </div>
+        );
+    }
+
+    const formattedDate = new Date(summaryData.lastUpdated).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+
+    return (
+        <div className="bg-violet-50 border-l-4 border-violet-400 p-4 rounded-r-lg animate-fade-in-fast">
+            <div className="flex items-start gap-3">
+                <SparklesIcon className="h-6 w-6 text-violet-500 flex-shrink-0 mt-1" />
+                <div>
+                    <h4 className="font-bold text-violet-900 text-lg">Análise de Desempenho (IA)</h4>
+                    <p className="text-violet-800 mt-2 whitespace-pre-wrap">{summaryData.summary}</p>
+                    <p className="text-xs text-violet-500 mt-3">Análise gerada em {formattedDate}</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- Componente Principal ---
 
 interface StudentDetailProps { student: Student; onBack: () => void; onEdit: () => void; currentUser: Collaborator; }
@@ -410,6 +438,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 </section>
                 
                 {showAllInfo && (<section><StudentInfoDisplay student={student} /></section>)}
+
+                <section>
+                    <AISummaryDisplay summaryData={student.aiSummary} />
+                </section>
 
                  <section>
                     <div className="flex items-center justify-between mb-4">

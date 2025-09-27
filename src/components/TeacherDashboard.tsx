@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useContext, useCallback } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -13,6 +14,98 @@ import {
     ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+
+// --- AI Summary Generation ---
+const generateAndSaveStudentSummary = async (studentId: string, allGroups: ClassGroup[]) => {
+    try {
+        console.log(`[AI] Starting summary generation for student ${studentId}`);
+
+        // 1. Fetch all reports for the student
+        const individualReportsSnap = await db.collection('scheduledClasses')
+            .where('studentId', '==', studentId)
+            .where('reportRegistered', '==', true)
+            .orderBy('date', 'desc')
+            .get();
+        const individualReports = individualReportsSnap.docs.map(doc => doc.data() as ScheduledClass);
+
+        const groupReportsSnap = await db.collection('groupStudentDailyReports')
+            .where('studentId', '==', studentId)
+            .orderBy('date', 'desc')
+            .get();
+        const groupReports = groupReportsSnap.docs.map(doc => doc.data() as GroupStudentDailyReport);
+
+        if (individualReports.length === 0 && groupReports.length === 0) {
+            console.log('[AI] No reports found. Skipping summary generation.');
+            return;
+        }
+
+        // 2. Format reports into a string
+        const groupMap = new Map(allGroups.map(g => [g.id, g.name]));
+        const reportsHistory = [
+            ...individualReports.map(r => {
+                const report = r.report;
+                if (!report) return null;
+                return `
+---
+Tipo: Aula Individual
+Data: ${r.date}
+Disciplina: ${r.discipline}
+Humor do Aluno: ${report.mood}
+Conteúdo: ${report.contents.map(c => c.content).join(', ')}
+Observações: ${report.description}
+Próximos Passos: ${report.nextSteps?.join(', ') || 'N/A'}
+---
+                `;
+            }),
+            ...groupReports.map(r => `
+---
+Tipo: Aula em Turma (${groupMap.get(r.groupId) || 'Turma desconhecida'})
+Data: ${r.date}
+Atividades: ${r.subjects.map(s => `${s.discipline} (${s.activity})`).join(', ')}
+Observações: ${r.observations}
+---
+            `)
+        ].filter(Boolean).join('\n');
+
+        // 3. Call Gemini API
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyB7-pho29IPnjWetbhAFPNOuYhJthu8UvI" });
+
+        const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo conciso e construtivo em um único parágrafo. O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
+
+Histórico de Relatórios:
+${reportsHistory}
+
+Resumo Analítico:`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        const summaryText = response.text;
+        
+        if (!summaryText) {
+            console.log('[AI] Received empty summary from API.');
+            return;
+        }
+
+        // 4. Update student document
+        const studentRef = db.collection('students').doc(studentId);
+        await studentRef.update({
+            aiSummary: {
+                summary: summaryText.trim(),
+                lastUpdated: new Date().toISOString().split('T')[0]
+            }
+        });
+        
+        console.log(`[AI] Successfully generated and saved summary for student ${studentId}`);
+
+    } catch (error) {
+        console.error('[AI] Error generating student summary:', error);
+        // We don't show a toast here to not bother the user. The primary action (saving report) was successful.
+    }
+};
+
 
 // --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
@@ -484,6 +577,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             
             showToast('Relatório salvo com sucesso!', 'success');
             setIsReportModalOpen(false);
+
+            // Trigger AI summary generation - fire and forget
+            generateAndSaveStudentSummary(classContext.studentId, classGroups);
+            
         } catch (error) {
             showToast('Erro ao salvar o relatório.', 'error');
             console.error("Error saving report:", error);

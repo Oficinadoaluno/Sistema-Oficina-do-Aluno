@@ -13,7 +13,8 @@
     "react": "^19.1.1",
     "firebase": "^12.2.1",
     "@heroicons/react": "^2.2.0",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "@google/genai": "^0.14.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

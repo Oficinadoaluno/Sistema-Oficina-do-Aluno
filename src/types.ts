@@ -11,6 +11,10 @@ export interface Student {
     grade: string;
     status: 'matricula' | 'prospeccao' | 'inativo';
     hasMonthlyPlan?: boolean;
+    aiSummary?: {
+        summary: string;
+        lastUpdated: string; // YYYY-MM-DD
+    };
     // Registration details
     birthDate?: string;
     schoolUnit?: string;

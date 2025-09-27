@@ -116,6 +116,7 @@ const ScheduleClassModal: React.FC<{
     
     const isEditing = !!classToEdit?.id;
 
+    // All hooks are defined at the top level to respect the Rules of Hooks.
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [studentId, setStudentId] = useState<string>('');
@@ -129,7 +130,6 @@ const ScheduleClassModal: React.FC<{
     const [status, setStatus] = useState<ScheduledClass['status']>('scheduled');
     const [statusChangeReason, setStatusChangeReason] = useState('');
     const [packageId, setPackageId] = useState<string | undefined>(undefined);
-    
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
     const studentDropdownRef = useRef<HTMLDivElement>(null);
@@ -143,7 +143,7 @@ const ScheduleClassModal: React.FC<{
             setType(classToEdit.type || 'Aula Regular');
             const isCustom = classToEdit.discipline && !allDisciplines.includes(classToEdit.discipline);
             setDiscipline(isCustom ? 'Outro' : classToEdit.discipline || '');
-            setCustomDiscipline(isCustom ? classToEdit.discipline : '');
+            setCustomDiscipline(isCustom ? classToEdit.discipline || '' : '');
             setContent(classToEdit.content || '');
             setDuration(classToEdit.duration || 90);
             setLocation(classToEdit.location || 'presencial');
@@ -204,6 +204,8 @@ const ScheduleClassModal: React.FC<{
         if (!studentId) return [];
         return allPackages.filter(p => p.studentId === studentId && p.status === 'active' && (p.totalHours - p.usedHours) > 0);
     }, [studentId, allPackages]);
+    
+    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -218,8 +220,6 @@ const ScheduleClassModal: React.FC<{
         });
         onClose();
     };
-    
-    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     if (!isOpen) return null;
 
@@ -421,6 +421,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [classToShowReport, setClassToShowReport] = useState<ScheduledClass | null>(null);
     const [monthlyStudentFilter, setMonthlyStudentFilter] = useState('');
     const [monthlyProfFilter, setMonthlyProfFilter] = useState('');
+    const [monthlyStatusFilter, setMonthlyStatusFilter] = useState('');
+
 
     useEffect(() => {
         setLoading(true);
@@ -547,11 +549,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         const filtered = classesInMonth.filter(c => {
             const studentMatch = !monthlyStudentFilter || c.studentId === monthlyStudentFilter;
             const profMatch = !monthlyProfFilter || c.professionalId === monthlyProfFilter;
-            return studentMatch && profMatch;
+            const statusMatch = !monthlyStatusFilter || c.status === monthlyStatusFilter;
+            return studentMatch && profMatch && statusMatch;
         });
 
         return { monthName, filteredMonthlyClasses: filtered.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) };
-    }, [currentDate, scheduledClasses, monthlyStudentFilter, monthlyProfFilter]);
+    }, [currentDate, scheduledClasses, monthlyStudentFilter, monthlyProfFilter, monthlyStatusFilter]);
+
 
     const handleDateChange = (amount: number) => {
         const newDate = new Date(currentDate);
@@ -680,14 +684,21 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 
                 <section className="mt-8">
                     <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({monthName})</h3>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={inputStyle}>
+                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={`${inputStyle} md:col-span-2`}>
                             <option value="">Todos os Alunos</option>
                             {students.filter(s => s.status === 'matricula').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                          <select value={monthlyProfFilter} onChange={e => setMonthlyProfFilter(e.target.value)} className={inputStyle}>
                             <option value="">Todos os Professores</option>
                             {professionals.filter(p => p.status === 'ativo').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <select value={monthlyStatusFilter} onChange={e => setMonthlyStatusFilter(e.target.value)} className={inputStyle}>
+                            <option value="">Todos os Status</option>
+                            <option value="scheduled">Agendada</option>
+                            <option value="completed">Concluída</option>
+                            <option value="canceled">Cancelada</option>
+                            <option value="rescheduled">Remarcada</option>
                         </select>
                     </div>
                     {/* Desktop Table */}
@@ -698,7 +709,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
                                     <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
                                 </tr>
@@ -708,11 +718,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                     const student = students.find(s => s.id === cls.studentId);
                                     const professional = professionals.find(p => p.id === cls.professionalId);
                                     return (
-                                        <tr key={cls.id} className={cls.status === 'completed' ? 'bg-green-50' : ''}>
-                                            <td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
-                                            <td className="px-4 py-3 font-medium">{student?.name}</td>
-                                            <td className="px-4 py-3 text-sm">{professional?.name}</td>
-                                            <td className="px-4 py-3 text-sm">{cls.discipline}</td>
+                                        <tr key={cls.id} className={`${cls.status === 'completed' ? 'bg-green-50' : ''} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
+                                            <td className="px-4 py-3 text-sm">
+                                                {new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                                                <span className="text-zinc-500"> às {cls.time}</span>
+                                            </td>
+                                            <td className="px-4 py-3 font-medium">{student?.name || 'Aluno não encontrado'}</td>
+                                            <td className="px-4 py-3 text-sm">{professional?.name || 'Professor não encontrado'}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <div className="flex items-center gap-2">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusStyles[cls.status].bg} ${statusStyles[cls.status].text}`}>
@@ -720,7 +732,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                     </span>
                                                     {(cls.paymentStatus === 'pending' || !cls.paymentStatus) && cls.status !== 'canceled' && (
                                                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800" title="Pagamento Pendente">
-                                                            $
+                                                            Pendente
                                                         </span>
                                                     )}
                                                 </div>
@@ -748,7 +760,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                             const student = students.find(s => s.id === cls.studentId);
                             const professional = professionals.find(p => p.id === cls.professionalId);
                             return (
-                                <div key={cls.id} className={`border rounded-lg p-3 space-y-2 ${cls.status === 'completed' ? 'bg-green-50' : 'bg-zinc-50'}`}>
+                                <div key={cls.id} className={`border rounded-lg p-3 space-y-2 ${cls.status === 'completed' ? 'bg-green-50' : 'bg-zinc-50'} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-bold text-zinc-800">{student?.name}</p>

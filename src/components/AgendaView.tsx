@@ -355,32 +355,47 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [classToEdit, setClassToEdit] = useState<Partial<ScheduledClass> | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const [classesSnap, studentsSnap, profsSnap, groupsSnap, pkgSnap] = await Promise.all([
-                    db.collection("scheduledClasses").get(),
-                    db.collection("students").get(),
-                    db.collection("professionals").get(),
-                    db.collection("classGroups").get(),
-                    db.collection("classPackages").where("status", "==", "active").get()
-                ]);
-
-                setScheduledClasses(classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]);
-                setStudents(studentsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]);
-                setProfessionals(profsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
-                setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
-                setAllPackages(pkgSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]);
-
-            } catch (err: any) {
-                console.error(`Firestore Error (AgendaView):`, err);
-                showToast("Ocorreu um erro ao carregar os dados da agenda.", "error");
-                setError("Ocorreu um erro ao carregar os dados da agenda.");
-            } finally {
-                setLoading(false);
-            }
+        setLoading(true);
+        const createErrorHandler = (context: string) => (error: any) => {
+            console.error(`Firestore (${context}) Error:`, error);
+            setError(`Erro ao carregar ${context}.`);
+            showToast(`Erro ao carregar ${context}.`, "error");
         };
-        fetchData();
+
+        const unsubClasses = db.collection("scheduledClasses").onSnapshot(
+            snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]),
+            createErrorHandler("aulas")
+        );
+        const unsubStudents = db.collection("students").onSnapshot(
+            snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]),
+            createErrorHandler("alunos")
+        );
+        const unsubProfs = db.collection("professionals").onSnapshot(
+            snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]),
+            createErrorHandler("profissionais")
+        );
+        const unsubGroups = db.collection("classGroups").onSnapshot(
+            snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]),
+            createErrorHandler("turmas")
+        );
+        const unsubPkgs = db.collection("classPackages").where("status", "==", "active").onSnapshot(
+            snap => setAllPackages(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]),
+            createErrorHandler("pacotes")
+        );
+
+        // This is just to turn off the initial loader
+        Promise.all([
+           db.collection("scheduledClasses").get(),
+           db.collection("students").get()
+        ]).then(() => setLoading(false)).catch(() => setLoading(false));
+
+        return () => {
+            unsubClasses();
+            unsubStudents();
+            unsubProfs();
+            unsubGroups();
+            unsubPkgs();
+        };
     }, [showToast]);
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
@@ -456,8 +471,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 await classRef.update(sanitizeFirestore(dataToSave as any));
                 showToast('Aula atualizada com sucesso!', 'success');
             } else {
-                const docRef = await db.collection('scheduledClasses').add(sanitizeFirestore(dataToSave as any));
-                setScheduledClasses(prev => [...prev, { ...dataToSave, id: docRef.id } as ScheduledClass]);
+                await db.collection('scheduledClasses').add(sanitizeFirestore(dataToSave as any));
                 showToast('Aula agendada com sucesso!', 'success');
             }
         } catch (error: any) {

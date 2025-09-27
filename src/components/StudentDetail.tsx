@@ -263,36 +263,38 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
     const [monthOffset, setMonthOffset] = useState(0);
 
 
-    useEffect(() => {
-        const createSpecificErrorHandler = (context: string) => (error: any) => {
+     useEffect(() => {
+        const createErrorHandler = (context: string) => (error: any) => {
             console.error(`Firestore (${context}) Error:`, error);
-            showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
+            showToast(`Erro ao carregar ${context}.`, "error");
         };
 
-        const fetchData = async () => {
-            try {
-                const [classesSnap, professionalsSnap, packagesSnap, groupsSnap, groupReportsSnap] = await Promise.all([
-                    db.collection("scheduledClasses").where("studentId", "==", student.id).get(),
-                    db.collection("professionals").get(),
-                    db.collection("classPackages").where("studentId", "==", student.id).get(),
-                    db.collection("classGroups").where("studentIds", "array-contains", student.id).get(),
-                    db.collection("groupStudentDailyReports").where("studentId", "==", student.id).orderBy("date", "desc").get(),
-                ]);
-
-                const classes = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
+        const unsubClasses = db.collection("scheduledClasses").where("studentId", "==", student.id)
+            .onSnapshot(snap => {
+                const classes = snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
                 classes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                 setAllScheduledClasses(classes);
-                setProfessionals(professionalsSnap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]);
-                setClassPackages(packagesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]);
-                setClassGroups(groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]);
-                setGroupReports(groupReportsSnap.docs.map(d => ({id: d.id, ...d.data()})) as GroupStudentDailyReport[]);
+            }, createErrorHandler('aulas'));
+        
+        const unsubProfs = db.collection("professionals")
+            .onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), createErrorHandler('profissionais'));
+        
+        const unsubPackages = db.collection("classPackages").where("studentId", "==", student.id)
+            .onSnapshot(snap => setClassPackages(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassPackage[]), createErrorHandler('pacotes'));
 
-            } catch (error: any) {
-                createSpecificErrorHandler('dados do aluno')(error);
-            }
+        const unsubGroups = db.collection("classGroups").where("studentIds", "array-contains", student.id)
+            .onSnapshot(snap => setClassGroups(snap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[]), createErrorHandler('turmas'));
+
+        const unsubGroupReports = db.collection("groupStudentDailyReports").where("studentId", "==", student.id).orderBy("date", "desc")
+            .onSnapshot(snap => setGroupReports(snap.docs.map(d => ({id: d.id, ...d.data()})) as GroupStudentDailyReport[]), createErrorHandler('relatórios de turma'));
+
+        return () => {
+            unsubClasses();
+            unsubProfs();
+            unsubPackages();
+            unsubGroups();
+            unsubGroupReports();
         };
-
-        fetchData();
     }, [student.id, showToast]);
     
     const { upcomingClasses, pastClasses } = useMemo(() => {
@@ -371,36 +373,60 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
         const classToUpdate = allScheduledClasses.find(c => c.id === classId);
         if (!classToUpdate) return;
     
-        const originalStatus = classToUpdate.paymentStatus;
-        const originalPackageId = classToUpdate.packageId;
-    
-        setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: newStatus } : c));
-    
+        const batch = db.batch();
+        const classRef = db.collection('scheduledClasses').doc(classId);
+        
         try {
-            if (newStatus === 'package') {
+            // --- Logic for changing TO 'paid' ---
+            if (newStatus === 'paid' && classToUpdate.paymentStatus !== 'paid') {
+                const professional = professionals.find(p => p.id === classToUpdate.professionalId);
+                const hourlyRate = professional?.hourlyRateIndividual || 70; // Fallback rate
+                const amount = (classToUpdate.duration / 60) * hourlyRate;
+                
+                if (amount > 0) {
+                    const transactionData = {
+                        type: 'credit' as const, date: classToUpdate.date, amount, studentId: student.id,
+                        description: `Pagamento aula de ${classToUpdate.discipline} para ${student.name}`,
+                        registeredById: currentUser.id, classId: classId
+                    };
+                    const newTxRef = db.collection('transactions').doc(); // Create ref with new ID
+                    batch.set(newTxRef, sanitizeFirestore(transactionData as any));
+                    batch.update(classRef, { paymentStatus: 'paid', packageId: firebase.firestore.FieldValue.delete(), transactionId: newTxRef.id });
+                } else {
+                    batch.update(classRef, { paymentStatus: 'paid', packageId: firebase.firestore.FieldValue.delete() });
+                }
+                showToast('Aula marcada como paga e transação registrada.', 'success');
+            
+            // --- Logic for changing TO 'package' ---
+            } else if (newStatus === 'package') {
                 const availablePackage = packagesWithUsage.find(p => p.status === 'active' && p.remainingHours > 0);
-    
                 if (!availablePackage) {
                     showToast('Aluno não possui créditos de horas disponíveis.', 'error');
-                    setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: originalStatus } : c));
-                    return;
+                    return; // Abort
                 }
-                
-                await db.collection('scheduledClasses').doc(classId).update({ paymentStatus: 'package', packageId: availablePackage.id });
+                if (classToUpdate.transactionId) {
+                    const txRef = db.collection('transactions').doc(classToUpdate.transactionId);
+                    batch.delete(txRef);
+                }
+                batch.update(classRef, { paymentStatus: 'package', packageId: availablePackage.id, transactionId: firebase.firestore.FieldValue.delete() });
                 showToast('Aula debitada do pacote.', 'success');
-
+    
+            // --- Logic for changing FROM 'paid' or 'package' to something else ---
             } else {
-                let updateData: any = { paymentStatus: newStatus };
-                if (originalStatus === 'package' || originalPackageId) {
-                    updateData.packageId = firebase.firestore.FieldValue.delete();
-                    showToast('Crédito do pacote estornado.', 'info');
+                if (classToUpdate.transactionId) {
+                    const txRef = db.collection('transactions').doc(classToUpdate.transactionId);
+                    batch.delete(txRef);
+                    showToast('Transação financeira estornada.', 'info');
                 }
-                await db.collection('scheduledClasses').doc(classId).update(updateData);
+                batch.update(classRef, { paymentStatus: newStatus, packageId: firebase.firestore.FieldValue.delete(), transactionId: firebase.firestore.FieldValue.delete() });
                 showToast('Status da aula atualizado.', 'success');
             }
+            
+            await batch.commit();
+
         } catch (error) {
+            console.error("Error updating class payment status:", error);
             showToast('Erro ao atualizar status da aula.', 'error');
-            setAllScheduledClasses(prev => prev.map(c => c.id === classId ? { ...c, paymentStatus: originalStatus, packageId: originalPackageId } : c));
         }
     };
 

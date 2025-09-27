@@ -51,25 +51,27 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
 
     // --- Data Fetching ---
     useEffect(() => {
-        const fetchTeam = async () => {
-            setLoading(true);
-            try {
-                const [profsSnap, collabsSnap] = await Promise.all([
-                    db.collection("professionals").orderBy("name").get(),
-                    db.collection("collaborators").orderBy("name").get()
-                ]);
+        setLoading(true);
+        const unsubProfs = db.collection("professionals").orderBy("name").onSnapshot(snap => {
+            setProfessionals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[]);
+            setLoading(false);
+        }, err => {
+            console.error(err);
+            showToast("Erro ao buscar professores.", "error");
+            setLoading(false);
+        });
 
-                setProfessionals(profsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Professional[]);
-                setCollaborators(collabsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Collaborator[]);
-
-            } catch (error: any) {
-                console.error("Firestore (TeamManagement) Error:", error);
-                showToast("Ocorreu um erro ao buscar os dados da equipe.", "error");
-            } finally {
-                setLoading(false);
-            }
+        const unsubCollabs = db.collection("collaborators").orderBy("name").onSnapshot(snap => {
+            setCollaborators(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Collaborator[]);
+        }, err => {
+            console.error(err);
+            showToast("Erro ao buscar colaboradores.", "error");
+        });
+        
+        return () => {
+            unsubProfs();
+            unsubCollabs();
         };
-        fetchTeam();
     }, [showToast]);
 
     // --- Memoized Filters ---

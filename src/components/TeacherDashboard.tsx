@@ -69,7 +69,7 @@ Observações: ${r.observations}
         ].filter(Boolean).join('\n');
 
         // 3. Call Gemini API
-        const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU" });
 
         const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo direto e objetivo em um único parágrafo curto (máximo de 5 frases). O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
@@ -685,7 +685,7 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
 2.  **Atividade Prática:** Uma atividade concreta e rápida.
 3.  **Ponto de Conexão:** Como a abordagem ajuda o aluno com base em seu perfil.`;
             
-            const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
+            const ai = new GoogleGenAI({ apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU" });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -830,68 +830,66 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const createSpecificErrorHandler = useCallback((context: string) => (error: any) => {
+    const createErrorHandler = useCallback((context: string) => (error: any) => {
         console.error(`Firestore (${context}) Error:`, error);
-        if (error.code === 'permission-denied') {
-            showToast(`Você não tem permissão para ver ${context.toLowerCase()}.`, "error");
-        } else if (error.code === 'failed-precondition') {
-            showToast(`Erro de configuração: índice ausente para ${context.toLowerCase()}.`, "error");
-        } else if (error.code === 'unavailable') {
-            showToast("Erro de conexão. Verifique sua internet.", "error");
-        } else {
-            showToast(`Ocorreu um erro ao buscar dados de ${context.toLowerCase()}.`, "error");
-        }
+        showToast(`Erro ao carregar ${context}.`, "error");
     }, [showToast]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // FIX: The original query required a composite index. By sorting on the client,
-                // we make the query more robust against missing index deployments.
-                const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
-                const classesSnap = await qClasses.get();
-                const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
-                
-                // Sort by date on the client
-                classesData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                
-                setScheduledClasses(classesData);
+        const studentListeners: (() => void)[] = [];
 
-                const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
-                const groupsSnap = await qGroups.get();
-                const groupsData = groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[];
-                setClassGroups(groupsData);
-                
-                const studentIds = new Set([
-                    ...classesData.map(c => c.studentId),
-                    ...groupsData.flatMap(g => g.studentIds)
-                ]);
+        const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
+        const unsubClasses = qClasses.onSnapshot(classesSnap => {
+            const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
+            classesData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            setScheduledClasses(classesData);
+            
+            // Re-fetch students when classes change
+            fetchAllStudents(classesData, classGroups);
+        }, createErrorHandler('aulas'));
 
-                if (studentIds.size > 0) {
-                    const studentIdArray = Array.from(studentIds);
-                    const studentPromises = [];
-                    // Firestore 'in' queries support up to 30 elements per query.
-                    // Chunking the array ensures the query will not fail with a large number of students.
-                    for (let i = 0; i < studentIdArray.length; i += 10) {
-                        const chunk = studentIdArray.slice(i, i + 10);
-                        studentPromises.push(
-                            db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", chunk).get()
-                        );
-                    }
-                    const studentSnapshots = await Promise.all(studentPromises);
-                    const studentsData = studentSnapshots.flatMap(snap => 
-                        snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
+        const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
+        const unsubGroups = qGroups.onSnapshot(groupsSnap => {
+            const groupsData = groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[];
+            setClassGroups(groupsData);
+            
+            // Re-fetch students when groups change
+            fetchAllStudents(scheduledClasses, groupsData);
+        }, createErrorHandler('turmas'));
+
+        const fetchAllStudents = async (currentClasses: ScheduledClass[], currentGroups: ClassGroup[]) => {
+            const studentIds = new Set([
+                ...currentClasses.map(c => c.studentId),
+                ...currentGroups.flatMap(g => g.studentIds)
+            ]);
+
+            if (studentIds.size > 0) {
+                // To avoid multiple listeners, we fetch all students at once.
+                // onSnapshot on a large `in` query is complex, so a .get() here is a good compromise.
+                const studentIdArray = Array.from(studentIds);
+                const studentPromises = [];
+                for (let i = 0; i < studentIdArray.length; i += 10) {
+                    const chunk = studentIdArray.slice(i, i + 10);
+                    studentPromises.push(
+                        db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", chunk).get()
                     );
-                    setStudents(studentsData);
-                } else {
-                    setStudents([]);
                 }
-            } catch (error) {
-                createSpecificErrorHandler('dados do painel')(error);
+                const studentSnapshots = await Promise.all(studentPromises);
+                const studentsData = studentSnapshots.flatMap(snap => 
+                    snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
+                );
+                setStudents(studentsData);
+            } else {
+                setStudents([]);
             }
         };
-        fetchData();
-    }, [currentUser.id, createSpecificErrorHandler]);
+
+        return () => {
+            unsubClasses();
+            unsubGroups();
+            studentListeners.forEach(unsub => unsub());
+        };
+    }, [currentUser.id, createErrorHandler]);
 
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {

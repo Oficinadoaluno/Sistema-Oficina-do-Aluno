@@ -89,6 +89,7 @@ export interface Transaction {
   month?: string;
   studentId?: string;
   professionalId?: string;
+  classId?: string; // Link to the specific class paid for
   cardDetails?: {
     method: CardPaymentMethod;
     details?: string;
@@ -159,6 +160,7 @@ export interface ScheduledClass {
   report?: ClassReport;
   packageId?: string;
   paymentStatus?: 'paid' | 'free' | 'package' | 'pending';
+  transactionId?: string;
 }
 
 // --- Class Group Types ---

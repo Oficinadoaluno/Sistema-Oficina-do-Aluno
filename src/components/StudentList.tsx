@@ -23,35 +23,29 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
     const { showToast } = useContext(ToastContext);
 
     useEffect(() => {
-        const fetchStudents = async () => {
-            setLoading(true);
-            try {
-                const q = db.collection("students").orderBy("name");
-                const snapshot = await q.get();
-                const studentsData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as Student[];
-                setStudents(studentsData);
-            } catch (error: any) {
-                console.error("Firestore (StudentList) Error:", error);
-                if (error.code === 'permission-denied') {
-                    console.error("Erro de Permissão: Verifique as regras de segurança do Firestore para a coleção 'students'.");
-                    showToast("Você não tem permissão para listar os alunos.", "error");
-                } else if (error.code === 'failed-precondition') {
-                    console.error("Erro de Pré-condição: Um índice para a query de alunos está faltando. Verifique o console para o link de criação do índice.");
-                    showToast("Erro de configuração do banco de dados (índice ausente).", "error");
-                } else if (error.code === 'unavailable') {
-                    console.error("Erro de Rede: Não foi possível conectar ao Firestore.");
-                    showToast("Erro de conexão. Verifique sua internet.", "error");
-                } else {
-                    showToast("Ocorreu um erro ao buscar os alunos.", "error");
-                }
-            } finally {
-                setLoading(false);
+        setLoading(true);
+        const q = db.collection("students").orderBy("name");
+        
+        const unsubscribe = q.onSnapshot(snapshot => {
+            const studentsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Student[];
+            setStudents(studentsData);
+            setLoading(false);
+        }, (error: any) => {
+            console.error("Firestore (StudentList) Error:", error);
+            if (error.code === 'permission-denied') {
+                showToast("Você não tem permissão para listar os alunos.", "error");
+            } else if (error.code === 'failed-precondition') {
+                showToast("Erro de configuração do banco de dados (índice ausente).", "error");
+            } else {
+                showToast("Ocorreu um erro ao buscar os alunos.", "error");
             }
-        };
-        fetchStudents();
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
     }, [showToast]);
 
     const schools = useMemo(() => [...new Set(students.map(s => s.school).filter(Boolean))].sort(), [students]);
@@ -91,26 +85,21 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
     };
     
     const handleSaveSuccess = (studentId: string) => {
-        setLoading(true);
-        db.collection("students").doc(studentId).get()
-            .then(doc => {
+        // With onSnapshot, we just need to switch views.
+        // The list is already updated. We find the student in the state.
+        const studentData = students.find(s => s.id === studentId);
+        if (studentData) {
+            setSelectedStudent(studentData);
+            setView('detail');
+        } else {
+            // Fallback in case the snapshot is slow
+            db.collection("students").doc(studentId).get().then(doc => {
                 if (doc.exists) {
-                    const studentData = { id: doc.id, ...doc.data() } as Student;
-                    setSelectedStudent(studentData);
+                    setSelectedStudent({ id: doc.id, ...doc.data() } as Student);
                     setView('detail');
-                } else {
-                    showToast("Não foi possível encontrar o aluno salvo, retornando à lista.", "info");
-                    setView('list');
                 }
-            })
-            .catch(error => {
-                console.error("Error fetching student after save:", error);
-                showToast("Erro ao buscar dados do aluno, retornando à lista.", "error");
-                setView('list');
-            })
-            .finally(() => {
-                setLoading(false);
             });
+        }
     };
     
     if (view === 'add') {

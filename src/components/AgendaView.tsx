@@ -6,6 +6,7 @@ import {
 } from './Icons';
 import { ToastContext } from '../App';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import InfoItem from './InfoItem';
 
 // --- Constants & Types ---
 const inputStyle = "w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
@@ -35,6 +36,70 @@ interface DisplayGroupClass {
     duration: number; // in minutes
 }
 type DisplayClass = DisplayIndividualClass | DisplayGroupClass;
+
+// --- Report Modal ---
+interface ClassReportModalProps {
+    aula: ScheduledClass | null;
+    onClose: () => void;
+    professionals: Professional[];
+}
+const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, professionals }) => {
+    if (!aula || !aula.report) return null;
+
+    const report = aula.report;
+    const professional = professionals.find(p => p.id === aula.professionalId);
+
+    return (
+         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl m-4 animate-fade-in-down" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-bold text-zinc-800">Relatório da Aula</h3>
+                        <p className="text-zinc-600 font-semibold">{aula.discipline}</p>
+                        <p className="text-sm text-zinc-500">Prof. {professional?.name || 'N/A'} - {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                    </div>
+                     <button onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 -mt-2 -mr-2"><XMarkIcon /></button>
+                </div>
+                <div className="mt-4 pt-4 border-t max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <InfoItem label="Humor do Aluno" value={<span className="text-2xl">{report.mood}</span>} />
+                        <InfoItem label="Exercício para Casa" value={report.homeworkAssigned ? 'Sim' : 'Não'} />
+                    </div>
+                    {report.description && (
+                        <InfoItem label="Observações da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
+                    )}
+
+                    {report.testRecord && (
+                        <div>
+                            <h4 className="text-sm font-medium text-zinc-500">Nota de Prova Registrada</h4>
+                            <div className="p-3 bg-zinc-50 rounded-md mt-1 grid grid-cols-3 gap-2">
+                                <InfoItem label="Tipo" value={report.testRecord.type} />
+                                <InfoItem label="Nota Máxima" value={report.testRecord.maxScore.toFixed(1)} />
+                                <InfoItem label="Nota Aluno" value={<span className="font-bold text-lg text-secondary">{report.testRecord.studentScore.toFixed(1)}</span>} />
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div>
+                        <h4 className="text-sm font-medium text-zinc-500">Conteúdo Abordado</h4>
+                        <div className="p-3 bg-zinc-50 rounded-md mt-1 space-y-2">{(report.contents && report.contents.length > 0) ? report.contents.map((c, index) => (<div key={index}><p className="font-semibold text-zinc-800">{c.discipline}</p><p className="text-zinc-700 pl-2">{c.content}</p></div>)) : <p className="text-zinc-500">Nenhum conteúdo especificado.</p>}</div>
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-medium text-zinc-500">Próximos Passos / Tópicos a Revisar</h4>
+                        <div className="p-3 bg-zinc-50 rounded-md mt-1">
+                           {report.nextSteps && report.nextSteps.length > 0 ? (
+                                <ul className="list-disc pl-5 space-y-1 text-zinc-700">
+                                    {report.nextSteps.map((step, index) => <li key={index}>{step}</li>)}
+                                </ul>
+                           ) : <p className="text-zinc-500">Nenhum próximo passo definido.</p>}
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Fechar</button></div>
+            </div>
+        </div>
+    );
+};
 
 
 // --- Schedule/Detail Modal ---
@@ -153,10 +218,10 @@ const ScheduleClassModal: React.FC<{
         });
         onClose();
     };
-
-    if (!isOpen) return null;
     
     const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
@@ -353,6 +418,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [classToEdit, setClassToEdit] = useState<Partial<ScheduledClass> | null>(null);
+    const [classToShowReport, setClassToShowReport] = useState<ScheduledClass | null>(null);
     const [monthlyStudentFilter, setMonthlyStudentFilter] = useState('');
     const [monthlyProfFilter, setMonthlyProfFilter] = useState('');
 
@@ -457,6 +523,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             return { ...pkg, usedHours };
         });
     }, [allPackages, scheduledClasses]);
+    
+    const statusStyles: Record<ScheduledClass['status'], { label: string; bg: string; text: string; }> = {
+        scheduled: { label: 'Agendada', bg: 'bg-blue-100', text: 'text-blue-800' },
+        completed: { label: 'Concluída', bg: 'bg-green-100', text: 'text-green-800' },
+        canceled: { label: 'Cancelada', bg: 'bg-red-100', text: 'text-red-800' },
+        rescheduled: { label: 'Remarcada', bg: 'bg-zinc-200', text: 'text-zinc-800' },
+    };
 
     const { monthName, filteredMonthlyClasses } = useMemo(() => {
         const targetDate = new Date(currentDate);
@@ -583,7 +656,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                     {profClasses.map(cls => {
                                         if (cls.classType === 'individual') {
                                             const student = students.find(s => s.id === cls.studentId);
-                                            const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-cyan-100 border-cyan-500 text-cyan-800' }[cls.status];
+                                            const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-green-100 border-green-500 text-green-800' }[cls.status];
                                             return (
                                                 <button key={cls.id} onClick={() => handleClassClick(cls)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
                                                     <p className="font-bold text-xs truncate">{student?.name}</p>
@@ -634,16 +707,34 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                 {filteredMonthlyClasses.map(cls => {
                                     const student = students.find(s => s.id === cls.studentId);
                                     const professional = professionals.find(p => p.id === cls.professionalId);
-                                    const statusMap: Record<ScheduledClass['status'], string> = { scheduled: 'Agendada', completed: 'Concluída', canceled: 'Cancelada', rescheduled: 'Remarcada' };
                                     return (
-                                        <tr key={cls.id}>
+                                        <tr key={cls.id} className={cls.status === 'completed' ? 'bg-green-50' : ''}>
                                             <td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
                                             <td className="px-4 py-3 font-medium">{student?.name}</td>
                                             <td className="px-4 py-3 text-sm">{professional?.name}</td>
                                             <td className="px-4 py-3 text-sm">{cls.discipline}</td>
-                                            <td className="px-4 py-3 text-sm">{statusMap[cls.status]}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusStyles[cls.status].bg} ${statusStyles[cls.status].text}`}>
+                                                        {statusStyles[cls.status].label}
+                                                    </span>
+                                                    {(cls.paymentStatus === 'pending' || !cls.paymentStatus) && cls.status !== 'canceled' && (
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800" title="Pagamento Pendente">
+                                                            $
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3 text-right text-sm">
-                                                <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline">Editar</button>
+                                                {cls.reportRegistered ? (
+                                                    <button onClick={() => setClassToShowReport(cls)} className="font-semibold text-secondary hover:underline">
+                                                        Ver Relatório
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline">
+                                                        {cls.status === 'completed' ? 'Detalhes' : 'Editar'}
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -656,22 +747,32 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         {filteredMonthlyClasses.map(cls => {
                             const student = students.find(s => s.id === cls.studentId);
                             const professional = professionals.find(p => p.id === cls.professionalId);
-                            const statusMap: Record<ScheduledClass['status'], string> = { scheduled: 'Agendada', completed: 'Concluída', canceled: 'Cancelada', rescheduled: 'Remarcada' };
                             return (
-                                <div key={cls.id} className="bg-zinc-50 border rounded-lg p-3 space-y-2">
+                                <div key={cls.id} className={`border rounded-lg p-3 space-y-2 ${cls.status === 'completed' ? 'bg-green-50' : 'bg-zinc-50'}`}>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-bold text-zinc-800">{student?.name}</p>
                                             <p className="text-sm text-zinc-600">{cls.discipline}</p>
                                         </div>
-                                        <span className="text-xs font-semibold bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded-full">{statusMap[cls.status]}</span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusStyles[cls.status].bg} ${statusStyles[cls.status].text}`}>{statusStyles[cls.status].label}</span>
+                                            {(cls.paymentStatus === 'pending' || !cls.paymentStatus) && cls.status !== 'canceled' && (
+                                                <span className="text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" title="Pagamento Pendente">
+                                                    Pgto. Pendente
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="text-sm text-zinc-500 border-t pt-2">
                                         <p>Prof: {professional?.name}</p>
                                         <p>Data: {new Date(cls.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {cls.time}</p>
                                     </div>
                                     <div className="text-right">
-                                        <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline text-sm">Editar</button>
+                                        {cls.reportRegistered ? (
+                                            <button onClick={() => setClassToShowReport(cls)} className="font-semibold text-secondary hover:underline text-sm">Ver Relatório</button>
+                                        ) : (
+                                            <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline text-sm">{cls.status === 'completed' ? 'Detalhes' : 'Editar'}</button>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -690,6 +791,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 professionals={professionals}
                 allDisciplines={allDisciplines}
                 allPackages={packagesWithUsage}
+            />
+            <ClassReportModal
+                aula={classToShowReport}
+                onClose={() => setClassToShowReport(null)}
+                professionals={professionals}
             />
         </div>
     );

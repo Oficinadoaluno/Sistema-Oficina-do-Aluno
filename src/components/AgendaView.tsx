@@ -596,7 +596,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         setIsModalOpen(true);
     };
 
-    const handleClassClick = (cls: ScheduledClass) => {
+    const handleClassClick = (cls: ScheduledClass, e: React.MouseEvent) => {
+        e.stopPropagation(); // Stop the event from reaching the cell behind it
         setClassToEdit(cls);
         setIsModalOpen(true);
     };
@@ -662,7 +663,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                             const student = students.find(s => s.id === cls.studentId);
                                             const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-green-100 border-green-500 text-green-800' }[cls.status];
                                             return (
-                                                <button key={cls.id} onClick={() => handleClassClick(cls)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
+                                                <button key={cls.id} onClick={(e) => handleClassClick(cls, e)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
                                                     <p className="font-bold text-xs truncate">{student?.name}</p>
                                                     <p className="text-[10px] truncate">{cls.discipline}</p>
                                                 </button>
@@ -743,7 +744,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                         Ver Relatório
                                                     </button>
                                                 ) : (
-                                                    <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline">
+                                                    <button onClick={(e) => handleClassClick(cls, e)} className="font-semibold text-secondary hover:underline">
                                                         {cls.status === 'completed' ? 'Detalhes' : 'Editar'}
                                                     </button>
                                                 )}
@@ -783,7 +784,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         {cls.reportRegistered ? (
                                             <button onClick={() => setClassToShowReport(cls)} className="font-semibold text-secondary hover:underline text-sm">Ver Relatório</button>
                                         ) : (
-                                            <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline text-sm">{cls.status === 'completed' ? 'Detalhes' : 'Editar'}</button>
+                                            <button onClick={(e) => handleClassClick(cls, e)} className="font-semibold text-secondary hover:underline text-sm">{cls.status === 'completed' ? 'Detalhes' : 'Editar'}</button>
                                         )}
                                     </div>
                                 </div>

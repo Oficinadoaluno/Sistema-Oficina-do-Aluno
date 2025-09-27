@@ -617,7 +617,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                             {professionals.filter(p => p.status === 'ativo').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                     </div>
-                    <div className="border rounded-lg overflow-hidden">
+                    {/* Desktop Table */}
+                    <div className="border rounded-lg overflow-hidden hidden md:block">
                         <table className="min-w-full divide-y divide-zinc-200">
                              <thead className="bg-zinc-50">
                                 <tr>
@@ -649,8 +650,34 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                 })}
                             </tbody>
                         </table>
-                        {filteredMonthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada para este mês com os filtros aplicados.</p>}
                     </div>
+                    {/* Mobile Cards */}
+                    <div className="space-y-3 md:hidden">
+                        {filteredMonthlyClasses.map(cls => {
+                            const student = students.find(s => s.id === cls.studentId);
+                            const professional = professionals.find(p => p.id === cls.professionalId);
+                            const statusMap: Record<ScheduledClass['status'], string> = { scheduled: 'Agendada', completed: 'Concluída', canceled: 'Cancelada', rescheduled: 'Remarcada' };
+                            return (
+                                <div key={cls.id} className="bg-zinc-50 border rounded-lg p-3 space-y-2">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-bold text-zinc-800">{student?.name}</p>
+                                            <p className="text-sm text-zinc-600">{cls.discipline}</p>
+                                        </div>
+                                        <span className="text-xs font-semibold bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded-full">{statusMap[cls.status]}</span>
+                                    </div>
+                                    <div className="text-sm text-zinc-500 border-t pt-2">
+                                        <p>Prof: {professional?.name}</p>
+                                        <p>Data: {new Date(cls.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {cls.time}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline text-sm">Editar</button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {filteredMonthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada para este mês com os filtros aplicados.</p>}
                 </section>
             </main>
             

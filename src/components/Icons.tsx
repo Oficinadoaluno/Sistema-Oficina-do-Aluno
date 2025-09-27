@@ -47,7 +47,8 @@ import {
   XCircleIcon as HeroXCircleIcon,
   ComputerDesktopIcon as HeroComputerDesktopIcon,
   BuildingOffice2Icon as HeroBuildingOffice2Icon,
-  AcademicCapIcon as HeroAcademicCapIcon
+  AcademicCapIcon as HeroAcademicCapIcon,
+  Bars3Icon as HeroBars3Icon
 } from '@heroicons/react/24/outline';
 import {
   CheckBadgeIcon as HeroCheckBadgeIcon,
@@ -259,4 +260,8 @@ export const BuildingOffice2Icon: React.FC<React.SVGProps<SVGSVGElement>> = ({ c
 
 export const AcademicCapIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
     <HeroAcademicCapIcon className={className} {...props} />
+);
+
+export const Bars3Icon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+    <HeroBars3Icon className={className} {...props} />
 );

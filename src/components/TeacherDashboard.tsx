@@ -12,9 +12,16 @@ import {
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
     LockClosedIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon, ChartPieIcon,
     ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon,
-    SparklesIcon, BookOpenIcon
+    SparklesIcon, BookOpenIcon, Bars3Icon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+
+// --- AI API Keys ---
+// Key for generating student performance summaries after a report is filed.
+const AI_API_KEY_SUMMARY = "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU";
+// Key for the creativity panel to generate teaching ideas.
+const AI_API_KEY_CREATIVITY = "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E";
+
 
 // A simple component to render markdown-like text from the AI
 const SimpleMarkdownRenderer: React.FC<{ text: string }> = React.memo(({ text }) => {
@@ -113,7 +120,7 @@ Observações: ${r.observations}
         ].filter(Boolean).join('\n');
 
         // 3. Call Gemini API
-        const ai = new GoogleGenAI({ apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU" });
+        const ai = new GoogleGenAI({ apiKey: AI_API_KEY_SUMMARY });
 
         const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo direto e objetivo em um único parágrafo curto (máximo de 5 frases). O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
@@ -358,7 +365,7 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             if (existingRecord) {
                 await db.collection('groupAttendance').doc(existingRecord.id).update(firestoreUpdate);
                 
-                // Manually construct the new state to avoid spread operator issues
+                // FIX: Manually construct the new state to avoid spread operator issues on non-plain objects from Firestore.
                 const updatedLocalRecord: GroupAttendance = {
                     id: existingRecord.id,
                     groupId: existingRecord.groupId,
@@ -366,7 +373,8 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
                     date: existingRecord.date,
                     status: status,
                 };
-                // Preserve justification if student is marked absent again
+                // Preserve justification if student is marked absent.
+                // If student is present, justification is cleared in firestore, so we don't set it here for local state.
                 if (status === 'absent' && existingRecord.justification) {
                     updatedLocalRecord.justification = existingRecord.justification;
                 }
@@ -396,7 +404,15 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const newAttendance = new Map(attendance);
         const record = newAttendance.get(studentId);
         if (record) {
-            const updatedRecord = { ...record, justification };
+            // FIX: Manually construct the object to avoid spread operator issues.
+            const updatedRecord: GroupAttendance = {
+                id: record.id,
+                groupId: record.groupId,
+                studentId: record.studentId,
+                date: record.date,
+                status: record.status,
+                justification: justification,
+            };
             newAttendance.set(studentId, updatedRecord);
             setAttendance(newAttendance);
         }
@@ -742,7 +758,7 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
 2.  **Atividade Prática:** Uma atividade concreta e rápida.
 3.  **Ponto de Conexão:** Como a abordagem ajuda o aluno com base em seu perfil.`;
             
-            const ai = new GoogleGenAI({ apiKey: "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU" });
+            const ai = new GoogleGenAI({ apiKey: AI_API_KEY_CREATIVITY });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -895,6 +911,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [view, setView] = useState<View>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -968,7 +985,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             unsubGroups();
             studentListeners.forEach(unsub => unsub());
         };
-    }, [currentUser.id, createErrorHandler]);
+    }, [currentUser.id, createErrorHandler, scheduledClasses, classGroups]);
 
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
@@ -1160,8 +1177,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
 
     return (
         <div className="flex h-screen bg-neutral font-sans">
+            {/* Mobile Sidebar Overlay */}
+            <div 
+                className={`fixed inset-0 z-30 bg-black/50 transition-opacity md:hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+                onClick={() => setIsSidebarOpen(false)}
+            ></div>
             {/* Sidebar */}
-            <aside className="w-64 bg-white p-4 shadow-lg flex-shrink-0 flex flex-col">
+            <aside className={`absolute md:static z-40 w-64 h-full bg-white p-4 shadow-lg flex-shrink-0 flex flex-col transition-transform transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
                 <div className="flex items-center gap-3 mb-8 px-2">
                     <LogoPlaceholder />
                     <h1 className="text-xl font-semibold text-zinc-700">Portal Professor</h1>
@@ -1171,7 +1193,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                         {navItems.map(item => (
                             <li key={item.id}>
                                 <button
-                                    onClick={() => setView(item.id as View)}
+                                    onClick={() => { setView(item.id as View); setIsSidebarOpen(false); }}
                                     className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
                                         view === item.id ? 'bg-secondary/10 text-secondary' : 'text-zinc-600 hover:bg-zinc-100'
                                     }`}
@@ -1188,7 +1210,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0 z-10">
-                    <h2 className="text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                     <div className="flex items-center gap-2">
+                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-zinc-600 hover:bg-zinc-100 rounded-md">
+                            <Bars3Icon className="h-6 w-6" />
+                        </button>
+                        <h2 className="text-xl md:text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                    </div>
                     <div ref={menuRef} className="relative">
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100">
                             <span className="font-semibold">{currentUser.name}</span>
@@ -1205,7 +1232,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-4 md:p-6">
                     {renderContent()}
                 </main>
             </div>

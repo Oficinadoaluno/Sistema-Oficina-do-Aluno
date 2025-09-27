@@ -15,7 +15,8 @@ import {
     LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
     Cog6ToothIcon, ArrowRightOnRectangleIcon, ArchiveBoxIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
-    BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon, CurrencyDollarIcon
+    BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon, CurrencyDollarIcon,
+    Bars3Icon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -301,6 +302,7 @@ type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -357,8 +359,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
 
     return (
         <div className="flex h-screen bg-neutral font-sans">
+            {/* Mobile Sidebar Overlay */}
+            <div 
+                className={`fixed inset-0 z-30 bg-black/50 transition-opacity md:hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+                onClick={() => setIsSidebarOpen(false)}
+            ></div>
+
             {/* Sidebar */}
-            <aside className="w-64 bg-white p-4 shadow-lg flex-shrink-0 flex flex-col">
+            <aside className={`absolute md:static z-40 w-64 h-full bg-white p-4 shadow-lg flex-shrink-0 flex flex-col transition-transform transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
                 <div className="flex items-center gap-3 mb-8 px-2">
                     <LogoPlaceholder />
                     <h1 className="text-xl font-semibold text-zinc-700">Oficina do Aluno</h1>
@@ -367,7 +375,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                     <ul className="space-y-2">
                         {navItems.map(item => item.canAccess && (
                             <li key={item.id}>
-                                <button onClick={() => setView(item.id as View)} className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${view === item.id ? 'bg-secondary/10 text-secondary' : 'text-zinc-600 hover:bg-zinc-100'}`}>
+                                <button onClick={() => { setView(item.id as View); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors ${view === item.id ? 'bg-secondary/10 text-secondary' : 'text-zinc-600 hover:bg-zinc-100'}`}>
                                     <item.icon className="h-5 w-5" />
                                     <span>{item.label}</span>
                                 </button>
@@ -381,7 +389,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header */}
                 <header className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0 z-10">
-                    <h2 className="text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-zinc-600 hover:bg-zinc-100 rounded-md">
+                            <Bars3Icon className="h-6 w-6" />
+                        </button>
+                        <h2 className="text-xl md:text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                    </div>
                     <div className="relative" ref={menuRef}>
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">
                             <span className="font-semibold">{currentUser.name}</span>
@@ -399,7 +412,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                 </header>
                 
                 {/* Scrollable Content Area */}
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-4 md:p-6">
                     {renderContent()}
                 </main>
             </div>

@@ -176,35 +176,61 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
 
             <div className="flex-grow overflow-y-auto">
                 {loading ? <div className="text-center py-10">Carregando alunos...</div> :
-                <table className="min-w-full divide-y divide-zinc-200">
-                    <thead className="bg-zinc-50 sticky top-0">
-                        <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Nome</th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Responsável</th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Colégio</th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Série</th>
-                            <th scope="col" className="relative px-6 py-3">
-                                <span className="sr-only">Ações</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-zinc-200">
-                        {filteredStudents.map((student) => (
-                            <tr key={student.id} className="hover:bg-zinc-50 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-zinc-900">{student.name}</div></td>
-                                <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.guardian}</div></td>
-                                <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.school}</div></td>
-                                <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-secondary/10 text-secondary-dark">{student.grade}</span></td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleViewDetails(student)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>}
-                 {!loading && filteredStudents.length === 0 && (
-                    <div className="text-center py-10">
-                        <p className="text-zinc-500">Nenhum aluno encontrado com os filtros aplicados.</p>
+                <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                        <table className="min-w-full divide-y divide-zinc-200">
+                            <thead className="bg-zinc-50 sticky top-0">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Nome</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Responsável</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Colégio</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Série</th>
+                                    <th scope="col" className="relative px-6 py-3">
+                                        <span className="sr-only">Ações</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-zinc-200">
+                                {filteredStudents.map((student) => (
+                                    <tr key={student.id} className="hover:bg-zinc-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-zinc-900">{student.name}</div></td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.guardian}</div></td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.school}</div></td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-secondary/10 text-secondary-dark">{student.grade}</span></td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleViewDetails(student)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                )}
+
+                    {/* Mobile Cards */}
+                    <div className="space-y-3 md:hidden">
+                        {filteredStudents.map((student) => (
+                            <div key={student.id} className="bg-zinc-50 border rounded-lg p-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold text-zinc-900">{student.name}</p>
+                                        <p className="text-sm text-zinc-600">Resp: {student.guardian}</p>
+                                    </div>
+                                    <button onClick={() => handleViewDetails(student)} className="text-secondary hover:text-secondary-dark font-semibold text-sm">Ver mais</button>
+                                </div>
+                                <div className="mt-2 pt-2 border-t text-sm text-zinc-600">
+                                    <p>{student.school}</p>
+                                    <p><span className="px-2 mt-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-secondary/10 text-secondary-dark">{student.grade}</span></p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {!loading && filteredStudents.length === 0 && (
+                        <div className="text-center py-10">
+                            <p className="text-zinc-500">Nenhum aluno encontrado com os filtros aplicados.</p>
+                        </div>
+                    )}
+                </>
+                }
             </div>
         </div>
     );

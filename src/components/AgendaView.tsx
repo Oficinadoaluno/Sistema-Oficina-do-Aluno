@@ -11,9 +11,10 @@ import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 const inputStyle = "w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
 const labelStyle = "block text-xs font-medium text-zinc-600 mb-1";
 const VIEW_START_HOUR = 8;
-const VIEW_END_HOUR = 21; // Render up to 21:00 to give space for 20:xx classes
+const VIEW_END_HOUR = 21;
 const TOTAL_VIEW_HOURS = VIEW_END_HOUR - VIEW_START_HOUR;
 const TOTAL_VIEW_MINUTES = TOTAL_VIEW_HOURS * 60;
+const TIMELINE_ROW_HEIGHT_PX = 960; // Fixed height for the timeline row for consistent scaling
 
 const timeToMinutes = (time: string): number => {
     if (!time || !time.includes(':')) return 0;
@@ -604,10 +605,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                 return (
                                     <React.Fragment key={prof.id}>
                                         <div className="border-r border-t p-2 text-sm font-medium text-zinc-800 sticky left-0 bg-white/70 backdrop-blur-sm flex items-center">{prof.name}</div>
-                                        <div className="border-t grid relative" style={{ gridTemplateColumns: `repeat(${dailyGridTimeSlots.length}, 1fr)` }}>
+                                        <div className="border-t grid relative" style={{ 
+                                            gridTemplateColumns: `repeat(${dailyGridTimeSlots.length}, 1fr)`,
+                                            height: `${TIMELINE_ROW_HEIGHT_PX}px`
+                                        }}>
                                             {/* Background Grid & Availability */}
                                             {dailyGridTimeSlots.map(time => (
-                                                <div key={time} className={`border-l h-full min-h-[4rem] ${availableSlots.includes(time) ? 'bg-green-50/50' : ''}`}></div>
+                                                <div key={time} className={`border-l h-full ${availableSlots.includes(time) ? 'bg-green-100' : ''}`}></div>
                                             ))}
 
                                             {/* Class Blocks */}

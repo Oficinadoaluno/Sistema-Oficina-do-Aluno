@@ -11,7 +11,8 @@ import { ToastContext } from '../App';
 import { 
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
     LockClosedIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon, ChartPieIcon,
-    ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon
+    ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon,
+    SparklesIcon, BookOpenIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -68,9 +69,9 @@ Observações: ${r.observations}
         ].filter(Boolean).join('\n');
 
         // 3. Call Gemini API
-        const ai = new GoogleGenAI({ apiKey: "AIzaSyB7-pho29IPnjWetbhAFPNOuYhJthu8UvI" });
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
 
-        const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo conciso e construtivo em um único parágrafo. O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
+        const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo conciso e construtivo em um único parágrado. O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
 Histórico de Relatórios:
 ${reportsHistory}
@@ -110,6 +111,62 @@ Resumo Analítico:`;
 // --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
+
+// --- Upcoming Class Detail Modal ---
+interface UpcomingClassDetailModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    classData: ScheduledClass;
+    student: Student;
+}
+const UpcomingClassDetailModal: React.FC<UpcomingClassDetailModalProps> = ({ isOpen, onClose, classData, student }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <header className="flex justify-between items-start p-4 border-b">
+                    <div>
+                        <h3 className="text-xl font-bold text-zinc-800">{classData.discipline}</h3>
+                        <p className="text-sm text-zinc-500">
+                            {new Date(classData.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {classData.time}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="p-2 -mt-1 -mr-1 rounded-full text-zinc-400 hover:bg-zinc-100"><XMarkIcon /></button>
+                </header>
+                <main className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    <section>
+                        <h4 className="font-semibold text-zinc-700 mb-2">Aluno</h4>
+                        <div className="bg-zinc-50 p-3 rounded-md grid grid-cols-2 gap-2 text-sm">
+                            <div><p className="text-xs text-zinc-500">Nome</p><p className="font-medium text-zinc-800">{student.name}</p></div>
+                            <div><p className="text-xs text-zinc-500">Colégio</p><p className="font-medium text-zinc-800">{student.school || 'N/A'}</p></div>
+                            <div><p className="text-xs text-zinc-500">Série</p><p className="font-medium text-zinc-800">{student.grade || 'N/A'}</p></div>
+                        </div>
+                    </section>
+                    <section>
+                        <h4 className="font-semibold text-zinc-700 mb-2">Conteúdo da Aula</h4>
+                        <div className="bg-zinc-50 p-3 rounded-md">
+                            <p className="text-zinc-800 whitespace-pre-wrap">{classData.content || 'Nenhum conteúdo específico registrado.'}</p>
+                        </div>
+                    </section>
+                    <section>
+                        <h4 className="font-semibold text-zinc-700 mb-2 flex items-center gap-2"><SparklesIcon className="h-5 w-5 text-violet-500" /> Análise de Desempenho (IA)</h4>
+                        <div className="bg-violet-50 p-3 rounded-md border-l-4 border-violet-400">
+                            <p className="text-sm text-violet-800 whitespace-pre-wrap">
+                                {student.aiSummary?.summary || 'Nenhum resumo disponível. Será gerado após o primeiro relatório.'}
+                            </p>
+                            {student.aiSummary && <p className="text-xs text-violet-500 mt-2">Última atualização: {new Date(student.aiSummary.lastUpdated).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>}
+                        </div>
+                    </section>
+                </main>
+                <footer className="p-4 border-t flex justify-end">
+                    <button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Fechar</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Group Student Report Modal ---
 const activityOptions = ['Trabalho', 'Tarefas', 'Estudo', 'Outro'];
@@ -255,14 +312,21 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             const newAttendance = new Map(attendance);
             if (existingRecord) {
                 await db.collection('groupAttendance').doc(existingRecord.id).update(updateData);
-                // FIX: Create a new object for the state update, and safely remove justification if needed.
-                // This avoids mutation and potential type issues.
-                const { justification, ...restOfRecord } = existingRecord;
-                const updatedRecord = status === 'present'
-                    ? { ...restOfRecord, status }
-                    : { ...existingRecord, status };
+                // FIX: The object spread operator was causing a build error.
+                // Replaced with manual object construction to ensure type safety.
+                const updatedRecord: GroupAttendance = {
+                    id: existingRecord.id,
+                    groupId: existingRecord.groupId,
+                    studentId: existingRecord.studentId,
+                    date: existingRecord.date,
+                    status: status, // New status
+                    justification: existingRecord.justification // Copy old justification
+                };
 
-                newAttendance.set(studentId, updatedRecord as GroupAttendance);
+                if (status === 'present') {
+                    delete updatedRecord.justification;
+                }
+                newAttendance.set(studentId, updatedRecord);
             } else {
                 const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
                 const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
@@ -471,9 +535,177 @@ const DashboardCard: React.FC<{ title: string; value: string | number; icon: Rea
     </div>
 );
 
+// --- New "My Classes" View ---
+const MyClassesView: React.FC<{
+    scheduledClasses: ScheduledClass[];
+    students: Map<string, Student>;
+    handleOpenReportModal: (cls: ScheduledClass) => void;
+}> = ({ scheduledClasses, students, handleOpenReportModal }) => {
+    const [monthOffset, setMonthOffset] = useState(0);
+
+    const { monthName, classesInMonth } = useMemo(() => {
+        const targetDate = new Date();
+        targetDate.setDate(1);
+        targetDate.setUTCHours(0, 0, 0, 0);
+        targetDate.setMonth(targetDate.getMonth() + monthOffset);
+
+        const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        
+        const classes = scheduledClasses
+            .filter(c => {
+                const classDate = new Date(c.date);
+                return classDate.getUTCMonth() === targetDate.getUTCMonth() && classDate.getUTCFullYear() === targetDate.getUTCFullYear();
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        return { monthName, classesInMonth: classes };
+    }, [monthOffset, scheduledClasses]);
+
+    return (
+        <div className="animate-fade-in-view space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-zinc-700">Histórico de Aulas</h3>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
+                    <span className="font-semibold text-lg text-zinc-800 capitalize w-36 text-center">{monthName}</span>
+                    <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-2 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon /></button>
+                </div>
+            </div>
+            <div className="border rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-zinc-200">
+                    <thead className="bg-zinc-50">
+                        <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th>
+                            <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-zinc-200">
+                        {classesInMonth.map(cls => (
+                            <tr key={cls.id}>
+                                <td className="px-4 py-3 text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                                <td className="px-4 py-3 text-sm font-medium text-zinc-800">{students.get(cls.studentId)?.name || 'Aluno não encontrado'}</td>
+                                <td className="px-4 py-3 text-sm text-zinc-600">{cls.discipline}</td>
+                                <td className="px-4 py-3 text-right text-sm">
+                                    <button onClick={() => handleOpenReportModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">
+                                        {cls.reportRegistered ? 'Ver/Editar Relatório' : 'Lançar Relatório'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {classesInMonth.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada neste mês.</p>}
+            </div>
+        </div>
+    );
+};
+
+// --- New "Creativity Panel" View ---
+const CreativityPanelView: React.FC<{ students: Student[] }> = ({ students }) => {
+    const { showToast } = useContext(ToastContext);
+    const [studentId, setStudentId] = useState('');
+    const [discipline, setDiscipline] = useState('');
+    const [topic, setTopic] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [result, setResult] = useState('');
+
+    const activeStudents = useMemo(() => students.filter(s => s.status === 'matricula'), [students]);
+
+    const handleGenerate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!studentId || !discipline || !topic) {
+            showToast('Por favor, preencha todos os campos.', 'error');
+            return;
+        }
+
+        setIsLoading(true);
+        setResult('');
+
+        try {
+            const student = students.find(s => s.id === studentId);
+            if (!student) throw new Error("Student not found");
+
+            const prompt = `Você é um assistente pedagógico criativo. Sua tarefa é criar um plano de aula inovador para um aluno específico.
+
+**Informações do Aluno:**
+- **Nome:** ${student.name}
+- **Ano/Série:** ${student.grade || 'Não informado'}
+- **Objetivo Principal:** ${student.objective || 'Não informado'}
+- **Neurodivergência/Dificuldades:** ${student.neurodiversity || "Nenhuma informada"}
+- **Resumo de Desempenho (gerado por IA):** ${student.aiSummary?.summary || "Nenhum disponível"}
+
+**Detalhes da Aula:**
+- **Disciplina:** ${discipline}
+- **Tópico:** ${topic}
+
+**Sua Tarefa:**
+Com base nas informações do aluno e nos detalhes da aula, sugira 3 abordagens de ensino distintas e criativas. Para cada abordagem, inclua:
+1.  **Conceito da Abordagem:** Uma breve descrição da metodologia (ex: Aprendizagem baseada em jogos, debate socrático, projeto prático).
+2.  **Atividade Prática:** Uma atividade concreta que o aluno pode realizar.
+3.  **Ponto de Conexão:** Como essa abordagem se conecta com os interesses ou supera as dificuldades do aluno.
+
+Formate sua resposta de forma clara e organizada, usando markdown para títulos e listas.`;
+            
+            const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            setResult(response.text);
+
+        } catch (error) {
+            console.error("Gemini API error:", error);
+            showToast('Ocorreu um erro ao gerar as ideias. Tente novamente.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="animate-fade-in-view space-y-6">
+            <div className="text-center">
+                <SparklesIcon className="h-10 w-10 text-primary mx-auto"/>
+                <h3 className="text-xl font-semibold text-zinc-700 mt-2">Painel de Criatividade</h3>
+                <p className="text-zinc-500 max-w-2xl mx-auto">Receba sugestões de atividades e abordagens de ensino personalizadas para seus alunos, com base em suas informações e no tópico da aula.</p>
+            </div>
+            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 border rounded-lg bg-zinc-50">
+                <div className="md:col-span-2">
+                    <label htmlFor="student" className={labelStyle}>Aluno</label>
+                    <select id="student" value={studentId} onChange={e => setStudentId(e.target.value)} className={inputStyle} required>
+                        <option value="" disabled>Selecione um aluno...</option>
+                        {activeStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="discipline" className={labelStyle}>Disciplina</label>
+                    <input id="discipline" type="text" value={discipline} onChange={e => setDiscipline(e.target.value)} className={inputStyle} required placeholder="Ex: História"/>
+                </div>
+                <div>
+                    <label htmlFor="topic" className={labelStyle}>Tópico</label>
+                    <input id="topic" type="text" value={topic} onChange={e => setTopic(e.target.value)} className={inputStyle} required placeholder="Ex: Revolução Francesa"/>
+                </div>
+                <div className="md:col-span-4">
+                     <button type="submit" disabled={isLoading} className="w-full py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark disabled:bg-zinc-400 flex items-center justify-center gap-2">
+                        <SparklesIcon className="h-5 w-5"/>
+                        {isLoading ? 'Gerando Ideias...' : 'Gerar Ideias'}
+                    </button>
+                </div>
+            </form>
+            <div className="bg-white border rounded-lg p-6 min-h-[200px]">
+                {isLoading && <div className="text-center"><p>Gerando sugestões... ✨</p></div>}
+                {!isLoading && !result && <div className="text-center text-zinc-500"><p>As sugestões da IA aparecerão aqui.</p></div>}
+                {result && <div className="prose prose-sm max-w-none whitespace-pre-wrap">{result}</div>}
+            </div>
+        </div>
+    );
+};
+
+
 // --- Componente Principal ---
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
-type View = 'dashboard' | 'availability' | 'groups' | 'groupSession';
+type View = 'dashboard' | 'availability' | 'groups' | 'groupSession' | 'myClasses' | 'creativityPanel';
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
@@ -484,6 +716,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportContext, setReportContext] = useState<any>(null);
     const [selectedGroup, setSelectedGroup] = useState<ClassGroup | null>(null);
+    const [classDetailModal, setClassDetailModal] = useState<{ class: ScheduledClass; student: Student } | null>(null);
+
 
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
@@ -595,6 +829,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             pastClasses: all.filter(c => c.date < todayStr),
         };
     }, [scheduledClasses]);
+    
+    const studentsMap = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
 
     const { pendingReportsCount } = useMemo(() => {
         const pending = pastClasses.filter(c => !c.reportRegistered).length;
@@ -633,8 +869,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
 
     const navItems = [
         { id: 'dashboard', label: 'Painel', icon: ChartPieIcon },
-        { id: 'availability', label: 'Disponibilidade', icon: CalendarDaysIcon },
+        { id: 'myClasses', label: 'Minhas Aulas', icon: DocumentTextIcon },
         { id: 'groups', label: 'Minhas Turmas', icon: UsersIcon },
+        { id: 'availability', label: 'Disponibilidade', icon: CalendarDaysIcon },
+        { id: 'creativityPanel', label: 'Painel Criativo', icon: SparklesIcon },
     ];
 
     const pageTitles: Record<View, string> = {
@@ -642,12 +880,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         availability: 'Disponibilidade Semanal',
         groups: 'Minhas Turmas',
         groupSession: 'Gerenciar Turma',
+        myClasses: 'Minhas Aulas',
+        creativityPanel: 'Painel de Criatividade',
     };
 
     const renderContent = () => {
         switch (view) {
             case 'availability':
                 return <WeeklyAvailabilityComponent initialAvailability={currentUser.availability || {}} onSave={handleSaveAvailability} />;
+            case 'myClasses':
+                return <MyClassesView scheduledClasses={scheduledClasses} students={studentsMap} handleOpenReportModal={handleOpenReportModal} />;
+            case 'creativityPanel':
+                return <CreativityPanelView students={students} />;
             case 'groupSession':
                 return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} />;
             case 'groups':
@@ -694,7 +938,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                     {upcomingClasses.length > 0 ? upcomingClasses.map(c => {
                                         const student = students.find(s => s.id === c.studentId);
                                         return (
-                                            <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
+                                            <button key={c.id} onClick={() => student && setClassDetailModal({ class: c, student })} className="w-full text-left bg-zinc-50 p-3 rounded-lg flex justify-between items-center hover:bg-zinc-100 transition-colors">
                                                 <div>
                                                     <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
                                                     <p className="text-sm text-zinc-600 flex items-center">{c.discipline} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
@@ -703,7 +947,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                                     <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                                                     <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
                                                 </div>
-                                            </div>
+                                            </button>
                                         );
                                     }) : <p className="text-center text-zinc-500 p-4">Nenhuma aula futura agendada.</p>}
                                 </div>
@@ -787,10 +1031,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             <UserProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={currentUser} />
             <ChangePasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
             <ClassReportFormModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onSave={handleSaveClassReport} context={reportContext} />
+            {classDetailModal && <UpcomingClassDetailModal isOpen={!!classDetailModal} onClose={() => setClassDetailModal(null)} classData={classDetailModal.class} student={classDetailModal.student} />}
+
 
             <style>{`
                 @keyframes fade-in-view { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in-view { animation: fade-in-view 0.4s ease-out forwards; }
+                @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out forwards; }
+                .prose {
+                    color: #3f3f46; /* zinc-700 */
+                }
+                .prose h1, .prose h2, .prose h3 {
+                    color: #18181b; /* zinc-900 */
+                    font-weight: 600;
+                }
+                .prose strong {
+                     color: #18181b; /* zinc-900 */
+                }
+                .prose ul {
+                    list-style-type: disc;
+                    padding-left: 1.5rem;
+                }
+                .prose li {
+                    margin-top: 0.25em;
+                    margin-bottom: 0.25em;
+                }
             `}</style>
         </div>
     );

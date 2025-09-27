@@ -16,6 +16,50 @@ import {
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
+// A simple component to render markdown-like text from the AI
+const SimpleMarkdownRenderer: React.FC<{ text: string }> = React.memo(({ text }) => {
+    const createMarkup = (line: string) => {
+        const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        return { __html: formatted };
+    };
+
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let listItems: string[] = [];
+
+    const flushList = (key: string) => {
+        if (listItems.length > 0) {
+            elements.push(
+                <ul key={key} className="list-disc pl-5 space-y-1 my-2">
+                    {listItems.map((item, i) => (
+                        <li key={i} dangerouslySetInnerHTML={createMarkup(item)} />
+                    ))}
+                </ul>
+            );
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('* ')) {
+            listItems.push(trimmedLine.substring(2));
+        } else {
+            flushList(`ul-${index}`);
+            if (trimmedLine.length > 0) {
+                elements.push(<p key={index} dangerouslySetInnerHTML={createMarkup(line)} />);
+            } else {
+                elements.push(<div key={index} className="h-4" />); // Paragraph break
+            }
+        }
+    });
+
+    flushList('ul-last'); // Flush any remaining list items
+
+    return <div className="prose prose-sm max-w-none text-zinc-800">{elements}</div>;
+});
+
+
 // --- AI Summary Generation ---
 const generateAndSaveStudentSummary = async (studentId: string, allGroups: ClassGroup[]) => {
     try {
@@ -303,36 +347,48 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const dateStr = currentDate.toISOString().split('T')[0];
         const existingRecord = attendance.get(studentId);
         
-        let updateData: any = { status };
+        // Data for Firestore update
+        const firestoreUpdate: { status: 'present' | 'absent'; justification?: any } = { status };
         if (status === 'present') {
-            updateData.justification = firebase.firestore.FieldValue.delete();
+            firestoreUpdate.justification = firebase.firestore.FieldValue.delete();
         }
-
+    
         try {
-            const newAttendance = new Map(attendance);
+            const newAttendanceState = new Map(attendance);
             if (existingRecord) {
-                await db.collection('groupAttendance').doc(existingRecord.id).update(updateData);
-                // FIX: The spread operator was causing a build error.
-                // Replaced with manual object construction to ensure type safety.
-                const updatedRecord: GroupAttendance = {
+                await db.collection('groupAttendance').doc(existingRecord.id).update(firestoreUpdate);
+                
+                // Manually construct the new state to avoid spread operator issues
+                const updatedLocalRecord: GroupAttendance = {
                     id: existingRecord.id,
                     groupId: existingRecord.groupId,
                     studentId: existingRecord.studentId,
                     date: existingRecord.date,
                     status: status,
                 };
+                // Preserve justification if student is marked absent again
                 if (status === 'absent' && existingRecord.justification) {
-                    updatedRecord.justification = existingRecord.justification;
+                    updatedLocalRecord.justification = existingRecord.justification;
                 }
-                newAttendance.set(studentId, updatedRecord);
+                newAttendanceState.set(studentId, updatedLocalRecord);
             } else {
                 const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
                 const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
-                newAttendance.set(studentId, { id: newRecordRef.id, ...newRecordData });
+                // FIX: Manually construct the new record to avoid potential spread operator issues,
+                // matching the pattern used in the `if (existingRecord)` block.
+                const newRecordForState: GroupAttendance = {
+                    id: newRecordRef.id,
+                    groupId: newRecordData.groupId,
+                    studentId: newRecordData.studentId,
+                    date: newRecordData.date,
+                    status: newRecordData.status,
+                };
+                newAttendanceState.set(studentId, newRecordForState);
             }
-            setAttendance(newAttendance);
+            setAttendance(newAttendanceState);
         } catch (error) {
             showToast("Erro ao salvar presença.", "error");
+            console.error("Error saving attendance:", error);
         }
     };
     
@@ -624,6 +680,7 @@ const CreativityPanelView: React.FC<{ students: Student[], currentUser: Professi
     const [savedIdeas, setSavedIdeas] = useState<SavedIdea[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingSaved, setIsLoadingSaved] = useState(true);
+    const [expandedIdeaId, setExpandedIdeaId] = useState<string | null>(null);
 
     const activeStudents = useMemo(() => students.filter(s => s.status === 'matricula'), [students]);
 
@@ -772,7 +829,7 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
             <div className="bg-white border rounded-lg p-6 min-h-[200px] space-y-4">
                 {isLoading && <div className="text-center"><p>Gerando sugestões... ✨</p></div>}
                 {!isLoading && !result && <div className="text-center text-zinc-500"><p>As sugestões da IA aparecerão aqui.</p></div>}
-                {result && <div className="whitespace-pre-wrap text-zinc-800">{result}</div>}
+                {result && <SimpleMarkdownRenderer text={result} />}
                  {result && !isLoading && (
                     <div className="text-right border-t pt-4">
                         <button onClick={handleSaveIdea} disabled={isSaving} className="py-2 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark disabled:bg-zinc-400">
@@ -787,19 +844,41 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
                 {isLoadingSaved && <p>Carregando ideias...</p>}
                 {!isLoadingSaved && savedIdeas.length === 0 && <div className="text-center py-8 bg-zinc-50 rounded-lg"><p className="text-zinc-500">Você ainda não salvou nenhuma ideia.</p></div>}
                 {!isLoadingSaved && savedIdeas.length > 0 && (
-                    <div className="space-y-4">
-                        {savedIdeas.map(idea => (
-                            <div key={idea.id} className="bg-white border rounded-lg p-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-bold text-zinc-800">{idea.discipline}: {idea.topic}</p>
-                                        <p className="text-sm text-zinc-500">Para: {idea.studentName}</p>
-                                    </div>
-                                    <button onClick={() => handleDeleteIdea(idea.id)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon/></button>
+                     <div className="space-y-2">
+                        {savedIdeas.map(idea => {
+                            const isExpanded = expandedIdeaId === idea.id;
+                            return (
+                                <div key={idea.id} className="bg-white border rounded-lg transition-shadow hover:shadow-sm">
+                                    <button
+                                        onClick={() => setExpandedIdeaId(isExpanded ? null : idea.id)}
+                                        className="w-full text-left p-4 flex justify-between items-center"
+                                        aria-expanded={isExpanded}
+                                    >
+                                        <div>
+                                            <p className="font-bold text-zinc-800">{idea.discipline}: {idea.topic}</p>
+                                            <p className="text-sm text-zinc-500">
+                                                Para: {idea.studentName} - {new Date(idea.createdAt.toDate()).toLocaleDateString('pt-BR')}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteIdea(idea.id); }} 
+                                                className="text-zinc-400 hover:text-red-600 p-1 rounded-full"
+                                                aria-label="Excluir ideia"
+                                            >
+                                                <TrashIcon/>
+                                            </button>
+                                            <ChevronDownIcon className={`h-5 w-5 text-zinc-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </div>
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="p-4 border-t border-zinc-200 animate-fade-in-fast">
+                                            <SimpleMarkdownRenderer text={idea.generatedIdeaText} />
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="whitespace-pre-wrap text-zinc-700 mt-2 border-t pt-2 text-sm">{idea.generatedIdeaText}</div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

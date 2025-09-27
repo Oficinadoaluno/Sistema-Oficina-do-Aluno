@@ -353,6 +353,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [classToEdit, setClassToEdit] = useState<Partial<ScheduledClass> | null>(null);
+    const [monthlyStudentFilter, setMonthlyStudentFilter] = useState('');
+    const [monthlyProfFilter, setMonthlyProfFilter] = useState('');
 
     useEffect(() => {
         setLoading(true);
@@ -383,7 +385,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             createErrorHandler("pacotes")
         );
 
-        // This is just to turn off the initial loader
         Promise.all([
            db.collection("scheduledClasses").get(),
            db.collection("students").get()
@@ -457,6 +458,28 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         });
     }, [allPackages, scheduledClasses]);
 
+    const { monthName, filteredMonthlyClasses } = useMemo(() => {
+        const targetDate = new Date(currentDate);
+        targetDate.setDate(1);
+        const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        
+        const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+        const classesInMonth = scheduledClasses.filter(c => {
+            const classDate = new Date(c.date);
+            return classDate >= monthStart && classDate <= monthEnd;
+        });
+
+        const filtered = classesInMonth.filter(c => {
+            const studentMatch = !monthlyStudentFilter || c.studentId === monthlyStudentFilter;
+            const profMatch = !monthlyProfFilter || c.professionalId === monthlyProfFilter;
+            return studentMatch && profMatch;
+        });
+
+        return { monthName, filteredMonthlyClasses: filtered.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()) };
+    }, [currentDate, scheduledClasses, monthlyStudentFilter, monthlyProfFilter]);
+
     const handleDateChange = (amount: number) => {
         const newDate = new Date(currentDate);
         newDate.setDate(currentDate.getDate() + amount);
@@ -513,7 +536,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                  <div className="flex items-center gap-4">
                      <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors"><ArrowLeftIcon className="h-6 w-6" /></button>
                     <div>
-                        <h2 className="text-2xl font-bold text-zinc-800">Agenda do Dia</h2>
+                        <h2 className="text-2xl font-bold text-zinc-800">Agenda</h2>
                         <p className="text-zinc-500">{currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
                 </div>
@@ -527,59 +550,110 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 </div>
             </header>
             
-            <div className="flex-grow overflow-auto border rounded-lg">
-                <div className="grid min-w-[1200px]" style={{ gridTemplateColumns: `60px repeat(${professorsToShow.length}, 1fr)` }}>
-                    {/* Header Row */}
-                    <div className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm"></div>
-                    {professorsToShow.map(prof => (
-                        <div key={prof.id} className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l">
-                            {prof.name}
-                        </div>
-                    ))}
-
-                    {/* Time Column & Professor Grids */}
-                    <div className="col-start-1 col-end-2 row-start-2 row-end-auto">
-                        {timeSlots.map(time => (
-                            <div key={time} style={{ height: `${CELL_HEIGHT_PX}px` }} className="relative text-right pr-2 text-xs text-zinc-400">
-                                <span className="absolute -top-1.5 right-2">{time.endsWith(':00') ? time : ''}</span>
+            <main className="flex-grow overflow-y-auto pr-2 -mr-2">
+                <section className="overflow-x-auto border rounded-lg">
+                    <div className="grid min-w-[1200px]" style={{ gridTemplateColumns: `60px repeat(${professorsToShow.length}, 1fr)` }}>
+                        {/* Header Row */}
+                        <div className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm"></div>
+                        {professorsToShow.map(prof => (
+                            <div key={prof.id} className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l">
+                                {prof.name}
                             </div>
                         ))}
+
+                        {/* Time Column & Professor Grids */}
+                        <div className="col-start-1 col-end-2 row-start-2 row-end-auto">
+                            {timeSlots.map(time => (
+                                <div key={time} style={{ height: `${CELL_HEIGHT_PX}px` }} className="relative text-right pr-2 text-xs text-zinc-400">
+                                    <span className="absolute -top-1.5 right-2">{time.endsWith(':00') ? time : ''}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {professorsToShow.map((prof, profIndex) => {
+                            const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
+                            const availableSlots = new Set(prof.availability?.[dayOfWeek] || []);
+                            const profClasses = allDisplayClassesForDay.filter(c => c.professionalId === prof.id);
+
+                            return (
+                                <div key={prof.id} className="relative border-l" style={{ gridColumn: `${profIndex + 2}`, gridRow: `2 / span ${timeSlots.length + 1}` }}>
+                                    {timeSlots.map((time) => (
+                                        <button key={time} onClick={() => handleCellClick(prof.id, time)} className={`w-full border-t border-dashed border-zinc-200 hover:bg-secondary/10`} style={{ height: `${CELL_HEIGHT_PX}px`, backgroundColor: availableSlots.has(time) ? '#f0fdf4' : '' }} />
+                                    ))}
+
+                                    {profClasses.map(cls => {
+                                        if (cls.classType === 'individual') {
+                                            const student = students.find(s => s.id === cls.studentId);
+                                            const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-cyan-100 border-cyan-500 text-cyan-800' }[cls.status];
+                                            return (
+                                                <button key={cls.id} onClick={() => handleClassClick(cls)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
+                                                    <p className="font-bold text-xs truncate">{student?.name}</p>
+                                                    <p className="text-[10px] truncate">{cls.discipline}</p>
+                                                </button>
+                                            );
+                                        } else {
+                                            return (
+                                                <div key={cls.id} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className="absolute w-full p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary">
+                                                     <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
+                                                     <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
+                                                </div>
+                                            );
+                                        }
+                                    })}
+                                </div>
+                            );
+                        })}
                     </div>
-                    {professorsToShow.map((prof, profIndex) => {
-                        const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
-                        const availableSlots = new Set(prof.availability?.[dayOfWeek] || []);
-                        const profClasses = allDisplayClassesForDay.filter(c => c.professionalId === prof.id);
-
-                        return (
-                            <div key={prof.id} className="relative border-l" style={{ gridColumn: `${profIndex + 2}`, gridRow: `2 / span ${timeSlots.length + 1}` }}>
-                                {timeSlots.map((time, timeIndex) => (
-                                    <button key={time} onClick={() => handleCellClick(prof.id, time)} className={`w-full border-t border-dashed border-zinc-200 hover:bg-secondary/10`} style={{ height: `${CELL_HEIGHT_PX}px`, backgroundColor: availableSlots.has(time) ? '#f0fdf4' : '' }} />
-                                ))}
-
-                                {profClasses.map(cls => {
-                                    if (cls.classType === 'individual') {
-                                        const student = students.find(s => s.id === cls.studentId);
-                                        const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-cyan-100 border-cyan-500 text-cyan-800' }[cls.status];
-                                        return (
-                                            <button key={cls.id} onClick={() => handleClassClick(cls)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
-                                                <p className="font-bold text-xs truncate">{student?.name}</p>
-                                                <p className="text-[10px] truncate">{cls.discipline}</p>
-                                            </button>
-                                        );
-                                    } else {
-                                        return (
-                                            <div key={cls.id} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className="absolute w-full p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary">
-                                                 <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
-                                                 <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
-                                            </div>
-                                        );
-                                    }
+                </section>
+                
+                <section className="mt-8">
+                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({monthName})</h3>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={inputStyle}>
+                            <option value="">Todos os Alunos</option>
+                            {students.filter(s => s.status === 'matricula').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                         <select value={monthlyProfFilter} onChange={e => setMonthlyProfFilter(e.target.value)} className={inputStyle}>
+                            <option value="">Todos os Professores</option>
+                            {professionals.filter(p => p.status === 'ativo').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="border rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-zinc-200">
+                             <thead className="bg-zinc-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
+                                    <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
+                                </tr>
+                            </thead>
+                             <tbody className="bg-white divide-y divide-zinc-200">
+                                {filteredMonthlyClasses.map(cls => {
+                                    const student = students.find(s => s.id === cls.studentId);
+                                    const professional = professionals.find(p => p.id === cls.professionalId);
+                                    const statusMap: Record<ScheduledClass['status'], string> = { scheduled: 'Agendada', completed: 'Concluída', canceled: 'Cancelada', rescheduled: 'Remarcada' };
+                                    return (
+                                        <tr key={cls.id}>
+                                            <td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {cls.time}</td>
+                                            <td className="px-4 py-3 font-medium">{student?.name}</td>
+                                            <td className="px-4 py-3 text-sm">{professional?.name}</td>
+                                            <td className="px-4 py-3 text-sm">{cls.discipline}</td>
+                                            <td className="px-4 py-3 text-sm">{statusMap[cls.status]}</td>
+                                            <td className="px-4 py-3 text-right text-sm">
+                                                <button onClick={() => handleClassClick(cls)} className="font-semibold text-secondary hover:underline">Editar</button>
+                                            </td>
+                                        </tr>
+                                    );
                                 })}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+                            </tbody>
+                        </table>
+                        {filteredMonthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada para este mês com os filtros aplicados.</p>}
+                    </div>
+                </section>
+            </main>
+            
             <ScheduleClassModal 
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setClassToEdit(null); }}

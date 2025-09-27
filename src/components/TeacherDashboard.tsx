@@ -152,7 +152,6 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
     const handleAttendanceChange = async (studentId: string, status: 'present' | 'absent') => {
         const dateStr = currentDate.toISOString().split('T')[0];
         const existingRecord = attendance.get(studentId);
-        const newAttendance = new Map(attendance);
         
         let updateData: any = { status };
         if (status === 'present') {
@@ -160,13 +159,17 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         }
 
         try {
+            const newAttendance = new Map(attendance);
             if (existingRecord) {
                 await db.collection('groupAttendance').doc(existingRecord.id).update(updateData);
-                const updatedRecord = { ...existingRecord, status };
-                if (status === 'present') {
-                    delete updatedRecord.justification;
-                }
-                newAttendance.set(studentId, updatedRecord);
+                // FIX: Create a new object for the state update, and safely remove justification if needed.
+                // This avoids mutation and potential type issues.
+                const { justification, ...restOfRecord } = existingRecord;
+                const updatedRecord = status === 'present'
+                    ? { ...restOfRecord, status }
+                    : { ...existingRecord, status };
+
+                newAttendance.set(studentId, updatedRecord as GroupAttendance);
             } else {
                 const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
                 const newRecordRef = await db.collection('groupAttendance').add(newRecordData);

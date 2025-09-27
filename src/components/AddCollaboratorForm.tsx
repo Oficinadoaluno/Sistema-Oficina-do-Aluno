@@ -131,6 +131,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                     canAccessFinancial: true,
                     canAccessSettings: true,
                     canAccessPackages: true,
+                    canAccessPricing: true,
                 } : undefined,
                 remunerationType,
                 fixedSalary: remunerationType === 'fixed' ? Number(fixedSalary) : undefined,

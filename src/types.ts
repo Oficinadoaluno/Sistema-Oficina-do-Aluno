@@ -218,6 +218,7 @@ export interface AdminPermissions {
     canAccessFinancial: boolean;
     canAccessSettings: boolean;
     canAccessPackages: boolean;
+    canAccessPricing: boolean;
 }
 
 export interface Collaborator {
@@ -241,4 +242,14 @@ export interface Collaborator {
     bank?: string;
     agency?: string;
     account?: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  type: 'hourly' | 'package' | 'daily';
+  totalHours?: number;
+  pricePerHour?: number;
+  totalPrice?: number;
+  description?: string;
 }

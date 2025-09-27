@@ -5,6 +5,7 @@ import AgendaView from './AgendaView';
 import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
 import PackagesView from './PackagesView';
+import PricingView from './PricingView';
 import { Collaborator, Student, Professional, ScheduledClass, Transaction } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
@@ -14,7 +15,7 @@ import {
     LogoPlaceholder, UserIcon, ChevronDownIcon, BookOpenIcon, UsersIcon, 
     Cog6ToothIcon, ArrowRightOnRectangleIcon, ArchiveBoxIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
-    BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon
+    BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon, CurrencyDollarIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -295,7 +296,7 @@ const DashboardContent: React.FC = () => {
 
 // --- Componente Principal ---
 interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator; }
-type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages';
+type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages' | 'pricing';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
     const [view, setView] = useState<View>('dashboard');
@@ -308,6 +309,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const canAccessSettings = userRole.includes('diretor');
     const canAccessPackages = userRole.includes('diretor') || userRole.includes('secretaria');
     const canAccessAgenda = userRole.includes('diretor') || userRole.includes('secretaria');
+    const canAccessPricing = userRole.includes('diretor');
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -322,6 +324,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         { id: 'students', label: 'Alunos', icon: BookOpenIcon, canAccess: true },
         { id: 'professionals', label: 'Equipe', icon: UserIcon, canAccess: true },
         { id: 'classes', label: 'Turmas', icon: UsersIcon, canAccess: true },
+        { id: 'pricing', label: 'Valores', icon: CurrencyDollarIcon, canAccess: canAccessPricing },
         { id: 'packages', label: 'Pacotes', icon: ArchiveBoxIcon, canAccess: canAccessPackages },
         { id: 'calendar', label: 'Agenda', icon: CalendarDaysIcon, canAccess: canAccessAgenda },
         { id: 'settings', label: 'Relatórios e Finanças', icon: Cog6ToothIcon, canAccess: canAccessSettings },
@@ -333,6 +336,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         professionals: 'Gestão de Equipe',
         classes: 'Gestão de Turmas',
         packages: 'Gestão de Pacotes de Aulas',
+        pricing: 'Valores e Serviços',
         calendar: 'Agenda',
         settings: 'Relatórios e Finanças'
     };
@@ -344,6 +348,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'calendar': return <AgendaView onBack={() => setView('dashboard')} />;
             case 'classes': return <ClassGroupView onBack={() => setView('dashboard')} />;
             case 'packages': return <PackagesView onBack={() => setView('dashboard')} currentUser={currentUser} />;
+            case 'pricing': return <PricingView onBack={() => setView('dashboard')} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
             default: return <DashboardContent />;

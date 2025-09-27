@@ -59,6 +59,8 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setScheduleType(groupToEdit.schedule.type);
             setColor(groupToEdit.color || pastelColors[0].name);
             if (groupToEdit.schedule.type === 'recurring') {
+                // FIX: Add sanitization for schedule.days to handle legacy data formats,
+                // preventing a crash if `days` is not an object.
                 const sanitizedDays: { [key in DayOfWeek]?: { start: string; end: string } } = {};
                 if (groupToEdit.schedule.days) {
                     for (const day in groupToEdit.schedule.days) {

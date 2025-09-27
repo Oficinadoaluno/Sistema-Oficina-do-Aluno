@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useRef, useEffect, useMemo, useContext, useCallback } from 'react';
 import { Professional, ScheduledClass, Student, WeeklyAvailability, DayOfWeek, ClassGroup, ClassReport, GroupAttendance, GroupStudentDailyReport } from '../types';
 import { db, auth } from '../firebase';
@@ -152,19 +149,28 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         fetchSessionData();
     }, [group.id, currentDate, showToast]);
 
-    const handleAttendanceChange = async (studentId: string, status: GroupAttendance['status']) => {
+    const handleAttendanceChange = async (studentId: string, status: 'present' | 'absent') => {
         const dateStr = currentDate.toISOString().split('T')[0];
         const existingRecord = attendance.get(studentId);
-
         const newAttendance = new Map(attendance);
         
+        let updateData: any = { status };
+        if (status === 'present') {
+            updateData.justification = firebase.firestore.FieldValue.delete();
+        }
+
         try {
             if (existingRecord) {
-                await db.collection('groupAttendance').doc(existingRecord.id).update({ status });
-                newAttendance.set(studentId, { ...existingRecord, status });
+                await db.collection('groupAttendance').doc(existingRecord.id).update(updateData);
+                const updatedRecord = { ...existingRecord, status };
+                if (status === 'present') {
+                    delete updatedRecord.justification;
+                }
+                newAttendance.set(studentId, updatedRecord);
             } else {
-                const newRecordRef = await db.collection('groupAttendance').add({ groupId: group.id, studentId, date: dateStr, status });
-                newAttendance.set(studentId, { id: newRecordRef.id, groupId: group.id, studentId, date: dateStr, status });
+                const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
+                const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
+                newAttendance.set(studentId, { id: newRecordRef.id, ...newRecordData });
             }
             setAttendance(newAttendance);
         } catch (error) {
@@ -172,6 +178,29 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         }
     };
     
+    const handleJustificationChange = (studentId: string, justification: string) => {
+        const newAttendance = new Map(attendance);
+        const record = newAttendance.get(studentId);
+        if (record) {
+            const updatedRecord = { ...record, justification };
+            newAttendance.set(studentId, updatedRecord);
+            setAttendance(newAttendance);
+        }
+    };
+
+    const handleJustificationBlur = async (studentId: string) => {
+        const record = attendance.get(studentId);
+        if (record && record.id) {
+            try {
+                await db.collection('groupAttendance').doc(record.id).update({
+                    justification: record.justification || ''
+                });
+            } catch (error) {
+                showToast('Erro ao salvar justificativa.', 'error');
+            }
+        }
+    };
+
     const handleSaveReport = async (reportData: Omit<GroupStudentDailyReport, 'id' | 'groupId' | 'studentId' | 'date'>) => {
         if (!studentForReport) return;
         
@@ -215,16 +244,26 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             </div>
             <div className="flex-grow overflow-y-auto border rounded-lg">
                 <table className="min-w-full divide-y">
-                    <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Presença</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Relatório</th></tr></thead>
+                    <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Presença</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Relatório/Justificativa</th></tr></thead>
                     <tbody className="divide-y">{groupStudents.map(student => {
-                        const studentAttendance = attendance.get(student.id)?.status;
+                        const studentAttendance = attendance.get(student.id);
                         const hasReport = reports.has(student.id);
                         return (
                             <tr key={student.id} className="hover:bg-zinc-50">
                                 <td className="px-4 py-2 font-medium">{student.name}</td>
-                                <td className="px-4 py-2"><div className="flex items-center gap-2 text-sm">{['present', 'absent', 'justified'].map(s => <button key={s} onClick={() => handleAttendanceChange(student.id, s as any)} className={`px-2 py-0.5 rounded-full font-semibold ${studentAttendance === s ? 'bg-secondary text-white' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}>{s === 'present' ? 'P' : s === 'absent' ? 'F' : 'J'}</button>)}</div></td>
-                                <td className="px-4 py-2">
-                                    {studentAttendance === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-secondary/10 text-secondary-dark' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
+                                <td className="px-4 py-2"><div className="flex items-center gap-2 text-sm">{['present', 'absent'].map(s => <button key={s} onClick={() => handleAttendanceChange(student.id, s as any)} className={`px-2 py-0.5 rounded-full font-semibold ${studentAttendance?.status === s ? 'bg-secondary text-white' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}>{s === 'present' ? 'P' : 'F'}</button>)}</div></td>
+                                <td className="px-4 py-2 w-1/2">
+                                    {studentAttendance?.status === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-secondary/10 text-secondary-dark' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
+                                    {studentAttendance?.status === 'absent' && (
+                                        <input
+                                            type="text"
+                                            placeholder="Justificativa (opcional)"
+                                            className={`${inputStyle} text-sm`}
+                                            value={studentAttendance.justification || ''}
+                                            onChange={(e) => handleJustificationChange(student.id, e.target.value)}
+                                            onBlur={() => handleJustificationBlur(student.id)}
+                                        />
+                                    )}
                                 </td>
                             </tr>
                         );
@@ -338,7 +377,7 @@ const DashboardCard: React.FC<{ title: string; value: string | number; icon: Rea
 
 // --- Componente Principal ---
 interface TeacherDashboardProps { onLogout: () => void; currentUser: Professional; }
-type View = 'dashboard' | 'availability' | 'groupSession';
+type View = 'dashboard' | 'availability' | 'groups' | 'groupSession';
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUser }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
@@ -461,6 +500,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         const pending = pastClasses.filter(c => !c.reportRegistered).length;
         return { pendingReportsCount: pending };
     }, [pastClasses]);
+
+    const completedClassesThisMonth = useMemo(() => {
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+
+        return scheduledClasses.filter(c => {
+            if (c.status !== 'completed') return false;
+            const classDate = new Date(c.date);
+            return classDate.getUTCMonth() === currentMonth && classDate.getUTCFullYear() === currentYear;
+        }).length;
+    }, [scheduledClasses]);
     
     const handleOpenReportModal = (classToReport: ScheduledClass) => {
         const student = students.find(s => s.id === classToReport.studentId);
@@ -483,11 +534,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const navItems = [
         { id: 'dashboard', label: 'Painel', icon: ChartPieIcon },
         { id: 'availability', label: 'Disponibilidade', icon: CalendarDaysIcon },
+        { id: 'groups', label: 'Minhas Turmas', icon: UsersIcon },
     ];
 
     const pageTitles: Record<View, string> = {
         dashboard: 'Meu Painel',
         availability: 'Disponibilidade Semanal',
+        groups: 'Minhas Turmas',
         groupSession: 'Gerenciar Turma',
     };
 
@@ -497,65 +550,81 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                 return <WeeklyAvailabilityComponent initialAvailability={currentUser.availability || {}} onSave={handleSaveAvailability} />;
             case 'groupSession':
                 return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} />;
+            case 'groups':
+                return (
+                    <div className="animate-fade-in-view space-y-4">
+                        {classGroups.length > 0 ? (
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {classGroups.map(g => (
+                                    <div key={g.id} className="bg-white border p-4 rounded-lg shadow-sm flex flex-col">
+                                        <h4 className="font-bold text-zinc-800 text-lg">{g.name}</h4>
+                                        <p className="text-sm text-zinc-500 flex-grow">{g.discipline || 'Sem disciplina'}</p>
+                                        <div className="flex items-center gap-2 mt-3 text-sm text-zinc-600">
+                                            <UsersIcon className="h-4 w-4" />
+                                            <span>{g.studentIds.length} alunos</span>
+                                        </div>
+                                        <button onClick={() => handleViewGroup(g)} className="mt-4 text-sm w-full font-semibold bg-zinc-100 hover:bg-zinc-200 py-2 rounded-md transition-colors">
+                                            Gerenciar Turma
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-white rounded-lg border">
+                                <UsersIcon className="mx-auto h-12 w-12 text-zinc-400" />
+                                <h3 className="mt-2 text-lg font-medium text-zinc-900">Nenhuma turma encontrada</h3>
+                                <p className="mt-1 text-sm text-zinc-500">Você não está atribuído a nenhuma turma no momento.</p>
+                            </div>
+                        )}
+                    </div>
+                );
             case 'dashboard':
             default:
                 return (
                     <div className="space-y-6 animate-fade-in-view">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DashboardCard title="Aulas Futuras" value={upcomingClasses.length} icon={CalendarDaysIcon} />
+                            <DashboardCard title="Aulas Dadas no Mês" value={completedClassesThisMonth} icon={CheckCircleIcon} />
                             <DashboardCard title="Relatórios Pendentes" value={pendingReportsCount} icon={DocumentTextIcon} />
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <section className="lg:col-span-2 space-y-6">
-                                <div>
-                                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Próximas Aulas</h3>
-                                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
-                                        {upcomingClasses.length > 0 ? upcomingClasses.map(c => {
-                                            const student = students.find(s => s.id === c.studentId);
-                                            return (
-                                                <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
-                                                    <div>
-                                                        <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
-                                                        <p className="text-sm text-zinc-600 flex items-center">{c.discipline} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
-                                                        <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
-                                                    </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Próximas Aulas</h3>
+                                <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
+                                    {upcomingClasses.length > 0 ? upcomingClasses.map(c => {
+                                        const student = students.find(s => s.id === c.studentId);
+                                        return (
+                                            <div key={c.id} className="bg-zinc-50 p-3 rounded-lg flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
+                                                    <p className="text-sm text-zinc-600 flex items-center">{c.discipline} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
                                                 </div>
-                                            );
-                                        }) : <p className="text-center text-zinc-500 p-4">Nenhuma aula futura agendada.</p>}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Relatórios Pendentes</h3>
-                                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
-                                        {pastClasses.filter(c => !c.reportRegistered).length > 0 ? pastClasses.filter(c => !c.reportRegistered).map(c => {
-                                            const student = students.find(s => s.id === c.studentId);
-                                            return (
-                                                <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
-                                                    <div>
-                                                        <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
-                                                        <p className="text-sm text-amber-700 flex items-center">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
-                                                    </div>
-                                                    <button onClick={() => handleOpenReportModal(c)} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-secondary-dark">Lançar Relatório</button>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                                    <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
                                                 </div>
-                                            );
-                                        }) : <p className="text-center text-zinc-500 p-4">Nenhum relatório pendente.</p>}
-                                    </div>
+                                            </div>
+                                        );
+                                    }) : <p className="text-center text-zinc-500 p-4">Nenhuma aula futura agendada.</p>}
                                 </div>
-                            </section>
-                            <aside className="space-y-6">
-                                <div className="bg-white border p-4 rounded-lg">
-                                    <h3 className="text-lg font-semibold text-zinc-700 mb-2">Minhas Turmas</h3>
-                                    <ul className="space-y-2">{classGroups.length > 0 ? classGroups.map(g => (
-                                        <li key={g.id}>
-                                            <button onClick={() => handleViewGroup(g)} className="font-semibold text-left w-full hover:bg-zinc-100 p-2 rounded-md transition-colors">{g.name}</button>
-                                        </li>
-                                    )) : <p className="text-sm text-zinc-500">Nenhuma turma atribuída.</p>}</ul>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Relatórios Pendentes</h3>
+                                <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
+                                    {pastClasses.filter(c => !c.reportRegistered).length > 0 ? pastClasses.filter(c => !c.reportRegistered).map(c => {
+                                        const student = students.find(s => s.id === c.studentId);
+                                        return (
+                                            <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
+                                                    <p className="text-sm text-amber-700 flex items-center">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
+                                                </div>
+                                                <button onClick={() => handleOpenReportModal(c)} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-secondary-dark">Lançar Relatório</button>
+                                            </div>
+                                        );
+                                    }) : <p className="text-center text-zinc-500 p-4">Nenhum relatório pendente.</p>}
                                 </div>
-                            </aside>
+                            </div>
                         </div>
                     </div>
                 );

@@ -1,21 +1,25 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { db } from '../firebase';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 import { Student, ClassPackage, ScheduledClass, Collaborator } from '../types';
 import { ToastContext } from '../App';
-import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon } from './Icons';
+import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
-// --- Register Package Modal ---
-interface RegisterPackageModalProps {
+// --- Package Form Modal (for Create/Edit) ---
+interface PackageFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (newPackage: Omit<ClassPackage, 'id' | 'status'>) => Promise<void>;
+    onSave: (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName'>, packageToEdit: ClassPackage | null) => Promise<void>;
     students: Student[];
+    packageToEdit: ClassPackage | null;
 }
-const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onClose, onSave, students }) => {
+const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, onSave, students, packageToEdit }) => {
+    const isEditing = !!packageToEdit;
     const [studentId, setStudentId] = useState('');
     const [totalHours, setTotalHours] = useState<number | ''>('');
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,6 +29,22 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
     const studentDropdownRef = useRef<HTMLDivElement>(null);
+
+     useEffect(() => {
+        if (packageToEdit) {
+            setStudentId(packageToEdit.studentId);
+            setTotalHours(packageToEdit.totalHours);
+            setPurchaseDate(packageToEdit.purchaseDate);
+            setValuePaid(packageToEdit.valuePaid || '');
+            setObservations(packageToEdit.observations || '');
+        } else {
+            setStudentId('');
+            setTotalHours('');
+            setPurchaseDate(new Date().toISOString().split('T')[0]);
+            setValuePaid('');
+            setObservations('');
+        }
+    }, [packageToEdit, isOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -44,39 +64,39 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const selectedStudent = students.find(s => s.id === studentId);
-        if (!selectedStudent || !totalHours) return;
-
+        if (!studentId || !totalHours) return;
+        
         await onSave({
             studentId,
-            studentName: selectedStudent.name,
             totalHours: Number(totalHours),
             purchaseDate,
             valuePaid: Number(valuePaid) || undefined,
             observations
-        });
+        }, packageToEdit);
         onClose();
     };
 
     if (!isOpen) return null;
+    
+    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
             <form className="bg-white rounded-xl shadow-xl w-full max-w-lg m-4" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
                 <header className="flex items-center justify-between p-4 border-b">
-                    <h2 className="text-xl font-bold text-zinc-800">Registrar Pacote de Aulas</h2>
+                    <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Pacote' : 'Registrar Pacote de Aulas'}</h2>
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
                 <main className="p-6 space-y-4">
                     <div className="relative" ref={studentDropdownRef}>
                         <label htmlFor="student-search" className={labelStyle}>Aluno <span className="text-red-500">*</span></label>
                         <input
-                            id="student-search" type="text" className={inputStyle}
-                            value={studentId ? students.find(s => s.id === studentId)?.name || '' : studentSearch}
-                            onChange={(e) => { setStudentSearch(e.target.value); setStudentId(''); setIsStudentDropdownOpen(true); }}
-                            onFocus={() => setIsStudentDropdownOpen(true)} placeholder="Pesquisar aluno..." autoComplete="off" required
+                            id="student-search" type="text" className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`}
+                            value={isEditing ? selectedStudentName : (studentId ? selectedStudentName : studentSearch)}
+                            onChange={(e) => { if(!isEditing) { setStudentSearch(e.target.value); setStudentId(''); setIsStudentDropdownOpen(true); } }}
+                            onFocus={() => {if(!isEditing) setIsStudentDropdownOpen(true)}} placeholder="Pesquisar aluno..." autoComplete="off" required readOnly={isEditing}
                         />
-                        {isStudentDropdownOpen && (
+                        {isStudentDropdownOpen && !isEditing && (
                             <ul className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
                                 {filteredStudents.map(s => (
                                     <li key={s.id} className="px-3 py-2 cursor-pointer hover:bg-zinc-100"
@@ -97,7 +117,7 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
                     </div>
                     <div>
                         <label htmlFor="valuePaid" className={labelStyle}>Valor Pago (R$)</label>
-                        <input id="valuePaid" type="number" step="0.01" value={valuePaid} onChange={e => setValuePaid(Number(e.target.value))} className={inputStyle} />
+                        <input id="valuePaid" type="number" step="0.01" value={valuePaid} onChange={e => setValuePaid(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
                     </div>
                     <div>
                         <label htmlFor="observations" className={labelStyle}>Observações</label>
@@ -106,90 +126,46 @@ const RegisterPackageModal: React.FC<RegisterPackageModalProps> = ({ isOpen, onC
                 </main>
                 <footer className="flex justify-end items-center gap-4 p-4 border-t">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">Salvar Pacote</button>
+                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark">{isEditing ? 'Salvar Alterações' : 'Salvar Pacote'}</button>
                 </footer>
             </form>
         </div>
     );
 };
 
-// --- Package Detail View ---
 type PackageWithUsage = ClassPackage & { usedHours: number; remainingHours: number };
-
-interface PackageDetailProps {
-    pkg: PackageWithUsage;
-    usedClasses: ScheduledClass[];
-    onBack: () => void;
-}
-const PackageDetail: React.FC<PackageDetailProps> = ({ pkg, usedClasses, onBack }) => {
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
-             <header className="flex items-center gap-4 mb-6">
-                <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800"><ArrowLeftIcon /></button>
-                <div>
-                    <h2 className="text-2xl font-bold text-zinc-800">Detalhes do Pacote</h2>
-                    <p className="text-zinc-600 font-semibold">{pkg.studentName}</p>
-                </div>
-            </header>
-            <main className="flex-grow overflow-y-auto space-y-6">
-                <div className="bg-zinc-50 p-4 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className="text-sm font-medium text-zinc-500">Horas Contratadas</p><p className="text-zinc-800 font-bold text-lg">{pkg.totalHours}</p></div>
-                    <div><p className="text-sm font-medium text-zinc-500">Horas Utilizadas</p><p className="text-zinc-800 font-bold text-lg">{pkg.usedHours.toFixed(2)}</p></div>
-                    <div><p className="text-sm font-medium text-zinc-500">Horas Restantes</p><p className="text-zinc-800 font-bold text-lg">{pkg.remainingHours.toFixed(2)}</p></div>
-                    <div><p className="text-sm font-medium text-zinc-500">Data da Compra</p><p className="text-zinc-800 font-bold text-lg">{new Date(pkg.purchaseDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p></div>
-                </div>
-                <section>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-2">Histórico de Aulas do Pacote</h3>
-                    <div className="border rounded-lg overflow-hidden">
-                         <table className="min-w-full divide-y divide-zinc-200">
-                             <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data da Aula</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th></tr></thead>
-                            <tbody className="bg-white divide-y divide-zinc-200">
-                                {usedClasses.map(cls => (
-                                    <tr key={cls.id}><td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium">{cls.discipline}</td><td className="px-4 py-3 text-sm capitalize">{cls.status}</td></tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {usedClasses.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhuma aula foi utilizada deste pacote ainda.</p>}
-                    </div>
-                </section>
-            </main>
-        </div>
-    );
-};
 
 // --- Main Packages View ---
 interface PackagesViewProps { onBack: () => void; currentUser: Collaborator; }
 const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, currentUser }) => {
     const { showToast } = useContext(ToastContext);
-    const [view, setView] = useState<'list' | 'detail'>('list');
+
     const [packages, setPackages] = useState<ClassPackage[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedPackage, setSelectedPackage] = useState<PackageWithUsage | null>(null);
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [packageToEdit, setPackageToEdit] = useState<ClassPackage | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const [pkgSnap, stdSnap, clsSnap] = await Promise.all([
-                    db.collection("classPackages").orderBy("purchaseDate", "desc").get(),
-                    db.collection("students").get(),
-                    db.collection("scheduledClasses").where("packageId", "!=", null).get()
-                ]);
-                setPackages(pkgSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ClassPackage[]);
-                setStudents(stdSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]);
-                setScheduledClasses(clsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]);
-            } catch (error) {
-                console.error("Error fetching packages data:", error);
-                showToast("Erro ao carregar dados dos pacotes.", "error");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
+        const unsubPackages = db.collection("classPackages").orderBy("purchaseDate", "desc").onSnapshot(
+            snap => setPackages(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ClassPackage[]),
+            err => { console.error(err); showToast("Erro ao carregar pacotes.", "error"); }
+        );
+        const unsubStudents = db.collection("students").onSnapshot(
+            snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]),
+            err => { console.error(err); showToast("Erro ao carregar alunos.", "error"); }
+        );
+        const unsubClasses = db.collection("scheduledClasses").where("packageId", "!=", null).onSnapshot(
+             snap => setScheduledClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]),
+             err => { console.error(err); showToast("Erro ao carregar aulas vinculadas.", "error"); }
+        );
+
+        Promise.all([unsubPackages, unsubStudents, unsubClasses]).then(() => setLoading(false)).catch(() => setLoading(false));
+
+        return () => { unsubPackages(); unsubStudents(); unsubClasses(); };
     }, [showToast]);
 
     const packagesWithUsage = useMemo((): PackageWithUsage[] => {
@@ -206,53 +182,117 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         );
     }, [packagesWithUsage, searchTerm]);
 
-    const handleSavePackage = async (newPackageData: Omit<ClassPackage, 'id' | 'status'>) => {
-        try {
-            const dataToSave = { ...newPackageData, status: 'active' as const };
-            await db.collection('classPackages').add(sanitizeFirestore(dataToSave));
+    const handleOpenModal = (pkg: ClassPackage | null = null) => {
+        setPackageToEdit(pkg);
+        setIsModalOpen(true);
+    };
 
-            if (newPackageData.valuePaid && newPackageData.valuePaid > 0) {
-                const transactionData = {
-                    type: 'credit' as const,
-                    date: newPackageData.purchaseDate,
-                    amount: newPackageData.valuePaid,
-                    studentId: newPackageData.studentId,
-                    description: `Compra de pacote de ${newPackageData.totalHours} horas para ${newPackageData.studentName}`,
-                    registeredById: currentUser.id,
-                };
-                await db.collection('transactions').add(sanitizeFirestore(transactionData as any));
+    const handleCloseModal = () => {
+        setPackageToEdit(null);
+        setIsModalOpen(false);
+    };
+
+    const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName'>, pkgToEdit: ClassPackage | null) => {
+        const isEditing = !!pkgToEdit;
+        try {
+            if (isEditing) {
+                const packageRef = db.collection('classPackages').doc(pkgToEdit.id);
+                const batch = db.batch();
+                let newTransactionId = pkgToEdit.transactionId;
+
+                const oldValue = pkgToEdit.valuePaid || 0;
+                const newValue = formData.valuePaid || 0;
+
+                if (oldValue !== newValue) {
+                    if (newValue > 0 && oldValue > 0 && pkgToEdit.transactionId) {
+                        const txRef = db.collection('transactions').doc(pkgToEdit.transactionId);
+                        batch.update(txRef, { amount: newValue, date: formData.purchaseDate });
+                    } else if (newValue > 0 && oldValue === 0) {
+                        const txData = { type: 'credit' as const, date: formData.purchaseDate, amount: newValue, studentId: pkgToEdit.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${pkgToEdit.studentName}`, registeredById: currentUser.id };
+                        const newTxRef = db.collection('transactions').doc();
+                        batch.set(newTxRef, sanitizeFirestore(txData as any));
+                        newTransactionId = newTxRef.id;
+                    } else if (newValue === 0 && oldValue > 0 && pkgToEdit.transactionId) {
+                        const txRef = db.collection('transactions').doc(pkgToEdit.transactionId);
+                        batch.delete(txRef);
+                        newTransactionId = undefined;
+                    }
+                }
+
+                const packageUpdateData = { ...formData, transactionId: newTransactionId };
+                batch.update(packageRef, sanitizeFirestore(packageUpdateData as any));
+                await batch.commit();
+                showToast('Pacote atualizado com sucesso!', 'success');
+
+            } else { // Creating new package
+                const student = students.find(s => s.id === formData.studentId);
+                if (!student) throw new Error("Aluno não encontrado");
+
+                let transactionId: string | undefined = undefined;
+                if (formData.valuePaid && formData.valuePaid > 0) {
+                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.valuePaid, studentId: formData.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${student.name}`, registeredById: currentUser.id };
+                    const newTxRef = await db.collection('transactions').add(sanitizeFirestore(transactionData as any));
+                    transactionId = newTxRef.id;
+                }
+                const dataToSave = { ...formData, studentName: student.name, status: 'active' as const, transactionId };
+                await db.collection('classPackages').add(sanitizeFirestore(dataToSave));
+                showToast('Pacote registrado com sucesso!', 'success');
             }
-            showToast('Pacote registrado com sucesso!', 'success');
         } catch (error) {
             console.error("Error saving package:", error);
             showToast("Ocorreu um erro ao salvar o pacote.", "error");
         }
     };
 
-    const handleViewDetails = (pkg: PackageWithUsage) => {
-        setSelectedPackage(pkg);
-        setView('detail');
-    };
+    const handleDeletePackage = async (pkgToDelete: ClassPackage) => {
+        if (!window.confirm(`Tem certeza que deseja excluir o pacote de ${pkgToDelete.totalHours} horas de ${pkgToDelete.studentName}? Esta ação não pode ser desfeita e irá estornar todas as aulas vinculadas a ele.`)) {
+            return;
+        }
 
-    if (view === 'detail' && selectedPackage) {
-        const usedClassesForDetail = scheduledClasses.filter(c => c.packageId === selectedPackage.id);
-        return <PackageDetail pkg={selectedPackage} usedClasses={usedClassesForDetail} onBack={() => setView('list')} />;
-    }
+        try {
+            const batch = db.batch();
+
+            if (pkgToDelete.transactionId) {
+                const txRef = db.collection('transactions').doc(pkgToDelete.transactionId);
+                batch.delete(txRef);
+            }
+
+            const classesQuery = db.collection('scheduledClasses').where('packageId', '==', pkgToDelete.id);
+            const classesSnap = await classesQuery.get();
+            classesSnap.forEach(doc => {
+                const classRef = db.collection('scheduledClasses').doc(doc.id);
+                batch.update(classRef, {
+                    packageId: firebase.firestore.FieldValue.delete(),
+                    paymentStatus: 'pending'
+                });
+            });
+
+            const pkgRef = db.collection('classPackages').doc(pkgToDelete.id);
+            batch.delete(pkgRef);
+
+            await batch.commit();
+            showToast('Pacote excluído com sucesso!', 'success');
+        } catch (error) {
+            console.error("Error deleting package:", error);
+            showToast("Ocorreu um erro ao excluir o pacote.", "error");
+        }
+    };
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
-            <RegisterPackageModal
+            <PackageFormModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={handleCloseModal}
                 onSave={handleSavePackage}
                 students={students}
+                packageToEdit={packageToEdit}
             />
             <header className="flex items-center justify-between mb-6 flex-wrap gap-2">
                 <div className="flex items-center gap-4">
                     <button onClick={onBackToDashboard} className="text-zinc-500 hover:text-zinc-800"><ArrowLeftIcon /></button>
                     <h2 className="text-2xl font-bold text-zinc-800">Pacotes de Aulas</h2>
                 </div>
-                <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-secondary text-white font-semibold py-2 px-4 rounded-lg hover:bg-secondary-dark"><PlusIcon /><span>Registrar Pacote</span></button>
+                <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-secondary text-white font-semibold py-2 px-4 rounded-lg hover:bg-secondary-dark"><PlusIcon /><span>Registrar Pacote</span></button>
             </header>
 
             <div className="relative mb-4">
@@ -282,7 +322,10 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right text-sm">
-                                        <button onClick={() => handleViewDetails(pkg)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Detalhes</button>
+                                        <div className="flex items-center justify-end gap-4">
+                                            <button onClick={() => handleOpenModal(pkg)} className="text-secondary hover:text-secondary-dark font-semibold flex items-center gap-1"><PencilIcon className="h-4 w-4"/> Editar</button>
+                                            <button onClick={() => handleDeletePackage(pkg)} className="text-red-600 hover:text-red-800 font-semibold flex items-center gap-1"><TrashIcon className="h-4 w-4"/> Excluir</button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

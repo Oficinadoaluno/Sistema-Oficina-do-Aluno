@@ -134,6 +134,7 @@ export interface ClassPackage {
   valuePaid?: number;
   observations?: string;
   status: 'active' | 'completed' | 'canceled';
+  transactionId?: string;
   // usedClasses will be derived by querying scheduledClasses with this package's ID
 }
 
@@ -192,7 +193,8 @@ export interface GroupAttendance {
   groupId: string;
   studentId: string;
   date: string; // YYYY-MM-DD
-  status: 'present' | 'absent' | 'justified';
+  status: 'present' | 'absent';
+  justification?: string;
 }
 
 export interface GroupStudentDailyReport {

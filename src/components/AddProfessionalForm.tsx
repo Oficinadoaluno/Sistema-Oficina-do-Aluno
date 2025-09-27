@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import { ToastContext } from '../App';
 import { sanitizeFirestore, onlyDigits, phoneMask, validateCPF } from '../utils/sanitizeFirestore';
@@ -90,6 +90,25 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setSelectedDisciplines(prev => [...prev, trimmed]);
         }
         setOtherDiscipline('');
+    };
+
+    const handlePasswordReset = async () => {
+        if (!login) {
+            showToast("Login do professor não encontrado para redefinir a senha.", "error");
+            return;
+        }
+        const emailForReset = login.includes('@') ? login : `${login}@oficinadoaluno.com.br`;
+        try {
+            await auth.sendPasswordResetEmail(emailForReset);
+            showToast(`E-mail de redefinição de senha enviado para ${emailForReset}.`, 'success');
+        } catch (error: any) {
+            console.error("Password reset error:", error);
+            if (error.code === 'auth/user-not-found') {
+                showToast("Usuário não encontrado no sistema de autenticação para este login.", "error");
+            } else {
+                showToast("Ocorreu um erro ao enviar o e-mail de redefinição.", "error");
+            }
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -232,8 +251,21 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                 </fieldset>
                 <fieldset>
                     <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Acesso ao Sistema</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div><label htmlFor="login" className={labelStyle}>Login <span className="text-red-500">*</span></label><input type="text" id="login" value={login} onChange={e => setLogin(e.target.value)} className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`} required readOnly={isEditing} disabled={isSubmitting}/></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 items-end">
+                        <div>
+                            <label htmlFor="login" className={labelStyle}>Login</label>
+                            <input type="text" id="login" value={login} className={`${inputStyle} bg-zinc-200 cursor-not-allowed`} readOnly />
+                        </div>
+                        <div>
+                            <button 
+                                type="button" 
+                                onClick={handlePasswordReset} 
+                                className="w-full py-2 px-4 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+                                disabled={isSubmitting}
+                            >
+                                Enviar link para redefinir senha
+                            </button>
+                        </div>
                     </div>
                 </fieldset>
             </div>

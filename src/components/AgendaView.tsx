@@ -36,6 +36,9 @@ interface DisplayGroupClass {
     duration: number; // in minutes
 }
 type DisplayClass = DisplayIndividualClass | DisplayGroupClass;
+interface DailySchedule {
+    [professorId: string]: DisplayClass[];
+}
 
 // --- Report Modal ---
 interface ClassReportModalProps {
@@ -423,7 +426,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const [monthlyProfFilter, setMonthlyProfFilter] = useState('');
     const [monthlyStatusFilter, setMonthlyStatusFilter] = useState('');
 
-
     useEffect(() => {
         setLoading(true);
         const createErrorHandler = (context: string) => (error: any) => {
@@ -467,57 +469,63 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         };
     }, [showToast]);
 
-    const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
-    
-    const timeSlots = useMemo(() => {
+    const { allDisciplines, timeSlots, professorsToShow, dailySchedule } = useMemo(() => {
+        // All Disciplines
+        const disciplines = Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort();
+
+        // Time Slots
         const slots = [];
         for (let hour = VIEW_START_HOUR; hour < VIEW_END_HOUR; hour++) {
             slots.push(`${String(hour).padStart(2, '0')}:00`);
             slots.push(`${String(hour).padStart(2, '0')}:30`);
         }
-        return slots;
-    }, []);
-    
-    const allDisplayClassesForDay = useMemo((): DisplayClass[] => {
+
+        // --- Schedule Calculation ---
         const dateStr = currentDate.toISOString().split('T')[0];
         
-        const individualClasses: DisplayIndividualClass[] = scheduledClasses
+        const individualClasses = scheduledClasses
             .filter(c => c.date === dateStr)
-            .map(c => ({ ...c, classType: 'individual' }));
+            .map(c => ({ ...c, classType: 'individual' as const }));
 
         const groupClassInstances: DisplayGroupClass[] = [];
+        const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
+        
         classGroups.forEach(group => {
             if (group.status !== 'active') return;
-            
             if (group.schedule.type === 'recurring' && group.schedule.days) {
-                const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
                 const timeInfo = (group.schedule.days as any)[dayOfWeek];
-                
-                if (timeInfo && typeof timeInfo === 'object' && timeInfo.start && timeInfo.end) {
-                     const duration = timeToMinutes(timeInfo.end) - timeToMinutes(timeInfo.start);
+                if (timeInfo && timeInfo.start && timeInfo.end) {
+                    const duration = timeToMinutes(timeInfo.end) - timeToMinutes(timeInfo.start);
                     if (duration > 0) {
                         groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: timeInfo.start, professionalId: group.professionalId, duration });
                     }
                 }
             } else if (group.schedule.type === 'single' && group.schedule.date === dateStr && group.schedule.time) {
-                 groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration: 90 });
+                groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration: 90 });
             }
         });
+        const allDisplayClassesForDay: DisplayClass[] = [...individualClasses, ...groupClassInstances];
 
-        return [...individualClasses, ...groupClassInstances];
-    }, [currentDate, scheduledClasses, classGroups]);
-
-    const professorsToShow = useMemo(() => {
-        const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
         const profsWithClasses = new Set(allDisplayClassesForDay.map(c => c.professionalId));
-        const profsWithAvailability = professionals
-            .filter(p => p.status === 'ativo' && p.availability && p.availability[dayOfWeek] && p.availability[dayOfWeek]!.length > 0)
-            .map(p => p.id);
+        const profsWithAvailability = new Set(professionals.filter(p => p.status === 'ativo' && p.availability?.[dayOfWeek]?.length).map(p => p.id));
         const allRelevantProfIds = new Set([...profsWithClasses, ...profsWithAvailability]);
-        return professionals
+        
+        const sortedProfessors = professionals
             .filter(p => allRelevantProfIds.has(p.id))
             .sort((a, b) => a.name.localeCompare(b.name));
-    }, [allDisplayClassesForDay, professionals, currentDate]);
+
+        const schedule: DailySchedule = {};
+        sortedProfessors.forEach(prof => {
+            schedule[prof.id] = allDisplayClassesForDay.filter(cls => cls.professionalId === prof.id);
+        });
+        
+        return { 
+            allDisciplines: disciplines,
+            timeSlots: slots,
+            professorsToShow: sortedProfessors,
+            dailySchedule: schedule,
+        };
+    }, [currentDate, professionals, scheduledClasses, classGroups]);
 
     const packagesWithUsage = useMemo(() => {
         return allPackages.map(pkg => {
@@ -650,7 +658,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         {professorsToShow.map((prof, profIndex) => {
                             const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
                             const availableSlots = new Set(prof.availability?.[dayOfWeek] || []);
-                            const profClasses = allDisplayClassesForDay.filter(c => c.professionalId === prof.id);
+                            const profClasses = dailySchedule[prof.id] || [];
 
                             return (
                                 <div key={prof.id} className="relative border-l" style={{ gridColumn: `${profIndex + 2}`, gridRow: `2 / span ${timeSlots.length + 1}` }}>

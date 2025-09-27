@@ -11,8 +11,8 @@ const days: { key: DayOfWeek; label: string }[] = [
     { key: 'domingo', label: 'Dom' },
 ];
 
-// 08:00 to 20:00
-const timeSlots = Array.from({ length: 13 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); 
+// 08:00 to 22:00
+const timeSlots = Array.from({ length: 15 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); 
 
 interface WeeklyAvailabilityProps {
     initialAvailability: WeeklyAvailability;

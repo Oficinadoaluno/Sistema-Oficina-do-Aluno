@@ -71,7 +71,7 @@ Observações: ${r.observations}
         // 3. Call Gemini API
         const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
 
-        const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo conciso e construtivo em um único parágrado. O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
+        const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo direto e objetivo em um único parágrafo curto (máximo de 5 frases). O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
 Histórico de Relatórios:
 ${reportsHistory}
@@ -312,19 +312,17 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             const newAttendance = new Map(attendance);
             if (existingRecord) {
                 await db.collection('groupAttendance').doc(existingRecord.id).update(updateData);
-                // FIX: The object spread operator was causing a build error.
+                // FIX: The spread operator was causing a build error.
                 // Replaced with manual object construction to ensure type safety.
                 const updatedRecord: GroupAttendance = {
                     id: existingRecord.id,
                     groupId: existingRecord.groupId,
                     studentId: existingRecord.studentId,
                     date: existingRecord.date,
-                    status: status, // New status
-                    justification: existingRecord.justification // Copy old justification
+                    status: status,
                 };
-
-                if (status === 'present') {
-                    delete updatedRecord.justification;
+                if (status === 'absent' && existingRecord.justification) {
+                    updatedRecord.justification = existingRecord.justification;
                 }
                 newAttendance.set(studentId, updatedRecord);
             } else {
@@ -603,20 +601,55 @@ const MyClassesView: React.FC<{
 };
 
 // --- New "Creativity Panel" View ---
-const CreativityPanelView: React.FC<{ students: Student[] }> = ({ students }) => {
+interface SavedIdea {
+    id: string;
+    professionalId: string;
+    studentId: string;
+    studentName: string;
+    discipline: string;
+    topic: string;
+    generatedIdeaText: string;
+    createdAt: firebase.firestore.Timestamp;
+}
+
+const CreativityPanelView: React.FC<{ students: Student[], currentUser: Professional }> = ({ students, currentUser }) => {
     const { showToast } = useContext(ToastContext);
     const [studentId, setStudentId] = useState('');
     const [discipline, setDiscipline] = useState('');
     const [topic, setTopic] = useState('');
+    const [initialIdea, setInitialIdea] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState('');
 
+    const [savedIdeas, setSavedIdeas] = useState<SavedIdea[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isLoadingSaved, setIsLoadingSaved] = useState(true);
+
     const activeStudents = useMemo(() => students.filter(s => s.status === 'matricula'), [students]);
+
+    useEffect(() => {
+        setIsLoadingSaved(true);
+        const unsubscribe = db.collection('savedCreativeIdeas')
+            .where('professionalId', '==', currentUser.id)
+            .orderBy('createdAt', 'desc')
+            .onSnapshot(snapshot => {
+                const ideas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedIdea));
+                setSavedIdeas(ideas);
+                setIsLoadingSaved(false);
+            }, error => {
+                console.error("Error fetching saved ideas:", error);
+                showToast("Erro ao carregar ideias salvas.", "error");
+                setIsLoadingSaved(false);
+            });
+
+        return () => unsubscribe();
+    }, [currentUser.id, showToast]);
+
 
     const handleGenerate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!studentId || !discipline || !topic) {
-            showToast('Por favor, preencha todos os campos.', 'error');
+            showToast('Por favor, preencha todos os campos obrigatórios.', 'error');
             return;
         }
 
@@ -627,26 +660,30 @@ const CreativityPanelView: React.FC<{ students: Student[] }> = ({ students }) =>
             const student = students.find(s => s.id === studentId);
             if (!student) throw new Error("Student not found");
 
-            const prompt = `Você é um assistente pedagógico criativo. Sua tarefa é criar um plano de aula inovador para um aluno específico.
+            const prompt = `Você é um assistente pedagógico criativo para aulas particulares.
+Sua tarefa é criar um plano de aula curto, direto e eficaz.
+
+**Restrições Importantes:**
+- A aula é particular e curta (aprox. 1 hora). As sugestões devem ser práticas.
+- **NÃO USE O NOME DO ALUNO.** Refira-se a ele(a) de forma genérica ("o aluno", "a aluna").
+- Formate a resposta de forma clara, usando títulos em negrito (ex: **Abordagem 1:**) e listas com asteriscos (*). Use quebras de linha para separar os parágrafos. Não use markdown complexo (como '#').
 
 **Informações do Aluno:**
-- **Nome:** ${student.name}
-- **Ano/Série:** ${student.grade || 'Não informado'}
-- **Objetivo Principal:** ${student.objective || 'Não informado'}
-- **Neurodivergência/Dificuldades:** ${student.neurodiversity || "Nenhuma informada"}
-- **Resumo de Desempenho (gerado por IA):** ${student.aiSummary?.summary || "Nenhum disponível"}
+- Ano/Série: ${student.grade || 'Não informado'}
+- Objetivo Principal: ${student.objective || 'Não informado'}
+- Neurodivergência/Dificuldades: ${student.neurodiversity || "Nenhuma informada"}
+- Resumo de Desempenho (gerado por IA): ${student.aiSummary?.summary || "Nenhum disponível"}
 
 **Detalhes da Aula:**
-- **Disciplina:** ${discipline}
-- **Tópico:** ${topic}
+- Disciplina: ${discipline}
+- Tópico: ${topic}
+- Ideia Inicial do Professor: ${initialIdea || "Nenhuma fornecida. Crie do zero."}
 
 **Sua Tarefa:**
-Com base nas informações do aluno e nos detalhes da aula, sugira 3 abordagens de ensino distintas e criativas. Para cada abordagem, inclua:
-1.  **Conceito da Abordagem:** Uma breve descrição da metodologia (ex: Aprendizagem baseada em jogos, debate socrático, projeto prático).
-2.  **Atividade Prática:** Uma atividade concreta que o aluno pode realizar.
-3.  **Ponto de Conexão:** Como essa abordagem se conecta com os interesses ou supera as dificuldades do aluno.
-
-Formate sua resposta de forma clara e organizada, usando markdown para títulos e listas.`;
+Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino distintas e criativas. Se o professor deu uma ideia inicial, use-a como ponto de partida. Para cada abordagem, inclua:
+1.  **Conceito:** Uma breve descrição da metodologia.
+2.  **Atividade Prática:** Uma atividade concreta e rápida.
+3.  **Ponto de Conexão:** Como a abordagem ajuda o aluno com base em seu perfil.`;
             
             const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
             const response = await ai.models.generateContent({
@@ -663,40 +700,108 @@ Formate sua resposta de forma clara e organizada, usando markdown para títulos 
         }
     };
 
+    const handleSaveIdea = async () => {
+        if (!result || !studentId) return;
+        setIsSaving(true);
+        try {
+            const student = students.find(s => s.id === studentId);
+            const ideaData = {
+                professionalId: currentUser.id,
+                studentId,
+                studentName: student?.name || 'Aluno desconhecido',
+                discipline,
+                topic,
+                generatedIdeaText: result,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            };
+            await db.collection('savedCreativeIdeas').add(ideaData);
+            showToast("Ideia salva com sucesso!", "success");
+        } catch (error) {
+            console.error("Error saving idea:", error);
+            showToast("Erro ao salvar a ideia.", "error");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteIdea = async (ideaId: string) => {
+        if (!window.confirm("Tem certeza que deseja excluir esta ideia?")) return;
+        try {
+            await db.collection('savedCreativeIdeas').doc(ideaId).delete();
+            showToast("Ideia excluída.", "info");
+        } catch (error) {
+            console.error("Error deleting idea:", error);
+            showToast("Erro ao excluir a ideia.", "error");
+        }
+    };
+
     return (
         <div className="animate-fade-in-view space-y-6">
             <div className="text-center">
                 <SparklesIcon className="h-10 w-10 text-primary mx-auto"/>
                 <h3 className="text-xl font-semibold text-zinc-700 mt-2">Painel de Criatividade</h3>
-                <p className="text-zinc-500 max-w-2xl mx-auto">Receba sugestões de atividades e abordagens de ensino personalizadas para seus alunos, com base em suas informações e no tópico da aula.</p>
+                <p className="text-zinc-500 max-w-2xl mx-auto">Receba sugestões de atividades e abordagens de ensino personalizadas para seus alunos.</p>
             </div>
-            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 border rounded-lg bg-zinc-50">
-                <div className="md:col-span-2">
-                    <label htmlFor="student" className={labelStyle}>Aluno</label>
+            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end p-4 border rounded-lg bg-zinc-50">
+                <div>
+                    <label htmlFor="student" className={labelStyle}>Aluno <span className="text-red-500">*</span></label>
                     <select id="student" value={studentId} onChange={e => setStudentId(e.target.value)} className={inputStyle} required>
                         <option value="" disabled>Selecione um aluno...</option>
                         {activeStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label htmlFor="discipline" className={labelStyle}>Disciplina</label>
+                    <label htmlFor="discipline" className={labelStyle}>Disciplina <span className="text-red-500">*</span></label>
                     <input id="discipline" type="text" value={discipline} onChange={e => setDiscipline(e.target.value)} className={inputStyle} required placeholder="Ex: História"/>
                 </div>
                 <div>
-                    <label htmlFor="topic" className={labelStyle}>Tópico</label>
+                    <label htmlFor="topic" className={labelStyle}>Tópico <span className="text-red-500">*</span></label>
                     <input id="topic" type="text" value={topic} onChange={e => setTopic(e.target.value)} className={inputStyle} required placeholder="Ex: Revolução Francesa"/>
                 </div>
-                <div className="md:col-span-4">
+                 <div>
+                    <label htmlFor="initialIdea" className={labelStyle}>Sua ideia ou objetivo (opcional)</label>
+                    <input id="initialIdea" type="text" value={initialIdea} onChange={e => setInitialIdea(e.target.value)} className={inputStyle} placeholder="Ex: Focar em exercícios práticos"/>
+                </div>
+                <div className="md:col-span-2">
                      <button type="submit" disabled={isLoading} className="w-full py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark disabled:bg-zinc-400 flex items-center justify-center gap-2">
                         <SparklesIcon className="h-5 w-5"/>
                         {isLoading ? 'Gerando Ideias...' : 'Gerar Ideias'}
                     </button>
                 </div>
             </form>
-            <div className="bg-white border rounded-lg p-6 min-h-[200px]">
+            <div className="bg-white border rounded-lg p-6 min-h-[200px] space-y-4">
                 {isLoading && <div className="text-center"><p>Gerando sugestões... ✨</p></div>}
                 {!isLoading && !result && <div className="text-center text-zinc-500"><p>As sugestões da IA aparecerão aqui.</p></div>}
-                {result && <div className="prose prose-sm max-w-none whitespace-pre-wrap">{result}</div>}
+                {result && <div className="whitespace-pre-wrap text-zinc-800">{result}</div>}
+                 {result && !isLoading && (
+                    <div className="text-right border-t pt-4">
+                        <button onClick={handleSaveIdea} disabled={isSaving} className="py-2 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark disabled:bg-zinc-400">
+                            {isSaving ? 'Salvando...' : 'Salvar Ideia'}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+             <div className="mt-8">
+                <h3 className="text-xl font-semibold text-zinc-700 mb-4">Suas Ideias Salvas</h3>
+                {isLoadingSaved && <p>Carregando ideias...</p>}
+                {!isLoadingSaved && savedIdeas.length === 0 && <div className="text-center py-8 bg-zinc-50 rounded-lg"><p className="text-zinc-500">Você ainda não salvou nenhuma ideia.</p></div>}
+                {!isLoadingSaved && savedIdeas.length > 0 && (
+                    <div className="space-y-4">
+                        {savedIdeas.map(idea => (
+                            <div key={idea.id} className="bg-white border rounded-lg p-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold text-zinc-800">{idea.discipline}: {idea.topic}</p>
+                                        <p className="text-sm text-zinc-500">Para: {idea.studentName}</p>
+                                    </div>
+                                    <button onClick={() => handleDeleteIdea(idea.id)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon/></button>
+                                </div>
+                                <div className="whitespace-pre-wrap text-zinc-700 mt-2 border-t pt-2 text-sm">{idea.generatedIdeaText}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -891,7 +996,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             case 'myClasses':
                 return <MyClassesView scheduledClasses={scheduledClasses} students={studentsMap} handleOpenReportModal={handleOpenReportModal} />;
             case 'creativityPanel':
-                return <CreativityPanelView students={students} />;
+                return <CreativityPanelView students={students} currentUser={currentUser} />;
             case 'groupSession':
                 return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} />;
             case 'groups':
@@ -1038,24 +1143,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                 @keyframes fade-in-view { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in-view { animation: fade-in-view 0.4s ease-out forwards; }
                 @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out forwards; }
-                .prose {
-                    color: #3f3f46; /* zinc-700 */
-                }
-                .prose h1, .prose h2, .prose h3 {
-                    color: #18181b; /* zinc-900 */
-                    font-weight: 600;
-                }
-                .prose strong {
-                     color: #18181b; /* zinc-900 */
-                }
-                .prose ul {
-                    list-style-type: disc;
-                    padding-left: 1.5rem;
-                }
-                .prose li {
-                    margin-top: 0.25em;
-                    margin-bottom: 0.25em;
-                }
             `}</style>
         </div>
     );

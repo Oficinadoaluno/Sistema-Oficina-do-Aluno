@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, ClassPackage } from '../types';
 import { db } from '../firebase';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, ClockIcon, BuildingOffice2Icon, ComputerDesktopIcon
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon
 } from './Icons';
 import { ToastContext } from '../App';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -10,7 +10,10 @@ import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 // --- Constants & Types ---
 const inputStyle = "w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
 const labelStyle = "block text-xs font-medium text-zinc-600 mb-1";
-const HOUR_HEIGHT_PX = 80; // The height of one hour in the timeline grid
+const VIEW_START_HOUR = 8;
+const VIEW_END_HOUR = 22;
+const SLOT_DURATION_MINUTES = 30;
+const CELL_HEIGHT_PX = 30; // Height of one 30-minute slot
 
 const timeToMinutes = (time: string): number => {
     if (!time || !time.includes(':')) return 0;
@@ -39,13 +42,15 @@ const ScheduleClassModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report'>) => Promise<void>;
-    classToEdit: ScheduledClass | null;
+    classToEdit: Partial<ScheduledClass> | null;
     students: Student[];
     professionals: Professional[];
     allDisciplines: string[];
     allPackages: (ClassPackage & { usedHours: number })[];
 }> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines, allPackages }) => {
     
+    const isEditing = !!classToEdit?.id;
+
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [studentId, setStudentId] = useState<string>('');
@@ -104,8 +109,7 @@ const ScheduleClassModal: React.FC<{
 
     const finalDiscipline = discipline === 'Outro' ? customDiscipline : discipline;
 
-    const { student, professional, availabilityWarning } = useMemo(() => {
-        const student = studentId ? students.find(s => s.id === studentId) : null;
+    const { availabilityWarning } = useMemo(() => {
         const professional = professionalId ? professionals.find(p => p.id === professionalId) : null;
 
         let availabilityWarning = false;
@@ -118,8 +122,8 @@ const ScheduleClassModal: React.FC<{
             }
         }
 
-        return { student, professional, availabilityWarning };
-    }, [studentId, professionalId, date, time, students, professionals]);
+        return { availabilityWarning };
+    }, [professionalId, date, time, professionals]);
     
     const filteredStudents = useMemo(() => {
         const activeStudents = students.filter(s => s.status === 'matricula');
@@ -151,12 +155,14 @@ const ScheduleClassModal: React.FC<{
     };
 
     if (!isOpen) return null;
+    
+    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <form className="bg-white rounded-xl shadow-xl w-full max-w-2xl m-4 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
                 <header className="flex items-center justify-between p-4 border-b">
-                    <h2 className="text-xl font-bold text-zinc-800">{classToEdit ? 'Editar Aula' : 'Agendar Nova Aula'}</h2>
+                    <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Aula' : 'Agendar Nova Aula'}</h2>
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
                 <main className="flex-grow overflow-y-auto p-6 space-y-4">
@@ -167,7 +173,7 @@ const ScheduleClassModal: React.FC<{
                                 id="student-search"
                                 type="text"
                                 className={inputStyle}
-                                value={studentId ? students.find(s => s.id === studentId)?.name || '' : studentSearch}
+                                value={studentId ? selectedStudentName : studentSearch}
                                 onChange={(e) => {
                                     setStudentSearch(e.target.value);
                                     setStudentId('');
@@ -210,7 +216,7 @@ const ScheduleClassModal: React.FC<{
                         </div>
                         <div>
                            <label htmlFor="time" className={labelStyle}>Horário</label>
-                            <input type="time" id="time" value={time} onChange={e => setTime(e.target.value)} className={inputStyle} required />
+                            <input type="time" id="time" value={time} onChange={e => setTime(e.target.value)} className={inputStyle} step="1800" required />
                         </div>
                         <div>
                            <label htmlFor="discipline" className={labelStyle}>Disciplina</label>
@@ -261,7 +267,7 @@ const ScheduleClassModal: React.FC<{
                         </div>
                         <div>
                            <label htmlFor="duration" className={labelStyle}>Duração (minutos)</label>
-                           <input type="number" id="duration" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className={inputStyle} />
+                           <input type="number" id="duration" value={duration} onChange={e => setDuration(parseInt(e.target.value))} step="30" className={inputStyle} />
                         </div>
                         <div className="md:col-span-2">
                             <label className={labelStyle}>Local da Aula</label>
@@ -290,12 +296,12 @@ const ScheduleClassModal: React.FC<{
                         </div>
                     )}
                      {availabilityWarning && (
-                        <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-800 flex items-center gap-2 font-semibold">
+                        <div className="p-3 bg-amber-50 border-l-4 border-amber-400 text-amber-800 flex items-center gap-2 font-semibold text-sm">
                             <ExclamationTriangleIcon className="h-5 w-5"/>
-                            <span>Horário indisponível para este professor.</span>
+                            <span>Atenção: Horário fora da disponibilidade padrão do professor.</span>
                         </div>
                      )}
-                     {classToEdit && (
+                     {isEditing && (
                         <div className="border-t pt-4">
                             <h3 className="text-lg font-semibold text-zinc-700 mb-2">Gerenciar Status da Aula</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -319,7 +325,7 @@ const ScheduleClassModal: React.FC<{
                 </main>
                 <footer className="flex justify-end items-center gap-4 p-4 border-t">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{classToEdit ? 'Salvar Alterações' : 'Agendar Aula'}</button>
+                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{isEditing ? 'Salvar Alterações' : 'Agendar Aula'}</button>
                 </footer>
             </form>
         </div>
@@ -346,18 +352,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     // UI State
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [classToEdit, setClassToEdit] = useState<ScheduledClass | null>(null);
-    const [filterType, setFilterType] = useState('');
-    const [filterDetail, setFilterDetail] = useState('');
-    const [filterProfessional, setFilterProfessional] = useState('');
-    const [filterStatus, setFilterStatus] = useState('');
+    const [classToEdit, setClassToEdit] = useState<Partial<ScheduledClass> | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
                 const [classesSnap, studentsSnap, profsSnap, groupsSnap, pkgSnap] = await Promise.all([
-                    db.collection("scheduledClasses").orderBy("date", "asc").get(),
+                    db.collection("scheduledClasses").get(),
                     db.collection("students").get(),
                     db.collection("professionals").get(),
                     db.collection("classGroups").get(),
@@ -372,16 +374,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
 
             } catch (err: any) {
                 console.error(`Firestore Error (AgendaView):`, err);
-                let message = `Ocorreu um erro ao carregar os dados da agenda.`;
-                if (err.code === 'permission-denied') {
-                    message = `Você não tem permissão para acessar os dados da agenda. Verifique as regras do Firestore.`;
-                } else if (err.code === 'failed-precondition') {
-                    message = `Erro de configuração do banco de dados para a agenda (índice ausente). Consulte o administrador.`;
-                } else if (err.code === 'unavailable') {
-                    message = `Erro de conexão. Não foi possível carregar os dados da agenda. Verifique sua internet.`;
-                }
-                showToast(message, "error");
-                setError(message);
+                showToast("Ocorreu um erro ao carregar os dados da agenda.", "error");
+                setError("Ocorreu um erro ao carregar os dados da agenda.");
             } finally {
                 setLoading(false);
             }
@@ -391,96 +385,47 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
     
-    const allDisplayClasses = useMemo((): DisplayClass[] => {
-        const individualClasses: DisplayIndividualClass[] = scheduledClasses.map(c => ({ ...c, classType: 'individual' }));
-        const groupClassInstances: DisplayGroupClass[] = [];
+    const timeSlots = useMemo(() => {
+        const slots = [];
+        for (let hour = VIEW_START_HOUR; hour < VIEW_END_HOUR; hour++) {
+            slots.push(`${String(hour).padStart(2, '0')}:00`);
+            slots.push(`${String(hour).padStart(2, '0')}:30`);
+        }
+        return slots;
+    }, []);
+    
+    const allDisplayClassesForDay = useMemo((): DisplayClass[] => {
+        const dateStr = currentDate.toISOString().split('T')[0];
         
+        const individualClasses: DisplayIndividualClass[] = scheduledClasses
+            .filter(c => c.date === dateStr)
+            .map(c => ({ ...c, classType: 'individual' }));
+
+        const groupClassInstances: DisplayGroupClass[] = [];
         classGroups.forEach(group => {
             if (group.status !== 'active') return;
-
-            const today = new Date();
-            const startDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-            const endDate = new Date(today.getFullYear(), today.getMonth() + 3, 0);
             
             if (group.schedule.type === 'recurring' && group.schedule.days) {
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[d.getUTCDay()];
-                    const timeInfo = (group.schedule.days as any)[dayOfWeek];
-                    
-                    if (timeInfo && typeof timeInfo === 'object' && timeInfo.start && timeInfo.end) {
-                         const duration = timeToMinutes(timeInfo.end) - timeToMinutes(timeInfo.start);
-                        if (duration > 0) {
-                            const dateStr = d.toISOString().split('T')[0];
-                            groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: timeInfo.start, professionalId: group.professionalId, duration });
-                        }
+                const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
+                const timeInfo = (group.schedule.days as any)[dayOfWeek];
+                
+                if (timeInfo && typeof timeInfo === 'object' && timeInfo.start && timeInfo.end) {
+                     const duration = timeToMinutes(timeInfo.end) - timeToMinutes(timeInfo.start);
+                    if (duration > 0) {
+                        groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: timeInfo.start, professionalId: group.professionalId, duration });
                     }
                 }
-            } else if (group.schedule.type === 'single' && group.schedule.date && group.schedule.time) {
-                 groupClassInstances.push({ id: `group-${group.id}-${group.schedule.date}`, classType: 'group', group, date: group.schedule.date, time: group.schedule.time, professionalId: group.professionalId, duration: 90 });
+            } else if (group.schedule.type === 'single' && group.schedule.date === dateStr && group.schedule.time) {
+                 groupClassInstances.push({ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration: 90 });
             }
         });
 
         return [...individualClasses, ...groupClassInstances];
-    }, [scheduledClasses, classGroups]);
-
-    const dailyClasses = useMemo(() => {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        return allDisplayClasses.filter(c => c.date === dateStr);
-    }, [currentDate, allDisplayClasses]);
-
-    const { viewStartHour, viewEndHour, dailyGridTimeSlots } = useMemo(() => {
-        let minHour = 8;
-        let maxHour = 21;
-
-        if (dailyClasses.length > 0) {
-            const times = dailyClasses.flatMap(c => {
-                const start = timeToMinutes(c.time);
-                const end = start + c.duration;
-                return [start, end];
-            });
-            minHour = Math.floor(Math.min(...times) / 60);
-            maxHour = Math.ceil(Math.max(...times) / 60);
-        }
-
-        const finalStartHour = Math.min(8, minHour);
-        const finalEndHour = Math.max(21, maxHour);
-        const slots = Array.from({ length: finalEndHour - finalStartHour }, (_, i) => `${(i + finalStartHour).toString().padStart(2, '0')}:00`);
-        
-        return { viewStartHour: finalStartHour, viewEndHour: finalEndHour, dailyGridTimeSlots: slots };
-    }, [dailyClasses]);
-    
-    const allMonthlyClasses = useMemo(() => {
-        const individualClasses = allDisplayClasses.filter(c => c.classType === 'individual');
-        return individualClasses
-            .filter(c => {
-                const classDate = new Date(c.date);
-                return classDate.getUTCMonth() === currentDate.getUTCMonth() && classDate.getUTCFullYear() === currentDate.getUTCFullYear();
-            })
-            .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [currentDate, allDisplayClasses]);
-    
-    const filteredMonthlyClasses = useMemo(() => {
-        return allMonthlyClasses.filter(cls => {
-            const individualClass = cls as DisplayIndividualClass;
-            if (filterProfessional && individualClass.professionalId !== filterProfessional) return false;
-            if (filterDetail) {
-                const studentName = students.find(s => s.id === individualClass.studentId)?.name || '';
-                if (!studentName.toLowerCase().includes(filterDetail.toLowerCase())) return false;
-            }
-            if (filterType) {
-                if (filterType === 'group') return false; 
-                if (filterType === 'individual') { /* This is always true */ }
-                if (filterType === 'online' && individualClass.location !== 'online') return false;
-                if (filterType === 'presencial' && individualClass.location !== 'presencial') return false;
-            }
-            if (filterStatus && individualClass.status !== filterStatus) return false;
-            return true;
-        });
-    }, [allMonthlyClasses, filterType, filterDetail, filterProfessional, filterStatus, students]);
+    }, [currentDate, scheduledClasses, classGroups]);
 
     const professorsToShow = useMemo(() => {
         const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
-        const profsWithClasses = new Set(dailyClasses.map(c => c.professionalId));
+        const profsWithClasses = new Set(allDisplayClassesForDay.map(c => c.professionalId));
         const profsWithAvailability = professionals
             .filter(p => p.status === 'ativo' && p.availability && p.availability[dayOfWeek] && p.availability[dayOfWeek]!.length > 0)
             .map(p => p.id);
@@ -488,7 +433,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         return professionals
             .filter(p => allRelevantProfIds.has(p.id))
             .sort((a, b) => a.name.localeCompare(b.name));
-    }, [dailyClasses, professionals, currentDate]);
+    }, [allDisplayClassesForDay, professionals, currentDate]);
 
     const packagesWithUsage = useMemo(() => {
         return allPackages.map(pkg => {
@@ -506,181 +451,121 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
         try {
             const dataToSave = { ...newClassData, paymentStatus: newClassData.packageId ? 'package' : 'pending' };
-            if (classToEdit) {
+            if (classToEdit && classToEdit.id) {
                 const classRef = db.collection('scheduledClasses').doc(classToEdit.id);
                 await classRef.update(sanitizeFirestore(dataToSave as any));
                 showToast('Aula atualizada com sucesso!', 'success');
             } else {
-                await db.collection('scheduledClasses').add(sanitizeFirestore(dataToSave as any));
+                const docRef = await db.collection('scheduledClasses').add(sanitizeFirestore(dataToSave as any));
+                setScheduledClasses(prev => [...prev, { ...dataToSave, id: docRef.id } as ScheduledClass]);
                 showToast('Aula agendada com sucesso!', 'success');
             }
         } catch (error: any) {
             console.error("Error scheduling class:", error);
             showToast("Ocorreu um erro ao agendar a aula.", "error");
+        } finally {
+            setClassToEdit(null);
         }
     };
     
-    const openScheduleModal = (classData: ScheduledClass | null = null) => {
-        setClassToEdit(classData);
+    const handleCellClick = (profId: string, timeSlot: string) => {
+        const newClassData: Partial<ScheduledClass> = {
+            professionalId: profId,
+            date: currentDate.toISOString().split('T')[0],
+            time: timeSlot,
+            duration: 60,
+            status: 'scheduled',
+            type: 'Aula Regular',
+            location: 'presencial',
+        };
+        setClassToEdit(newClassData);
         setIsModalOpen(true);
     };
 
-    const getStatusBadge = (cls: ScheduledClass) => {
-        const statusText = { scheduled: 'Agendada', completed: 'Concluída', canceled: 'Cancelada', rescheduled: 'Remarcada' };
-        const statusColors = { scheduled: 'bg-blue-100 text-blue-800', completed: 'bg-green-100 text-green-800', canceled: 'bg-red-100 text-red-800', rescheduled: 'bg-zinc-200 text-zinc-700' };
-        if (cls.status === 'scheduled' && !cls.reportRegistered && new Date(`${cls.date}T${cls.time}`) < new Date()) {
-            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Pendente Relatório</span>;
-        }
-        return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusColors[cls.status]}`}>{statusText[cls.status]}</span>
+    const handleClassClick = (cls: ScheduledClass) => {
+        setClassToEdit(cls);
+        setIsModalOpen(true);
     };
-
-    if (loading) return <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col items-center justify-center animate-fade-in-view"><p className="text-zinc-500 font-semibold">Carregando dados da agenda...</p></div>;
     
-    if (error) return <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col items-center justify-center animate-fade-in-view"><ExclamationTriangleIcon className="h-12 w-12 text-red-400 mb-4" /><h3 className="text-xl font-bold text-red-600">Erro ao Carregar a Agenda</h3><p className="text-zinc-600 mt-2 max-w-md text-center">{error}</p><button onClick={onBack} className="mt-6 py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Voltar ao Painel</button></div>;
+    const timeToPosition = (time: string) => (timeToMinutes(time) - (VIEW_START_HOUR * 60)) / SLOT_DURATION_MINUTES * CELL_HEIGHT_PX;
+    const durationToHeight = (duration: number) => (duration / SLOT_DURATION_MINUTES) * CELL_HEIGHT_PX;
+
+    if (loading) return <div className="bg-white p-6 rounded-xl shadow-sm h-full flex items-center justify-center"><p>Carregando agenda...</p></div>;
+    if (error) return <div className="bg-white p-6 rounded-xl shadow-sm h-full flex items-center justify-center text-red-600">{error}</div>;
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view space-y-6">
-            <header className="flex items-center justify-between flex-wrap gap-2">
+        <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
+            <header className="flex items-center justify-between flex-wrap gap-4 mb-4">
                  <div className="flex items-center gap-4">
                      <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors"><ArrowLeftIcon className="h-6 w-6" /></button>
-                    <h2 className="text-2xl font-bold text-zinc-800">Agenda</h2>
+                    <div>
+                        <h2 className="text-2xl font-bold text-zinc-800">Agenda do Dia</h2>
+                        <p className="text-zinc-500">{currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    </div>
                 </div>
-                <button onClick={() => openScheduleModal()} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105"><PlusIcon /><span>Agendar Aula</span></button>
+                <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-2">
+                        <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
+                        <button onClick={() => setCurrentDate(new Date())} className="text-sm font-semibold text-secondary hover:underline">Hoje</button>
+                        <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronRightIcon /></button>
+                    </div>
+                    <button onClick={() => handleCellClick('', '')} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg"><PlusIcon /><span>Agendar Aula</span></button>
+                </div>
             </header>
             
-            <main className="flex-grow overflow-y-auto space-y-8 pr-2">
-                <section>
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold text-zinc-700">Agenda do Dia</h3>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
-                            <button onClick={() => setCurrentDate(new Date())} className="text-sm font-semibold text-secondary hover:underline">Hoje</button>
-                            <span className="font-semibold text-lg text-zinc-800">{currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</span>
-                            <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronRightIcon /></button>
+            <div className="flex-grow overflow-auto border rounded-lg">
+                <div className="grid min-w-[1200px]" style={{ gridTemplateColumns: `60px repeat(${professorsToShow.length}, 1fr)` }}>
+                    {/* Header Row */}
+                    <div className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm"></div>
+                    {professorsToShow.map(prof => (
+                        <div key={prof.id} className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l">
+                            {prof.name}
                         </div>
-                    </div>
-                    <div className="border rounded-lg overflow-x-auto bg-white">
-                        <div className="min-w-[1200px] grid" style={{ gridTemplateColumns: '150px 1fr' }}>
-                            <div className="sticky top-0 left-0 bg-white z-20 border-r border-b p-2 font-semibold text-zinc-600 text-sm">Professor</div>
-                            <div className="sticky top-0 bg-white z-10 border-b grid" style={{ gridTemplateColumns: `repeat(${dailyGridTimeSlots.length}, 1fr)` }}>
-                                {dailyGridTimeSlots.map(time => <div key={time} className="text-center p-2 text-xs font-semibold text-zinc-500 border-l">{time}</div>)}
+                    ))}
+
+                    {/* Time Column & Professor Grids */}
+                    <div className="col-start-1 col-end-2 row-start-2 row-end-auto">
+                        {timeSlots.map(time => (
+                            <div key={time} style={{ height: `${CELL_HEIGHT_PX}px` }} className="relative text-right pr-2 text-xs text-zinc-400">
+                                <span className="absolute -top-1.5 right-2">{time.endsWith(':00') ? time : ''}</span>
                             </div>
-
-                            {professorsToShow.map(prof => {
-                                const profDailyClasses = dailyClasses.filter(c => c.professionalId === prof.id);
-                                const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
-                                const availableSlots = prof.availability?.[dayOfWeek] || [];
-                                const timelineHeight = (viewEndHour - viewStartHour) * HOUR_HEIGHT_PX;
-
-                                return (
-                                    <React.Fragment key={prof.id}>
-                                        <div className="border-r border-t p-2 text-sm font-medium text-zinc-800 sticky left-0 bg-white/70 backdrop-blur-sm flex items-center">{prof.name}</div>
-                                        <div className="border-t relative" style={{ height: `${timelineHeight}px` }}>
-                                            {/* Background Grid & Availability */}
-                                            {dailyGridTimeSlots.map((time, index) => (
-                                                <div key={`grid-${time}`} className={`absolute w-full ${availableSlots.includes(time) ? 'bg-green-50' : ''}`} style={{ top: `${index * HOUR_HEIGHT_PX}px`, height: `${HOUR_HEIGHT_PX}px`, borderBottom: '1px dashed #e5e7eb', borderLeft: '1px solid #e5e7eb' }}></div>
-                                            ))}
-                                            {/* Class Blocks */}
-                                            {profDailyClasses.map(cls => {
-                                                const startMinutes = timeToMinutes(cls.time);
-                                                const durationMinutes = cls.duration;
-                                                const endMinutes = startMinutes + durationMinutes;
-                                                if (endMinutes < viewStartHour * 60 || startMinutes >= viewEndHour * 60) return null;
-
-                                                const topPx = ((startMinutes - (viewStartHour * 60)) / 60) * HOUR_HEIGHT_PX;
-                                                const heightPx = (durationMinutes / 60) * HOUR_HEIGHT_PX;
-                                                const style = { top: `${topPx}px`, height: `${Math.max(heightPx - 2, 1)}px`, left: '1px', right: '1px', zIndex: 10 };
-
-                                                if (cls.classType === 'individual') {
-                                                    const student = students.find(s => s.id === cls.studentId);
-                                                    const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-secondary/20 border-secondary text-secondary-dark', completed: 'bg-secondary/20 border-secondary text-secondary-dark' }[cls.status];
-                                                    return (
-                                                        <button key={cls.id} onClick={() => openScheduleModal(cls)} style={style} className={`absolute p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
-                                                            <p className="font-bold text-xs truncate">{student?.name}</p>
-                                                            <p className="text-[10px] truncate">{cls.discipline}</p>
-                                                            <p className="text-[10px] text-zinc-500">{cls.time}</p>
-                                                        </button>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <div key={cls.id} style={style} className="absolute p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary">
-                                                             <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
-                                                             <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
-                                                             <p className="text-[10px] text-zinc-500">{cls.time}</p>
-                                                        </div>
-                                                    );
-                                                }
-                                            })}
-                                        </div>
-                                    </React.Fragment>
-                                );
-                            })}
-                        </div>
-                        {professorsToShow.length === 0 && <div className="text-center py-12 border-t"><p className="text-zinc-500">Nenhuma aula ou disponibilidade de professor para este dia.</p></div>}
+                        ))}
                     </div>
-                </section>
-                
-                <section>
-                    <h3 className="text-xl font-semibold text-zinc-700 mb-4">Aulas Agendadas no Mês ({filteredMonthlyClasses.length} total)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-zinc-50 rounded-lg">
-                        <div>
-                            <label className={labelStyle}>Tipo</label>
-                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className={inputStyle}>
-                                <option value="">Todos</option>
-                                <option value="individual">Individual</option>
-                                <option value="online">Online</option>
-                                <option value="presencial">Presencial</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className={labelStyle}>Detalhe (Aluno)</label>
-                            <input type="text" value={filterDetail} onChange={e => setFilterDetail(e.target.value)} placeholder="Buscar..." className={inputStyle} />
-                        </div>
-                        <div>
-                            <label className={labelStyle}>Professor</label>
-                            <select value={filterProfessional} onChange={e => setFilterProfessional(e.target.value)} className={inputStyle}>
-                                <option value="">Todos</option>
-                                {professionals.filter(p => p.status === 'ativo').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className={labelStyle}>Status</label>
-                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputStyle}>
-                                <option value="">Todos</option>
-                                <option value="scheduled">Agendada</option>
-                                <option value="completed">Concluída</option>
-                                <option value="canceled">Cancelada</option>
-                                <option value="rescheduled">Remarcada</option>
-                            </select>
-                        </div>
-                    </div>
+                    {professorsToShow.map((prof, profIndex) => {
+                        const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
+                        const availableSlots = new Set(prof.availability?.[dayOfWeek] || []);
+                        const profClasses = allDisplayClassesForDay.filter(c => c.professionalId === prof.id);
 
-                    <div className="border rounded-lg overflow-hidden">
-                        {filteredMonthlyClasses.length > 0 ? (
-                            <table className="min-w-full divide-y divide-zinc-200">
-                                <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Status</th><th className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
-                                <tbody className="bg-white divide-y divide-zinc-200">
-                                    {filteredMonthlyClasses.map(cls => {
-                                        const individualClass = cls as DisplayIndividualClass;
-                                        const professional = professionals.find(p => p.id === individualClass.professionalId);
-                                        const student = students.find(s => s.id === individualClass.studentId);
+                        return (
+                            <div key={prof.id} className="relative border-l" style={{ gridColumn: `${profIndex + 2}`, gridRow: `2 / span ${timeSlots.length + 1}` }}>
+                                {timeSlots.map((time, timeIndex) => (
+                                    <button key={time} onClick={() => handleCellClick(prof.id, time)} className={`w-full border-t border-dashed border-zinc-200 hover:bg-secondary/10`} style={{ height: `${CELL_HEIGHT_PX}px`, backgroundColor: availableSlots.has(time) ? '#f0fdf4' : '' }} />
+                                ))}
+
+                                {profClasses.map(cls => {
+                                    if (cls.classType === 'individual') {
+                                        const student = students.find(s => s.id === cls.studentId);
+                                        const statusStyle = { canceled: 'bg-red-100 border-red-500 text-red-700 line-through', rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic', scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800', completed: 'bg-cyan-100 border-cyan-500 text-cyan-800' }[cls.status];
                                         return (
-                                            <tr key={individualClass.id}>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{new Date(individualClass.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {individualClass.time}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm"><span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${individualClass.location === 'online' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{individualClass.location === 'online' ? 'Online' : 'Presencial'}</span></td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-zinc-800">{student?.name || 'Aluno não encontrado'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-zinc-600">{professional?.name || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm">{getStatusBadge(individualClass)}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right text-sm"><button onClick={() => openScheduleModal(individualClass)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button></td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        ) : (<p className="p-6 text-center text-zinc-500">{allMonthlyClasses.length > 0 ? 'Nenhuma aula encontrada com os filtros aplicados.' : 'Nenhuma aula agendada para este mês.'}</p>)}
-                    </div>
-                </section>
-            </main>
+                                            <button key={cls.id} onClick={() => handleClassClick(cls)} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}>
+                                                <p className="font-bold text-xs truncate">{student?.name}</p>
+                                                <p className="text-[10px] truncate">{cls.discipline}</p>
+                                            </button>
+                                        );
+                                    } else {
+                                        return (
+                                            <div key={cls.id} style={{ top: timeToPosition(cls.time), height: durationToHeight(cls.duration) }} className="absolute w-full p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary">
+                                                 <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
+                                                 <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
+                                            </div>
+                                        );
+                                    }
+                                })}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
             <ScheduleClassModal 
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setClassToEdit(null); }}

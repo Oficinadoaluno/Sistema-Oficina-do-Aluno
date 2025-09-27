@@ -159,7 +159,7 @@ const GroupStudentReportModal: React.FC<GroupStudentReportModalProps> = ({ isOpe
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <header className="p-4 border-b">
                     <h3 className="font-bold text-zinc-800">Relatório de {student.name}</h3>
@@ -396,7 +396,7 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
     };
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <form className="bg-white rounded-lg p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()} onSubmit={handleSave}>
                 <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Dados</h3>
                 <div className="space-y-4">
@@ -442,7 +442,7 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
     };
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <form className="bg-white rounded-lg p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()} onSubmit={handleChangePassword}>
                 <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Senha</h3>
                 <div className="space-y-4">

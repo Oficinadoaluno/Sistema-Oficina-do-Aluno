@@ -81,7 +81,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
     const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <form className="bg-white rounded-xl shadow-xl w-full max-w-lg m-4" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
                 <header className="flex items-center justify-between p-4 border-b">
                     <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Pacote' : 'Registrar Pacote de Aulas'}</h2>

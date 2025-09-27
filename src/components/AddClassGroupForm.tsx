@@ -155,7 +155,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast p-4 md:p-8" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast p-4 md:p-8">
             <form className="bg-white rounded-xl shadow-xl w-full h-full flex flex-col" onClick={e => e.stopPropagation()} onSubmit={handleSubmit}>
                 <header className="flex items-center justify-between p-4 border-b">
                     <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Turma' : 'Criar Nova Turma'}</h2>

@@ -51,7 +51,7 @@ interface ManageStudentModalProps {
 const ManageStudentModal: React.FC<ManageStudentModalProps> = ({ isOpen, onClose, onInactivate, student, onEdit }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-zinc-800 mb-4">Gerenciar Aluno</h3>
                 <div className="mt-6 border-t pt-4 space-y-2">
@@ -78,7 +78,7 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
     const professional = professionals.find(p => p.id === aula.professionalId);
 
     return (
-         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl m-4 animate-fade-in-down" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start">
                     <div>
@@ -93,9 +93,6 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                         <InfoItem label="Humor do Aluno" value={<span className="text-2xl">{report.mood}</span>} />
                         <InfoItem label="Exercício para Casa" value={report.homeworkAssigned ? 'Sim' : 'Não'} />
                     </div>
-                    {report.initialObservations && (
-                        <InfoItem label="Observacoes" value={<p className="whitespace-pre-wrap">{report.initialObservations}</p>} />
-                    )}
                     {report.description && (
                         <InfoItem label="Observações da Aula" value={<p className="whitespace-pre-wrap">{report.description}</p>} />
                     )}
@@ -141,7 +138,7 @@ const GroupReportModal: React.FC<GroupReportModalProps> = ({ report, group, onCl
     if (!report) return null;
 
     return (
-         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4 animate-fade-in-down" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start">
                     <div>

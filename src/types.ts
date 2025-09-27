@@ -110,7 +110,6 @@ export interface ClassReport {
   mood: string; // emoji character or custom text
   contents: { discipline: string; content: string }[];
   description: string;
-  initialObservations?: string; // Only for the first report for a student
   nextSteps?: string[]; // Replaces continuity plan
   homeworkAssigned?: boolean;
   testRecord?: {

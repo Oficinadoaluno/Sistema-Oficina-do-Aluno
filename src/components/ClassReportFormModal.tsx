@@ -25,7 +25,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
 
     const [mood, setMood] = useState('😊');
-    const [initialObservations, setInitialObservations] = useState('');
     const [contents, setContents] = useState<{ discipline: string; content: string }[]>([{ discipline: '', content: '' }]);
     const [description, setDescription] = useState('');
     const [nextSteps, setNextSteps] = useState<string[]>(['']);
@@ -38,7 +37,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
             const existingReport = context.class.report;
             if (existingReport) {
                 setMood(existingReport.mood || '😊');
-                setInitialObservations(existingReport.initialObservations || '');
                 setContents(existingReport.contents && existingReport.contents.length > 0 ? existingReport.contents : [{ discipline: context.class.discipline, content: '' }]);
                 setDescription(existingReport.description || '');
                 setNextSteps(existingReport.nextSteps && existingReport.nextSteps.length > 0 ? existingReport.nextSteps : ['']);
@@ -57,7 +55,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
             } else {
                 // Reset for new report
                 setMood('😊');
-                setInitialObservations('');
                 setContents([{ discipline: context.class.discipline, content: '' }]);
                 setDescription('');
                 setNextSteps(['']);
@@ -88,10 +85,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
             showToast('Por favor, selecione o humor do aluno.', 'error');
             return;
         }
-        if (context.isFirstReport && !initialObservations.trim()) {
-            showToast('O campo "Observações" é obrigatório para o primeiro relatório.', 'error');
-            return;
-        }
         if (!description.trim()) {
             showToast('O campo "Observações da Aula" é obrigatório.', 'error');
             return;
@@ -99,7 +92,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
 
         const reportData: ClassReport = {
             mood,
-            initialObservations: context.isFirstReport ? initialObservations : undefined,
             contents: contents.filter(c => c.content.trim() !== ''),
             description,
             nextSteps: nextSteps.filter(s => s.trim() !== ''),
@@ -118,7 +110,7 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <header className="flex justify-between items-start p-4 border-b">
                     <div>
@@ -137,13 +129,6 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
                             ))}
                         </div>
                     </div>
-
-                    {context.isFirstReport && (
-                         <div className="animate-fade-in-view">
-                            <label htmlFor="initial-obs" className={labelStyle}>Observacoes <span className="text-red-500">*</span></label>
-                            <textarea id="initial-obs" value={initialObservations} onChange={e => setInitialObservations(e.target.value)} className={textareaStyle} placeholder="Descreva suas impressões sobre as habilidades, dificuldades e a estratégia utilizada" required />
-                         </div>
-                    )}
                     
                     <div>
                         <label htmlFor="content" className={labelStyle}>Conteúdo(s) Abordado(s)</label>
@@ -154,7 +139,17 @@ const ClassReportFormModal: React.FC<ClassReportFormModalProps> = ({ isOpen, onC
                     
                      <div>
                         <label htmlFor="description" className={labelStyle}>Observações da Aula <span className="text-red-500">*</span></label>
-                        <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} className={textareaStyle} placeholder="Descreva o desenvolvimento do aluno, dificuldades, sucessos e comportamento geral." required />
+                        <textarea 
+                            id="description" 
+                            value={description} 
+                            onChange={e => setDescription(e.target.value)} 
+                            className={textareaStyle} 
+                            placeholder={
+                                context.isFirstReport 
+                                ? "Primeiro relatório: Descreva suas impressões iniciais sobre as habilidades, dificuldades e a estratégia a ser utilizada." 
+                                : "Descreva o desenvolvimento do aluno, dificuldades, sucessos e comportamento geral."
+                            }
+                            required />
                     </div>
 
                     <div>

@@ -183,6 +183,7 @@ export interface ClassGroup {
     discipline?: string;
     status: 'active' | 'archived';
     color?: string;
+    type?: 'group' | 'plan';
 }
 
 export interface GroupClassReport {
@@ -257,4 +258,5 @@ export interface Service {
   pricePerHour?: number;
   totalPrice?: number;
   description?: string;
+  discountPercentage?: number;
 }

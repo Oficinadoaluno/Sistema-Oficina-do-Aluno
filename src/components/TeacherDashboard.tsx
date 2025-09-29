@@ -309,11 +309,12 @@ interface GroupSessionManagerProps {
     group: ClassGroup;
     students: Student[];
     onBack: () => void;
+    initialDate?: Date;
 }
 
-const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, students: allStudents, onBack }) => {
+const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, students: allStudents, onBack, initialDate }) => {
     const { showToast } = useContext(ToastContext);
-    const [currentDate, setCurrentDate] = useState(new Date());
+    const [currentDate, setCurrentDate] = useState(initialDate || new Date());
     const [attendance, setAttendance] = useState<Map<string, GroupAttendance>>(new Map());
     const [reports, setReports] = useState<Map<string, GroupStudentDailyReport>>(new Map());
     const [isLoading, setIsLoading] = useState(true);
@@ -365,25 +366,23 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             if (existingRecord) {
                 await db.collection('groupAttendance').doc(existingRecord.id).update(firestoreUpdate);
                 
-                // FIX: Manually construct the new state to avoid spread operator issues on non-plain objects from Firestore.
+// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
                 const updatedLocalRecord: GroupAttendance = {
                     id: existingRecord.id,
                     groupId: existingRecord.groupId,
                     studentId: existingRecord.studentId,
                     date: existingRecord.date,
                     status: status,
+                    justification: existingRecord.justification,
                 };
-                // Preserve justification if student is marked absent.
-                // If student is present, justification is cleared in firestore, so we don't set it here for local state.
-                if (status === 'absent' && existingRecord.justification) {
-                    updatedLocalRecord.justification = existingRecord.justification;
+                if (status === 'present') {
+                    delete updatedLocalRecord.justification;
                 }
                 newAttendanceState.set(studentId, updatedLocalRecord);
             } else {
                 const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
                 const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
-                // FIX: Manually construct the new record to avoid potential spread operator issues,
-                // matching the pattern used in the `if (existingRecord)` block.
+// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
                 const newRecordForState: GroupAttendance = {
                     id: newRecordRef.id,
                     groupId: newRecordData.groupId,
@@ -404,14 +403,14 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const newAttendance = new Map(attendance);
         const record = newAttendance.get(studentId);
         if (record) {
-            // FIX: Manually construct the object to avoid spread operator issues.
+// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
             const updatedRecord: GroupAttendance = {
                 id: record.id,
                 groupId: record.groupId,
                 studentId: record.studentId,
                 date: record.date,
                 status: record.status,
-                justification: justification,
+                justification: justification
             };
             newAttendance.set(studentId, updatedRecord);
             setAttendance(newAttendance);
@@ -917,6 +916,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportContext, setReportContext] = useState<any>(null);
     const [selectedGroup, setSelectedGroup] = useState<ClassGroup | null>(null);
+    const [groupSessionDate, setGroupSessionDate] = useState<Date | undefined>(undefined);
     const [classDetailModal, setClassDetailModal] = useState<{ class: ScheduledClass; student: Student } | null>(null);
 
 
@@ -1021,13 +1021,50 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
     };
 
     const { upcomingClasses, pastClasses } = useMemo(() => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const all = scheduledClasses; // Already sorted
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        // Generate group class instances for the next 30 days
+        const groupInstances: any[] = [];
+        for (let i = 0; i < 30; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+            const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[date.getUTCDay()];
+
+            classGroups.forEach(group => {
+                if (group.status !== 'active' || (group.type && group.type !== 'group')) return;
+                
+                if (group.schedule.type === 'recurring' && group.schedule.days?.[dayOfWeek]) {
+                    const timeInfo = group.schedule.days[dayOfWeek];
+                    if (timeInfo?.start) {
+                        groupInstances.push({
+                            id: `group-${group.id}-${dateStr}`, isGroup: true, group,
+                            date: dateStr, time: timeInfo.start,
+                            discipline: group.name, student: { name: `${group.studentIds.length} alunos` }
+                        });
+                    }
+                } else if (group.schedule.type === 'single' && group.schedule.date === dateStr) {
+                     groupInstances.push({
+                        id: `group-${group.id}-${dateStr}`, isGroup: true, group,
+                        date: dateStr, time: group.schedule.time,
+                        discipline: group.name, student: { name: `${group.studentIds.length} alunos` }
+                    });
+                }
+            });
+        }
+
+        const allUpcoming = [
+            ...scheduledClasses.filter(c => c.date >= todayStr),
+            ...groupInstances
+        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
+
         return {
-            upcomingClasses: all.filter(c => c.date >= todayStr),
-            pastClasses: all.filter(c => c.date < todayStr),
+            upcomingClasses: allUpcoming,
+            pastClasses: scheduledClasses.filter(c => c.date < todayStr),
         };
-    }, [scheduledClasses]);
+    }, [scheduledClasses, classGroups]);
     
     const studentsMap = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
 
@@ -1061,8 +1098,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         setIsReportModalOpen(true);
     };
     
-    const handleViewGroup = (group: ClassGroup) => {
+    const handleViewGroup = (group: ClassGroup, date?: string) => {
         setSelectedGroup(group);
+        setGroupSessionDate(date ? new Date(date) : new Date());
         setView('groupSession');
     };
 
@@ -1092,13 +1130,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
             case 'creativityPanel':
                 return <CreativityPanelView students={students} currentUser={currentUser} />;
             case 'groupSession':
-                return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} />;
+                return selectedGroup && <GroupSessionManager group={selectedGroup} students={students} onBack={() => setView('dashboard')} initialDate={groupSessionDate} />;
             case 'groups':
                 return (
                     <div className="animate-fade-in-view space-y-4">
-                        {classGroups.length > 0 ? (
+                        {classGroups.filter(g => g.type !== 'plan').length > 0 ? (
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {classGroups.map(g => (
+                                {classGroups.filter(g => g.type !== 'plan').map(g => (
                                     <div key={g.id} className="bg-white border p-4 rounded-lg shadow-sm flex flex-col">
                                         <h4 className="font-bold text-zinc-800 text-lg">{g.name}</h4>
                                         <p className="text-sm text-zinc-500 flex-grow">{g.discipline || 'Sem disciplina'}</p>
@@ -1134,13 +1172,27 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                             <div>
                                 <h3 className="text-xl font-semibold text-zinc-700 mb-2 flex items-center gap-2">Próximas Aulas</h3>
                                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2 bg-white p-2 border rounded-lg">
-                                    {upcomingClasses.length > 0 ? upcomingClasses.map(c => {
-                                        const student = students.find(s => s.id === c.studentId);
+                                    {upcomingClasses.length > 0 ? upcomingClasses.map((c: any) => {
+                                        const isGroup = c.isGroup;
+                                        const student = isGroup ? null : students.find(s => s.id === c.studentId);
+                                        const bgColor = isGroup ? 'bg-primary/10' : 'bg-zinc-50';
+                                        const hoverBgColor = isGroup ? 'hover:bg-primary/20' : 'hover:bg-zinc-100';
+
                                         return (
-                                            <button key={c.id} onClick={() => student && setClassDetailModal({ class: c, student })} className="w-full text-left bg-zinc-50 p-3 rounded-lg flex justify-between items-center hover:bg-zinc-100 transition-colors">
+                                            <button key={c.id} onClick={() => {
+                                                if (isGroup) {
+                                                    handleViewGroup(c.group, c.date);
+                                                } else if (student) {
+                                                    setClassDetailModal({ class: c, student });
+                                                }
+                                            }} className={`w-full text-left p-3 rounded-lg flex justify-between items-center transition-colors ${bgColor} ${hoverBgColor}`}>
                                                 <div>
-                                                    <p className="font-bold text-zinc-800">{student?.name || 'Carregando...'}</p>
-                                                    <p className="text-sm text-zinc-600 flex items-center">{c.discipline} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
+                                                    <p className="font-bold text-zinc-800">{isGroup ? c.discipline : student?.name || 'Carregando...'}</p>
+                                                    <p className="text-sm text-zinc-600 flex items-center">
+                                                        {isGroup ? `${c.group.studentIds.length} alunos` : c.discipline}
+                                                        {!isGroup && c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>}
+                                                        {!isGroup && c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}
+                                                    </p>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
@@ -1219,36 +1271,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                     <div ref={menuRef} className="relative">
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100">
                             <span className="font-semibold">{currentUser.name}</span>
-                            <ChevronDownIcon open={isMenuOpen} />
+                            <ChevronDownIcon className="h-4 w-4" open={isMenuOpen} />
                         </button>
                         {isMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 border">
-                                <button onClick={() => { setIsProfileModalOpen(true); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm hover:bg-zinc-100"><IdentificationIcon />Alterar Dados</button>
-                                <button onClick={() => { setIsPasswordModalOpen(true); setIsMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm hover:bg-zinc-100"><LockClosedIcon />Alterar Senha</button>
+                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 animate-fade-in-fast border">
+                                <button onClick={() => {setIsProfileModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><IdentificationIcon /><span>Alterar Dados</span></button>
+                                <button onClick={() => {setIsPasswordModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><LockClosedIcon /><span>Alterar Senha</span></button>
                                 <div className="border-t my-1"></div>
-                                <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon />Sair</button>
+                                <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon /><span>Sair</span></button>
                             </div>
                         )}
                     </div>
                 </header>
-
                 <main className="flex-1 overflow-y-auto p-4 md:p-6">
                     {renderContent()}
                 </main>
             </div>
 
+            {reportContext && <ClassReportFormModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onSave={handleSaveClassReport} context={reportContext} />}
             <UserProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={currentUser} />
             <ChangePasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
-            <ClassReportFormModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onSave={handleSaveClassReport} context={reportContext} />
             {classDetailModal && <UpcomingClassDetailModal isOpen={!!classDetailModal} onClose={() => setClassDetailModal(null)} classData={classDetailModal.class} student={classDetailModal.student} />}
-
-
-            <style>{`
+            
+             <style>{`
                 @keyframes fade-in-view { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 .animate-fade-in-view { animation: fade-in-view 0.4s ease-out forwards; }
-                @keyframes fade-in-fast { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out forwards; }
+                @keyframes fade-in-fast { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+                .animate-fade-in-fast { animation: fade-in-fast 0.1s ease-out forwards; }
             `}</style>
         </div>
     );
 };
+
 export default TeacherDashboard;

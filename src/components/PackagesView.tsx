@@ -10,6 +10,39 @@ import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
+// --- Confirmation Modal ---
+const ConfirmationModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    children: React.ReactNode;
+}> = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-fade-in-fast" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h3 className="text-lg font-bold text-zinc-800">{title}</h3>
+                    <div className="mt-2 text-sm text-zinc-600 space-y-2">
+                        {children}
+                    </div>
+                </div>
+                <footer className="flex justify-end items-center gap-3 p-4 bg-zinc-50 rounded-b-xl">
+                    <button onClick={onClose} className="py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300">
+                        Cancelar
+                    </button>
+                    <button onClick={onConfirm} className="py-2 px-4 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">
+                        Confirmar Exclusão
+                    </button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
+
 // --- Package Form Modal (for Create/Edit) ---
 interface PackageFormModalProps {
     isOpen: boolean;
@@ -147,6 +180,8 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [packageToEdit, setPackageToEdit] = useState<ClassPackage | null>(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [packageToDelete, setPackageToDelete] = useState<ClassPackage | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -244,20 +279,18 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         }
     };
 
-    const handleDeletePackage = async (pkgToDelete: ClassPackage) => {
-        if (!window.confirm(`Tem certeza que deseja excluir o pacote de ${pkgToDelete.totalHours} horas de ${pkgToDelete.studentName}? Esta ação não pode ser desfeita e irá estornar todas as aulas vinculadas a ele.`)) {
-            return;
-        }
+    const handleConfirmDelete = async () => {
+        if (!packageToDelete) return;
 
         try {
             const batch = db.batch();
 
-            if (pkgToDelete.transactionId) {
-                const txRef = db.collection('transactions').doc(pkgToDelete.transactionId);
+            if (packageToDelete.transactionId) {
+                const txRef = db.collection('transactions').doc(packageToDelete.transactionId);
                 batch.delete(txRef);
             }
 
-            const classesQuery = db.collection('scheduledClasses').where('packageId', '==', pkgToDelete.id);
+            const classesQuery = db.collection('scheduledClasses').where('packageId', '==', packageToDelete.id);
             const classesSnap = await classesQuery.get();
             classesSnap.forEach(doc => {
                 const classRef = db.collection('scheduledClasses').doc(doc.id);
@@ -267,7 +300,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                 });
             });
 
-            const pkgRef = db.collection('classPackages').doc(pkgToDelete.id);
+            const pkgRef = db.collection('classPackages').doc(packageToDelete.id);
             batch.delete(pkgRef);
 
             await batch.commit();
@@ -275,11 +308,29 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         } catch (error) {
             console.error("Error deleting package:", error);
             showToast("Ocorreu um erro ao excluir o pacote.", "error");
+        } finally {
+            setIsConfirmModalOpen(false);
+            setPackageToDelete(null);
         }
+    };
+
+    const handleDeleteClick = (pkg: ClassPackage) => {
+        setPackageToDelete(pkg);
+        setIsConfirmModalOpen(true);
     };
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
+            <ConfirmationModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => setIsConfirmModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Confirmar Exclusão"
+            >
+                <p>Tem certeza que deseja excluir o pacote de <strong>{packageToDelete?.totalHours} horas</strong> de <strong>{packageToDelete?.studentName}</strong>?</p>
+                <p className="mt-2 text-amber-800 bg-amber-50 p-2 rounded-md border border-amber-200">Esta ação não pode ser desfeita e irá desvincular todas as aulas pagas com este pacote, marcando-as como pendentes de pagamento.</p>
+            </ConfirmationModal>
+
             <PackageFormModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
@@ -324,7 +375,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                     <td className="px-6 py-4 text-right text-sm">
                                         <div className="flex items-center justify-end gap-4">
                                             <button onClick={() => handleOpenModal(pkg)} className="text-secondary hover:text-secondary-dark font-semibold flex items-center gap-1"><PencilIcon className="h-4 w-4"/> Editar</button>
-                                            <button onClick={() => handleDeletePackage(pkg)} className="text-red-600 hover:text-red-800 font-semibold flex items-center gap-1"><TrashIcon className="h-4 w-4"/> Excluir</button>
+                                            <button onClick={() => handleDeleteClick(pkg)} className="text-red-600 hover:text-red-800 font-semibold flex items-center gap-1"><TrashIcon className="h-4 w-4"/> Excluir</button>
                                         </div>
                                     </td>
                                 </tr>

@@ -21,6 +21,7 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
     const isEditing = !!serviceToEdit;
 
     const [name, setName] = useState('');
+    const [discountPercentage, setDiscountPercentage] = useState<number | ''>('');
     const [type, setType] = useState<'hourly' | 'package' | 'daily'>('hourly');
     const [totalHours, setTotalHours] = useState<number | ''>('');
     const [pricePerHour, setPricePerHour] = useState<number | ''>('');
@@ -30,12 +31,14 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
     useEffect(() => {
         if (serviceToEdit) {
             setName(serviceToEdit.name);
+            setDiscountPercentage(serviceToEdit.discountPercentage || '');
             setType(serviceToEdit.type);
             setTotalHours(serviceToEdit.totalHours || '');
             setPricePerHour(serviceToEdit.pricePerHour || '');
             setTotalPrice(serviceToEdit.totalPrice || '');
         } else {
             setName('');
+            setDiscountPercentage('');
             setType('hourly');
             setTotalHours('');
             setPricePerHour('');
@@ -67,7 +70,9 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const serviceData: Omit<Service, 'id'> = {
-            name, type,
+            name, 
+            type,
+            discountPercentage: Number(discountPercentage) || undefined,
             totalHours: type === 'package' ? Number(totalHours) : undefined,
             pricePerHour: type === 'hourly' || type === 'package' ? Number(pricePerHour) : undefined,
             totalPrice: type === 'package' || type === 'daily' ? Number(totalPrice) : undefined,
@@ -85,9 +90,13 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
                 <main className="p-6 space-y-4">
-                    <div>
+                     <div>
                         <label htmlFor="serviceName" className={labelStyle}>Nome do Serviço <span className="text-red-500">*</span></label>
                         <input id="serviceName" type="text" value={name} onChange={e => setName(e.target.value)} className={inputStyle} required />
+                    </div>
+                    <div>
+                        <label htmlFor="discountPercentage" className={labelStyle}>Desconto Padrão (Pix/Dinheiro) (%)</label>
+                        <input id="discountPercentage" type="number" value={discountPercentage} onChange={e => setDiscountPercentage(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Ex: 5" className={inputStyle} />
                     </div>
                     <div>
                         <label className={labelStyle}>Tipo de Serviço</label>
@@ -163,6 +172,11 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
         return () => unsub();
     }, [showToast]);
 
+    useEffect(() => {
+        const service = services.find(s => s.id === selectedCalcServiceId);
+        setDiscount(service?.discountPercentage || '');
+    }, [selectedCalcServiceId, services]);
+
     const { basePrice, discountedAmount, finalPrice } = useMemo(() => {
         const service = services.find(s => s.id === selectedCalcServiceId);
         if (!service) return { basePrice: 0, discountedAmount: 0, finalPrice: 0 };
@@ -237,6 +251,11 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                             {service.type === 'package' && `${service.totalHours} horas - ${formatPrice(service.totalPrice)} (${formatPrice(service.pricePerHour)}/h)`}
                                             {service.type === 'daily' && `${formatPrice(service.totalPrice)} / dia`}
                                         </p>
+                                        {service.discountPercentage && (
+                                            <p className="text-xs text-green-700 font-semibold mt-1">
+                                                {service.discountPercentage}% de desconto para Pix/Dinheiro
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => handleOpenModal(service)} className="p-2 text-zinc-500 hover:text-secondary hover:bg-zinc-200 rounded-full"><PencilIcon /></button>
@@ -248,8 +267,11 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                     )}
                 </div>
                 <div className="space-y-4">
-                     <h3 className="text-xl font-semibold text-zinc-700">Simulador de Preços</h3>
-                     <div className="p-4 bg-zinc-50 border rounded-lg space-y-4">
+                     <div className="p-4 bg-secondary/5 border border-secondary/20 rounded-lg space-y-4 sticky top-0">
+                        <h3 className="text-xl font-semibold text-zinc-700 flex items-center gap-2">
+                            <CurrencyDollarIcon className="h-6 w-6 text-secondary"/>
+                            Simulador de Preços
+                        </h3>
                         <div>
                             <label htmlFor="calc-service" className={labelStyle}>Serviço</label>
                             <select id="calc-service" value={selectedCalcServiceId} onChange={e => setSelectedCalcServiceId(e.target.value)} className={inputStyle}>
@@ -269,10 +291,15 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                             <label htmlFor="calc-discount" className={labelStyle}>Desconto (%)</label>
                             <input id="calc-discount" type="number" value={discount} onChange={e => setDiscount(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} disabled={paymentMethod === 'cartao'} placeholder={paymentMethod === 'cartao' ? 'N/A' : 'Ex: 5'}/>
                         </div>
-                        <div className="border-t pt-4 space-y-2">
-                            <div className="flex justify-between text-sm"><span className="text-zinc-600">Valor Base:</span><span className="font-medium">{formatPrice(basePrice)}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-zinc-600">Desconto:</span><span className="font-medium text-red-600">- {formatPrice(discountedAmount)}</span></div>
-                            <div className="flex justify-between text-lg"><span className="text-zinc-800 font-bold">Valor Final:</span><span className="font-bold text-secondary">{formatPrice(finalPrice)}</span></div>
+                        <div className="border-t border-secondary/20 pt-4 mt-4">
+                            <div className="space-y-1 mb-3">
+                                <div className="flex justify-between text-sm"><span className="text-zinc-600">Valor Base:</span><span className="font-medium">{formatPrice(basePrice)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-zinc-600">Desconto:</span><span className="font-medium text-red-600">- {formatPrice(discountedAmount)}</span></div>
+                            </div>
+                            <div className="bg-secondary/10 p-3 rounded-lg mt-2 text-center">
+                                <p className="text-sm font-medium text-secondary-dark">VALOR FINAL</p>
+                                <p className="text-3xl font-bold text-secondary-dark">{formatPrice(finalPrice)}</p>
+                            </div>
                         </div>
                      </div>
                 </div>

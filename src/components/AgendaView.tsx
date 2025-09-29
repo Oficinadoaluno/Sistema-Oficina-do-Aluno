@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, ClassPackage } from '../types';
 import { db } from '../firebase';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon, CalendarDaysIcon
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon
 } from './Icons';
 import { ToastContext } from '../App';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -24,8 +24,16 @@ const timeToMinutes = (time: string): number => {
     return hours * 60 + minutes;
 };
 
+interface EventLayout {
+    top: number;
+    height: number;
+    left: number;
+    width: number;
+}
+
 interface DisplayIndividualClass extends ScheduledClass {
     classType: 'individual';
+    layout?: EventLayout;
 }
 interface DisplayGroupClass {
     id: string; 
@@ -35,11 +43,10 @@ interface DisplayGroupClass {
     time: string;
     professionalId: string;
     duration: number; // in minutes
+    layout?: EventLayout;
 }
 type DisplayClass = DisplayIndividualClass | DisplayGroupClass;
-interface DailySchedule {
-    [professorId: string]: DisplayClass[];
-}
+
 
 // --- Report Modal ---
 interface ClassReportModalProps {
@@ -418,9 +425,8 @@ const getWeekDays = (date: Date): Date[] => {
 const AgendaEvent: React.FC<{
     cls: DisplayClass;
     studentsMap: Map<string, Student>;
-    professionalsMap: Map<string, Professional>;
     onClick: (cls: ScheduledClass, e: React.MouseEvent) => void;
-}> = ({ cls, studentsMap, professionalsMap, onClick }) => {
+}> = ({ cls, studentsMap, onClick }) => {
     
     if (cls.classType === 'individual') {
         const student = studentsMap.get(cls.studentId);
@@ -434,8 +440,13 @@ const AgendaEvent: React.FC<{
         return (
             <button
                 onClick={(e) => onClick(cls, e)}
-                style={{ top: `${(timeToMinutes(cls.time) - VIEW_START_HOUR * 60) / SLOT_DURATION_MINUTES * CELL_HEIGHT_PX}px`, height: `${cls.duration / SLOT_DURATION_MINUTES * CELL_HEIGHT_PX}px` }}
-                className={`absolute w-full p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}
+                style={{
+                    top: `${cls.layout?.top}px`,
+                    height: `${cls.layout?.height}px`,
+                    left: `${cls.layout?.left}%`,
+                    width: `${cls.layout?.width}%`,
+                }}
+                className={`absolute p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}
             >
                 <p className="font-bold text-xs truncate">{student?.name}</p>
                 <p className="text-[10px] truncate">{cls.discipline}</p>
@@ -444,16 +455,88 @@ const AgendaEvent: React.FC<{
     } else { // Group class
         return (
             <div
-                style={{ top: `${(timeToMinutes(cls.time) - VIEW_START_HOUR * 60) / SLOT_DURATION_MINUTES * CELL_HEIGHT_PX}px`, height: `${cls.duration / SLOT_DURATION_MINUTES * CELL_HEIGHT_PX}px` }}
-                className="absolute w-full p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary"
+                 style={{
+                    top: `${cls.layout?.top}px`,
+                    height: `${cls.layout?.height}px`,
+                    left: `${cls.layout?.left}%`,
+                    width: `${cls.layout?.width}%`,
+                }}
+                className="absolute p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary"
             >
                 <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
                 <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
-                <p className="text-[10px] truncate">{professionalsMap.get(cls.professionalId)?.name}</p>
             </div>
         );
     }
 };
+
+const calculateLayout = (classes: DisplayClass[]): DisplayClass[] => {
+    const sortedClasses = [...classes].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+
+    const withLayout = sortedClasses.map(cls => {
+        const startMinutes = timeToMinutes(cls.time);
+        return {
+            ...cls,
+            start: startMinutes,
+            end: startMinutes + cls.duration,
+            layout: { top: 0, height: 0, left: 0, width: 100 },
+        };
+    });
+
+    type LayoutClass = typeof withLayout[number];
+
+    for (let i = 0; i < withLayout.length; i++) {
+        const current = withLayout[i];
+        current.layout.top = ((current.start - VIEW_START_HOUR * 60) / SLOT_DURATION_MINUTES) * CELL_HEIGHT_PX;
+        current.layout.height = (current.duration / SLOT_DURATION_MINUTES) * CELL_HEIGHT_PX - 2; // -2 for small gap
+    }
+
+    const collisionGroups: LayoutClass[][] = [];
+    withLayout.forEach(cls => {
+        let placed = false;
+        for (const group of collisionGroups) {
+            if (group.some(c => c.end > cls.start && c.start < cls.end)) {
+                group.push(cls);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            collisionGroups.push([cls]);
+        }
+    });
+
+    collisionGroups.forEach(group => {
+        const columns: LayoutClass[][] = [];
+        group.sort((a, b) => a.start - b.start);
+        
+        group.forEach(cls => {
+            let placed = false;
+            for (const col of columns) {
+                if (!col.some(c => c.end > cls.start && c.start < cls.end)) {
+                    col.push(cls);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                columns.push([cls]);
+            }
+        });
+
+        columns.forEach((col, colIndex) => {
+            col.forEach(cls => {
+                const classInLayout = withLayout.find(c => c.id === cls.id);
+                if (classInLayout) {
+                    classInLayout.layout.width = 100 / columns.length;
+                    classInLayout.layout.left = colIndex * (100 / columns.length);
+                }
+            });
+        });
+    });
+
+    return withLayout;
+}
 
 // --- Main View Component ---
 interface AgendaViewProps {
@@ -527,15 +610,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     }, [showToast]);
 
     const studentsMap = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
-    const professionalsMap = useMemo(() => new Map(professionals.map(p => [p.id, p])), [professionals]);
-
-    const { timeSlots } = useMemo(() => {
+    
+    const timeSlots = useMemo(() => {
         const slots = [];
         for (let hour = VIEW_START_HOUR; hour < VIEW_END_HOUR; hour++) {
             slots.push(`${String(hour).padStart(2, '0')}:00`);
             slots.push(`${String(hour).padStart(2, '0')}:30`);
         }
-        return { timeSlots: slots };
+        return slots;
     }, []);
 
     const allDisciplines = useMemo(() => Array.from(new Set(professionals.flatMap(p => p.disciplines))).sort(), [professionals]);
@@ -547,7 +629,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         });
     }, [allPackages, scheduledClasses]);
     
-    // --- Day View Data ---
     const { dailySchedule, professorsToShow } = useMemo(() => {
         const dateStr = currentDate.toISOString().split('T')[0];
         const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[currentDate.getUTCDay()];
@@ -575,22 +656,22 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         
         const sortedProfessors = professionals.filter(p => allRelevantProfIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
 
-        const schedule: DailySchedule = {};
+        const schedule: Record<string, DisplayClass[]> = {};
         sortedProfessors.forEach(prof => {
-            schedule[prof.id] = allDisplayClassesForDay.filter(cls => cls.professionalId === prof.id);
+            const profClasses = allDisplayClassesForDay.filter(cls => cls.professionalId === prof.id);
+            schedule[prof.id] = calculateLayout(profClasses);
         });
         
         return { professorsToShow: sortedProfessors, dailySchedule: schedule };
     }, [currentDate, professionals, scheduledClasses, classGroups]);
 
-    // --- Week View Data ---
     const { weekDays, weeklySchedule } = useMemo(() => {
         const days = getWeekDays(currentDate);
-        const weekDateStrings = days.map(d => d.toISOString().split('T')[0]);
         const scheduleByDate: Record<string, DisplayClass[]> = {};
 
-        weekDateStrings.forEach(dateStr => {
-            const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[new Date(dateStr).getUTCDay()];
+        days.forEach(day => {
+            const dateStr = day.toISOString().split('T')[0];
+            const dayOfWeek = (['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as DayOfWeek[])[day.getUTCDay()];
 
             const individualClasses = scheduledClasses.filter(c => c.date === dateStr).map(c => ({ ...c, classType: 'individual' as const }));
 
@@ -606,7 +687,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 }
                 return [];
             });
-            scheduleByDate[dateStr] = [...individualClasses, ...groupClassInstances];
+            scheduleByDate[dateStr] = calculateLayout([...individualClasses, ...groupClassInstances]);
         });
         
         return { weekDays: days, weeklySchedule: scheduleByDate };
@@ -758,7 +839,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                             <button key={time} onClick={() => openScheduleModal({ professionalId: prof.id, date: currentDate.toISOString().split('T')[0], time: time, duration: 60 })} className={`w-full border-t border-dashed border-zinc-200 hover:bg-secondary/10`} style={{ height: `${CELL_HEIGHT_PX}px`, backgroundColor: availableSlots.has(time) ? '#f0fdf4' : '' }} />
                                         ))}
                                         {(dailySchedule[prof.id] || []).map(cls => (
-                                            <AgendaEvent key={cls.id} cls={cls} studentsMap={studentsMap} professionalsMap={professionalsMap} onClick={handleClassClick} />
+                                            <AgendaEvent key={cls.id} cls={cls} studentsMap={studentsMap} onClick={handleClassClick} />
                                         ))}
                                     </div>
                                 );
@@ -789,7 +870,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         <button key={time} onClick={() => openScheduleModal({ date: day.toISOString().split('T')[0], time, duration: 60 })} className={`w-full border-t border-dashed border-zinc-200 hover:bg-secondary/10`} style={{ height: `${CELL_HEIGHT_PX}px` }} />
                                     ))}
                                     {(weeklySchedule[day.toISOString().split('T')[0]] || []).map(cls => (
-                                        <AgendaEvent key={cls.id} cls={cls} studentsMap={studentsMap} professionalsMap={professionalsMap} onClick={handleClassClick} />
+                                        <AgendaEvent key={cls.id} cls={cls} studentsMap={studentsMap} onClick={handleClassClick} />
                                     ))}
                                 </div>
                             ))}
@@ -800,7 +881,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 {viewMode === 'month' && (
                     <section>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={`${inputStyle} md:col-span-2`}>
+                             <input type="date" value={currentDate.toISOString().split('T')[0]} onChange={e => setCurrentDate(new Date(e.target.value))} className={inputStyle} />
+                            <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={inputStyle}>
                                 <option value="">Todos os Alunos</option>
                                 {students.filter(s => s.status === 'matricula').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
@@ -832,7 +914,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                         <tr key={cls.id} className={`${cls.status === 'completed' ? 'bg-green-50' : ''} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
                                             <td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}<span className="text-zinc-500"> às {cls.time}</span></td>
                                             <td className="px-4 py-3 font-medium">{studentsMap.get(cls.studentId)?.name || 'Aluno desc.'}</td>
-                                            <td className="px-4 py-3 text-sm">{professionalsMap.get(cls.professionalId)?.name || 'Prof. desc.'}</td>
+                                            <td className="px-4 py-3 text-sm">{professionals.find(p => p.id === cls.professionalId)?.name || 'Prof. desc.'}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <div className="flex items-center gap-2">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusStyles[cls.status].bg} ${statusStyles[cls.status].text}`}>{statusStyles[cls.status].label}</span>
@@ -850,7 +932,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         <div className="space-y-3 md:hidden">
                            {filteredMonthlyClasses.map(cls => {
                                const student = studentsMap.get(cls.studentId);
-                               const professional = professionalsMap.get(cls.professionalId);
+                               const professional = professionals.find(p => p.id === cls.professionalId);
                                return (
                                    <div key={cls.id} className={`border rounded-lg p-3 space-y-2 ${cls.status === 'completed' ? 'bg-green-50' : 'bg-zinc-50'} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
                                        <div className="flex justify-between items-start">

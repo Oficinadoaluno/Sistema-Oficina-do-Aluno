@@ -8,6 +8,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon, UserIcon, UserGroupIcon } from './Icons';
 import { ToastContext } from '../App';
+import { getShortName } from '../utils/sanitizeFirestore';
 
 interface TeamManagementProps {
     onBack: () => void;
@@ -158,7 +159,7 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
 
             {/* Professionals Tab Content */}
             {activeTab === 'professionals' && (
-                <div className="flex-grow flex flex-col pt-4">
+                <div className="flex-grow flex flex-col pt-4 min-h-0">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                         <h3 className="text-xl font-semibold text-zinc-700">Professores<span className="text-lg font-normal text-zinc-500 ml-2">({filteredProfessionals.length} encontrados)</span></h3>
                         <button onClick={() => setProfView('add')} className="flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold py-2 px-4 rounded-lg"><PlusIcon className="h-5 w-5" /><span>Novo Professor</span></button>
@@ -173,14 +174,14 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
                          <>
                             {/* Desktop Table */}
                             <div className="hidden md:block">
-                                <table className="min-w-full divide-y divide-zinc-200"><thead className="bg-zinc-50 sticky top-0"><tr><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Disciplinas</th><th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th></tr></thead><tbody className="bg-white divide-y divide-zinc-200">{filteredProfessionals.map((prof) => (<tr key={prof.id} className="hover:bg-zinc-50"><td className="px-6 py-4"><div className="text-sm font-medium text-zinc-900">{prof.name}</div></td><td className="px-6 py-4"><div className="flex flex-wrap gap-1">{prof.disciplines.map(d => (<span key={d} className="px-2 inline-flex text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">{d}</span>))}</div></td><td className="px-6 py-4 text-right text-sm"><button onClick={() => handleViewProfDetails(prof)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button></td></tr>))}</tbody></table>
+                                <table className="min-w-full divide-y divide-zinc-200"><thead className="bg-zinc-50 sticky top-0"><tr><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Disciplinas</th><th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th></tr></thead><tbody className="bg-white divide-y divide-zinc-200">{filteredProfessionals.map((prof) => (<tr key={prof.id} className="hover:bg-zinc-50"><td className="px-6 py-4"><div className="text-sm font-medium text-zinc-900" title={prof.name}>{getShortName(prof.name)}</div></td><td className="px-6 py-4"><div className="flex flex-wrap gap-1">{prof.disciplines.map(d => (<span key={d} className="px-2 inline-flex text-xs font-semibold rounded-full bg-secondary/10 text-secondary-dark">{d}</span>))}</div></td><td className="px-6 py-4 text-right text-sm"><button onClick={() => handleViewProfDetails(prof)} className="text-secondary hover:text-secondary-dark font-semibold">Ver mais</button></td></tr>))}</tbody></table>
                             </div>
                             {/* Mobile Cards */}
                             <div className="space-y-3 md:hidden">
                                 {filteredProfessionals.map(prof => (
                                      <div key={prof.id} className="bg-zinc-50 border rounded-lg p-4">
                                         <div className="flex justify-between items-start">
-                                            <p className="font-bold text-zinc-900">{prof.name}</p>
+                                            <p className="font-bold text-zinc-900" title={prof.name}>{getShortName(prof.name)}</p>
                                             <button onClick={() => handleViewProfDetails(prof)} className="text-secondary hover:text-secondary-dark font-semibold text-sm">Ver mais</button>
                                         </div>
                                         <div className="mt-2 pt-2 border-t flex flex-wrap gap-1">
@@ -197,7 +198,7 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
 
             {/* Collaborators Tab Content */}
             {activeTab === 'collaborators' && canManageUsers && (
-                <div className="flex-grow flex flex-col pt-4">
+                <div className="flex-grow flex flex-col pt-4 min-h-0">
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-xl font-semibold text-zinc-700">Gerenciar Usuários do Sistema</h3>
                         <button onClick={() => { setCollabView('add'); setCollaboratorToEdit(null); }} className="flex items-center gap-2 bg-secondary text-white font-semibold py-2 px-3 rounded-lg hover:bg-secondary-dark"><PlusIcon className="h-5 w-5"/> Novo Colaborador</button>

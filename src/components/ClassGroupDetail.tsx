@@ -4,6 +4,7 @@ import InfoItem from './InfoItem';
 import { 
     ArrowLeftIcon, PencilIcon, ArchiveBoxXMarkIcon, CheckBadgeIcon
 } from './Icons';
+import { getShortName } from '../utils/sanitizeFirestore';
 
 const dayMap: Record<DayOfWeek, string> = {
     segunda: 'Segunda-feira', terca: 'Terça-feira', quarta: 'Quarta-feira',
@@ -59,7 +60,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                     </button>
                     <div>
                         <h2 className="text-2xl font-bold text-zinc-800">{group.name}</h2>
-                        <p className="text-zinc-600">Prof. {professional?.name || 'N/A'}</p>
+                        <p className="text-zinc-600" title={professional?.name || 'N/A'}>Prof. {getShortName(professional?.name) || 'N/A'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -146,7 +147,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             <tbody className="divide-y">
                                 {groupStudents.map(student => (
                                     <tr key={student.id} className="hover:bg-zinc-50">
-                                        <td className="px-4 py-3 font-medium text-zinc-800">{student.name}</td>
+                                        <td className="px-4 py-3 font-medium text-zinc-800" title={student.name}>{getShortName(student.name)}</td>
                                         <td className="px-4 py-3">
                                             {student.hasMonthlyPlan ? (
                                                 <span className="flex items-center gap-2 text-sm text-cyan-700 font-semibold">

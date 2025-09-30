@@ -250,13 +250,15 @@ export interface Collaborator {
     account?: string;
 }
 
+export interface PricingTier {
+  quantity: number;
+  pricePerUnit: number;
+}
+
 export interface Service {
   id: string;
   name: string;
-  type: 'hourly' | 'package' | 'daily';
-  totalHours?: number;
-  pricePerHour?: number;
-  totalPrice?: number;
-  description?: string;
+  category: string;
+  pricingTiers: PricingTier[];
   discountPercentage?: number;
 }

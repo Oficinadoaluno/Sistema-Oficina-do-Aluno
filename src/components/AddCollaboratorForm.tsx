@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { sanitizeFirestore, validateCPF, phoneMask, onlyDigits } from '../utils/sanitizeFirestore';
+import { ToastContext } from '../App';
 
 interface AddCollaboratorFormProps {
     onBack: () => void;
@@ -17,6 +18,7 @@ const checkboxInputStyle = "h-4 w-4 rounded text-secondary focus:ring-secondary"
 const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { showToast } = useContext(ToastContext);
 
     // Form State
     const [name, setName] = useState('');
@@ -109,6 +111,24 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
 
         setIsSubmitting(true);
         try {
+             if (isEditing && collaboratorToEdit) {
+                const loginChanged = login !== collaboratorToEdit.login;
+                const passwordChanged = password.trim().length > 0;
+
+                if (passwordChanged && password.trim().length < 6) {
+                    showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                if (loginChanged || passwordChanged) {
+                    showToast(
+                        'Por segurança, a alteração de login ou senha de um usuário existente não é permitida diretamente. Os outros dados foram salvos.',
+                        'info'
+                    );
+                }
+            }
+
             const collaboratorData = {
                 name,
                 role,
@@ -140,7 +160,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             
             const sanitizedData = sanitizeFirestore(collaboratorData);
 
-            await onSave(sanitizedData, password);
+            await onSave(sanitizedData, isEditing ? undefined : password);
         } catch (error) {
             // Error is handled by parent, this just catches the promise rejection
             console.error("Save operation failed.");
@@ -172,8 +192,8 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                                 <label htmlFor="collaboratorRole" className={labelStyle}>Função <span className="text-red-500">*</span></label>
                                 <select id="collaboratorRole" value={role} onChange={e => setRole(e.target.value)} className={inputStyle} required>
                                     <option value="" disabled>Selecione a função</option>
-                                    <option value="secretaria">Secretaria</option>
-                                    <option value="diretoria">Diretoria</option>
+                                    <option value="Secretaria">Secretaria</option>
+                                    <option value="Diretor">Diretoria</option>
                                 </select>
                             </div>
                              <div>
@@ -206,7 +226,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label htmlFor="collaboratorLogin" className={labelStyle}>Login de Acesso <span className="text-red-500">*</span></label>
-                                <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={`${inputStyle} ${isEditing ? 'bg-zinc-200 cursor-not-allowed' : ''}`} required readOnly={isEditing}/>
+                                <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required />
                             </div>
                             <div>
                                 <label htmlFor="collaboratorPassword" className={labelStyle}>{isEditing ? 'Nova Senha (Opcional)' : 'Senha Temporária *'}</label>

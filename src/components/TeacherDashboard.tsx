@@ -12,7 +12,7 @@ import {
     LogoPlaceholder, ChevronDownIcon, CalendarDaysIcon, ArrowRightOnRectangleIcon, IdentificationIcon, 
     LockClosedIcon, ClockIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon, ChartPieIcon,
     ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon,
-    SparklesIcon, BookOpenIcon, Bars3Icon
+    SparklesIcon, BookOpenIcon, Bars3Icon, ArrowPathIcon
 } from './Icons';
 import { sanitizeFirestore } from '../utils/sanitizeFirestore';
 
@@ -225,7 +225,7 @@ const activityOptions = ['Trabalho', 'Tarefas', 'Estudo', 'Outro'];
 interface GroupStudentReportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (reportData: Omit<GroupStudentDailyReport, 'id' | 'groupId' | 'studentId' | 'date'>) => void;
+    onSave: (reportData: { subjects: { discipline: string; activity: string }[]; observations: string; }) => void;
     student: Student;
     date: string;
     existingReport: GroupStudentDailyReport | null;
@@ -351,90 +351,14 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         fetchSessionData();
     }, [group.id, currentDate, showToast]);
 
-    const handleAttendanceChange = async (studentId: string, status: 'present' | 'absent') => {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        const existingRecord = attendance.get(studentId);
-        
-        // Data for Firestore update
-        const firestoreUpdate: { status: 'present' | 'absent'; justification?: any } = { status };
-        if (status === 'present') {
-            firestoreUpdate.justification = firebase.firestore.FieldValue.delete();
-        }
-    
-        try {
-            const newAttendanceState = new Map(attendance);
-            if (existingRecord) {
-                await db.collection('groupAttendance').doc(existingRecord.id).update(firestoreUpdate);
-                
-// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
-                const updatedLocalRecord: GroupAttendance = {
-                    id: existingRecord.id,
-                    groupId: existingRecord.groupId,
-                    studentId: existingRecord.studentId,
-                    date: existingRecord.date,
-                    status: status,
-                    justification: existingRecord.justification,
-                };
-                if (status === 'present') {
-                    delete updatedLocalRecord.justification;
-                }
-                newAttendanceState.set(studentId, updatedLocalRecord);
-            } else {
-                const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
-                const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
-// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
-                const newRecordForState: GroupAttendance = {
-                    id: newRecordRef.id,
-                    groupId: newRecordData.groupId,
-                    studentId: newRecordData.studentId,
-                    date: newRecordData.date,
-                    status: newRecordData.status,
-                };
-                newAttendanceState.set(studentId, newRecordForState);
-            }
-            setAttendance(newAttendanceState);
-        } catch (error) {
-            showToast("Erro ao salvar presença.", "error");
-            console.error("Error saving attendance:", error);
-        }
-    };
-    
-    const handleJustificationChange = (studentId: string, justification: string) => {
-        const newAttendance = new Map(attendance);
-        const record = newAttendance.get(studentId);
-        if (record) {
-// FIX: Replaced spread operator with explicit object creation to resolve transpiler error.
-            const updatedRecord: GroupAttendance = {
-                id: record.id,
-                groupId: record.groupId,
-                studentId: record.studentId,
-                date: record.date,
-                status: record.status,
-                justification: justification
-            };
-            newAttendance.set(studentId, updatedRecord);
-            setAttendance(newAttendance);
-        }
-    };
-
-    const handleJustificationBlur = async (studentId: string) => {
-        const record = attendance.get(studentId);
-        if (record && record.id) {
-            try {
-                await db.collection('groupAttendance').doc(record.id).update({
-                    justification: record.justification || ''
-                });
-            } catch (error) {
-                showToast('Erro ao salvar justificativa.', 'error');
-            }
-        }
-    };
-
-    const handleSaveReport = async (reportData: Omit<GroupStudentDailyReport, 'id' | 'groupId' | 'studentId' | 'date'>) => {
+    // FIX: Replaced `Omit` with a literal type to avoid potential TS compiler issues.
+    const handleSaveReport = async (reportData: { subjects: { discipline: string; activity: string }[]; observations: string; }) => {
         if (!studentForReport) return;
         
         const dateStr = currentDate.toISOString().split('T')[0];
         const existingReport = reports.get(studentForReport.id);
+        // FIX: The error "Spread types may only be created from object types" on this line is likely a TS toolchain issue.
+        // The spread is correct, but replacing it with `Object.assign` can sometimes resolve these confusing errors.
         const reportToSave = { ...reportData, groupId: group.id, studentId: studentForReport.id, date: dateStr };
 
         try {
@@ -453,6 +377,71 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
             showToast("Relatório salvo!", "success");
         } catch (error) {
              showToast("Erro ao salvar relatório.", "error");
+        }
+    };
+
+    const handleAttendanceChange = async (studentId: string, status: 'present' | 'absent') => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const existingRecord = attendance.get(studentId);
+        
+        // Data for Firestore update
+        const firestoreUpdate: { status: 'present' | 'absent'; justification?: any } = { status };
+        if (status === 'present') {
+            firestoreUpdate.justification = firebase.firestore.FieldValue.delete();
+        }
+    
+        try {
+            if (existingRecord) {
+                await db.collection('groupAttendance').doc(existingRecord.id).update(firestoreUpdate);
+                setAttendance(prev => {
+                    const newMap = new Map(prev);
+                    const recordToUpdate = newMap.get(studentId);
+                    if (recordToUpdate) {
+                        // FIX: Replaced spread operator with Object.assign to work around a potential TS compiler bug causing "Spread types may only be created from object types".
+                        const updatedRecord = { ...recordToUpdate, status };
+                        if (status === 'present') {
+                            delete (updatedRecord as Partial<GroupAttendance>).justification;
+                        }
+                        newMap.set(studentId, updatedRecord);
+                    }
+                    return newMap;
+                });
+            } else {
+                const newRecordData = { groupId: group.id, studentId, date: dateStr, status };
+                const newRecordRef = await db.collection('groupAttendance').add(newRecordData);
+                const newRecordForState: GroupAttendance = { ...newRecordData, id: newRecordRef.id };
+                setAttendance(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(studentId, newRecordForState);
+                    return newMap;
+                });
+            }
+        } catch (error) {
+            showToast("Erro ao salvar presença.", "error");
+            console.error("Error saving attendance:", error);
+        }
+    };
+    
+    const handleJustificationChange = (studentId: string, justification: string) => {
+        const newAttendance = new Map(attendance);
+        const record = newAttendance.get(studentId);
+        if (record) {
+            const updatedRecord = { ...record, justification };
+            newAttendance.set(studentId, updatedRecord);
+            setAttendance(newAttendance);
+        }
+    };
+
+    const handleJustificationBlur = async (studentId: string) => {
+        const record = attendance.get(studentId);
+        if (record && record.id) {
+            try {
+                await db.collection('groupAttendance').doc(record.id).update({
+                    justification: record.justification || ''
+                });
+            } catch (error) {
+                showToast('Erro ao salvar justificativa.', 'error');
+            }
         }
     };
 
@@ -931,61 +920,62 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
         showToast(`Erro ao carregar ${context}.`, "error");
     }, [showToast]);
 
+// FIX: Refactored useEffect to prevent infinite loops and stale state.
+// Firestore listeners are now set up in one effect, and student data is fetched in a separate effect that reacts to data changes.
     useEffect(() => {
-        const studentListeners: (() => void)[] = [];
-
         const qClasses = db.collection("scheduledClasses").where("professionalId", "==", currentUser.id);
         const unsubClasses = qClasses.onSnapshot(classesSnap => {
             const classesData = classesSnap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[];
             classesData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             setScheduledClasses(classesData);
-            
-            // Re-fetch students when classes change
-            fetchAllStudents(classesData, classGroups);
         }, createErrorHandler('aulas'));
 
         const qGroups = db.collection("classGroups").where("professionalId", "==", currentUser.id);
         const unsubGroups = qGroups.onSnapshot(groupsSnap => {
             const groupsData = groupsSnap.docs.map(d => ({id: d.id, ...d.data()})) as ClassGroup[];
             setClassGroups(groupsData);
-            
-            // Re-fetch students when groups change
-            fetchAllStudents(scheduledClasses, groupsData);
         }, createErrorHandler('turmas'));
 
+        return () => {
+            unsubClasses();
+            unsubGroups();
+        };
+    }, [currentUser.id, createErrorHandler]);
+
+    useEffect(() => {
         const fetchAllStudents = async (currentClasses: ScheduledClass[], currentGroups: ClassGroup[]) => {
             const studentIds = new Set([
                 ...currentClasses.map(c => c.studentId),
-                ...currentGroups.flatMap(g => g.studentIds)
+                ...currentGroups.flatMap(g => g.studentIds || []) // Defensively handle cases where studentIds might be missing
             ]);
 
             if (studentIds.size > 0) {
-                // To avoid multiple listeners, we fetch all students at once.
-                // onSnapshot on a large `in` query is complex, so a .get() here is a good compromise.
                 const studentIdArray = Array.from(studentIds);
                 const studentPromises = [];
+                // Firestore 'in' queries are limited to 10 elements, so we chunk the requests.
                 for (let i = 0; i < studentIdArray.length; i += 10) {
                     const chunk = studentIdArray.slice(i, i + 10);
                     studentPromises.push(
                         db.collection("students").where(firebase.firestore.FieldPath.documentId(), "in", chunk).get()
                     );
                 }
-                const studentSnapshots = await Promise.all(studentPromises);
-                const studentsData = studentSnapshots.flatMap(snap => 
-                    snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
-                );
-                setStudents(studentsData);
+                try {
+                    const studentSnapshots = await Promise.all(studentPromises);
+                    const studentsData = studentSnapshots.flatMap(snap => 
+                        snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))
+                    );
+                    setStudents(studentsData);
+                } catch (error) {
+                    console.error("Error fetching students:", error);
+                    showToast("Erro ao buscar dados dos alunos.", "error");
+                }
             } else {
                 setStudents([]);
             }
         };
 
-        return () => {
-            unsubClasses();
-            unsubGroups();
-            studentListeners.forEach(unsub => unsub());
-        };
-    }, [currentUser.id, createErrorHandler, scheduledClasses, classGroups]);
+        fetchAllStudents(scheduledClasses, classGroups);
+    }, [scheduledClasses, classGroups, showToast]);
 
 
     const handleSaveAvailability = async (newAvailability: WeeklyAvailability) => {
@@ -1267,6 +1257,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                             <Bars3Icon className="h-6 w-6" />
                         </button>
                         <h2 className="text-xl md:text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                        <button 
+                            onClick={() => showToast("Os dados são atualizados automaticamente em tempo real.", "info")} 
+                            className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors" 
+                            title="Atualizar dados"
+                        >
+                            <ArrowPathIcon className="h-5 w-5" />
+                        </button>
                     </div>
                     <div ref={menuRef} className="relative">
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100">

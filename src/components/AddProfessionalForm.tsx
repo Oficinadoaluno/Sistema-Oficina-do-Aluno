@@ -1,8 +1,8 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
+// FIX: Import the 'auth' object from firebase to handle user creation.
 import { db, auth } from '../firebase';
-import firebase from 'firebase/compat/app';
 import { ToastContext } from '../App';
 import { sanitizeFirestore, onlyDigits, phoneMask, validateCPF } from '../utils/sanitizeFirestore';
 
@@ -14,7 +14,7 @@ interface AddProfessionalFormProps {
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
-const disciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
+const initialDisciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
 
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
@@ -29,6 +29,11 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     const [otherDiscipline, setOtherDiscipline] = useState('');
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
+    const [newPassword, setNewPassword] = useState(''); // For editing existing user
+    
+    // UI state for disciplines
+    const [allDisciplines, setAllDisciplines] = useState(initialDisciplineOptions);
+    const [disciplineAdded, setDisciplineAdded] = useState(false);
     
     // Full form fields
     const [birthDate, setBirthDate] = useState('');
@@ -68,6 +73,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setFixedSalary(professionalToEdit.fixedSalary || '');
             setLogin(professionalToEdit.login || '');
             setPassword('');
+            setNewPassword('');
         } else {
              // Reset form for new entry
             setFullName('');
@@ -76,6 +82,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setOtherDiscipline('');
             setLogin('');
             setPassword('');
+            setNewPassword('');
         }
     }, [professionalToEdit]);
 
@@ -86,46 +93,39 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     
     const handleAddOtherDiscipline = () => {
         const trimmed = otherDiscipline.trim();
-        if (trimmed && !selectedDisciplines.includes(trimmed)) {
-            setSelectedDisciplines(prev => [...prev, trimmed]);
+        if (trimmed) {
+            if (!selectedDisciplines.includes(trimmed)) {
+                setSelectedDisciplines(prev => [...prev, trimmed]);
+            }
+            if (!allDisciplines.includes(trimmed)) {
+                setAllDisciplines(prev => [...prev, trimmed].sort());
+            }
+            setDisciplineAdded(true);
+            setTimeout(() => setDisciplineAdded(false), 2000);
         }
         setOtherDiscipline('');
-    };
-
-    const handlePasswordReset = async () => {
-        if (!login) {
-            showToast("Login do professor não encontrado para redefinir a senha.", "error");
-            return;
-        }
-        const emailForReset = login.includes('@') ? login : `${login}@oficinadoaluno.com.br`;
-        try {
-            await auth.sendPasswordResetEmail(emailForReset);
-            showToast(`E-mail de redefinição de senha enviado para ${emailForReset}.`, 'success');
-        } catch (error: any) {
-            console.error("Password reset error:", error);
-            if (error.code === 'auth/user-not-found') {
-                showToast("Usuário não encontrado no sistema de autenticação para este login.", "error");
-            } else {
-                showToast("Ocorreu um erro ao enviar o e-mail de redefinição.", "error");
-            }
-        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!fullName.trim() || !phone.trim() || (!isEditing && !login.trim())) {
+        if (!fullName.trim() || !phone.trim() || !login.trim()) {
             showToast('Por favor, preencha todos os campos obrigatórios (*).', 'error');
             return;
         }
 
+        if (cpf && !validateCPF(cpf)) {
+            setCpfError('CPF inválido.');
+            showToast('O CPF informado é inválido.', 'error');
+            return;
+        }
+
         if (isEditing) {
-            if (cpf && !validateCPF(cpf)) {
-                setCpfError('CPF inválido.');
-                showToast('O CPF informado é inválido.', 'error');
+            if (newPassword && newPassword.length < 6) {
+                showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
                 return;
             }
-        } else {
+        } else { // New user
             if (password.length < 6) {
                 showToast('A senha temporária deve ter pelo menos 6 caracteres.', 'error');
                 return;
@@ -134,66 +134,62 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
         
         setIsSubmitting(true);
         
-        let professionalData;
-
-        if(isEditing) {
-            professionalData = {
-                name: fullName,
-                disciplines: selectedDisciplines,
-                birthDate,
-                cpf: onlyDigits(cpf),
-                address,
-                phone: onlyDigits(phone),
-                email,
-                currentSchool,
-                education,
-                certifications,
-                pixKey,
-                bank,
-                agency,
-                account,
-                hourlyRateIndividual: Number(hourlyRateIndividual) || undefined,
-                hourlyRateGroup: Number(hourlyRateGroup) || undefined,
-                fixedSalary: Number(fixedSalary) || undefined,
-                login,
-                availability: professionalToEdit?.availability || {},
-            };
-        } else {
-            professionalData = {
-                name: fullName,
-                disciplines: selectedDisciplines,
-                phone: onlyDigits(phone),
-                login,
-                availability: {},
-            };
-        }
-        
-        const sanitizedData = sanitizeFirestore(professionalData);
-
         try {
             if (isEditing && professionalToEdit) {
+                const loginChanged = login !== professionalToEdit.login;
+                const passwordChanged = newPassword.trim().length > 0;
+
+                if (loginChanged || passwordChanged) {
+                    showToast(
+                        'Por segurança, a alteração de login ou senha de um usuário existente não é permitida diretamente. Os outros dados foram salvos.',
+                        'info'
+                    );
+                }
+
+                const professionalData = {
+                    name: fullName,
+                    disciplines: selectedDisciplines,
+                    birthDate,
+                    cpf: onlyDigits(cpf),
+                    address,
+                    phone: onlyDigits(phone),
+                    email,
+                    currentSchool,
+                    education,
+                    certifications,
+                    pixKey,
+                    bank,
+                    agency,
+                    account,
+                    hourlyRateIndividual: Number(hourlyRateIndividual) || undefined,
+                    hourlyRateGroup: Number(hourlyRateGroup) || undefined,
+                    fixedSalary: Number(fixedSalary) || undefined,
+                    login,
+                    availability: professionalToEdit?.availability || {},
+                };
+
                 const profRef = db.collection("professionals").doc(professionalToEdit.id);
-                await profRef.update(sanitizedData);
+                await profRef.update(sanitizeFirestore(professionalData));
                 showToast('Dados do professor atualizados!', 'success');
                 onBack();
-            } else {
-                const creationAppName = `user-creation-prof-${Date.now()}`;
-                const tempApp = firebase.initializeApp(firebase.app().options, creationAppName);
-                const tempAuth = tempApp.auth();
 
-                try {
-                    const emailForAuth = login.includes('@') ? login : `${login}@oficinadoaluno.com.br`;
-                    const userCredential = await tempAuth.createUserWithEmailAndPassword(emailForAuth, password);
-                    const uid = userCredential.user!.uid;
+            } else { // Creating a new professional
+                const professionalData = {
+                    name: fullName,
+                    disciplines: selectedDisciplines,
+                    phone: onlyDigits(phone),
+                    login,
+                    availability: {},
+                };
+                
+                const emailForAuth = login.includes('@') ? login : `${login}@oficinadoaluno.com.br`;
+                const userCredential = await auth.createUserWithEmailAndPassword(emailForAuth, password);
+                const uid = userCredential.user!.uid;
 
-                    const newProfessionalData = { ...sanitizedData, status: 'ativo' as const };
-                    await db.collection("professionals").doc(uid).set(newProfessionalData);
-                    showToast('Professor cadastrado com sucesso!', 'success');
-                    onBack();
-                } finally {
-                    await tempAuth.signOut();
-                    await tempApp.delete();
-                }
+                const newProfessionalData = { ...sanitizeFirestore(professionalData), status: 'ativo' as const };
+                await db.collection("professionals").doc(uid).set(newProfessionalData);
+                showToast('Professor cadastrado com sucesso!', 'success');
+                onBack();
             }
         } catch (error: any) {
             console.error("Error saving professional:", error);
@@ -230,8 +226,12 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                         <div><label htmlFor="currentSchool" className={labelStyle}>Colégio em que atua (opcional)</label><input type="text" id="currentSchool" value={currentSchool} onChange={e => setCurrentSchool(e.target.value)} className={inputStyle} placeholder="Ex: Colégio Batista" disabled={isSubmitting}/></div>
                         <div><label htmlFor="certifications" className={labelStyle}>Cursos e Certificações</label><textarea id="certifications" rows={3} value={certifications} onChange={e => setCertifications(e.target.value)} className={inputStyle} disabled={isSubmitting}></textarea></div>
                         <div><span className={labelStyle}>Disciplinas</span>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 p-3 bg-zinc-50 rounded-lg">{disciplineOptions.map(d => (<label key={d} className="flex items-center gap-2"><input type="checkbox" checked={selectedDisciplines.includes(d)} onChange={e => handleDisciplineChange(d, e.target.checked)} className="h-4 w-4 rounded text-secondary focus:ring-secondary" disabled={isSubmitting}/><span>{d}</span></label>))}</div>
-                            <div className="flex items-center gap-2 mt-2"><input type="text" value={otherDiscipline} onChange={e => setOtherDiscipline(e.target.value)} className={inputStyle} placeholder="Outra disciplina..." disabled={isSubmitting}/><button type="button" onClick={handleAddOtherDiscipline} className="py-2 px-3 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300" disabled={isSubmitting}>Adicionar</button></div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 p-3 bg-zinc-50 rounded-lg">{allDisciplines.map(d => (<label key={d} className="flex items-center gap-2"><input type="checkbox" checked={selectedDisciplines.includes(d)} onChange={e => handleDisciplineChange(d, e.target.checked)} className="h-4 w-4 rounded text-secondary focus:ring-secondary" disabled={isSubmitting}/><span>{d}</span></label>))}</div>
+                             <div className="flex items-center gap-2 mt-2">
+                                <input type="text" value={otherDiscipline} onChange={e => setOtherDiscipline(e.target.value)} className={inputStyle} placeholder="Outra disciplina..." disabled={isSubmitting}/>
+                                <button type="button" onClick={handleAddOtherDiscipline} className="py-2 px-3 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300" disabled={isSubmitting}>Adicionar</button>
+                                {disciplineAdded && <span className="text-sm text-green-600 font-semibold animate-fade-in-fast">Adicionada!</span>}
+                            </div>
                         </div>
                     </div>
                 </fieldset>
@@ -253,18 +253,12 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Acesso ao Sistema</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 items-end">
                         <div>
-                            <label htmlFor="login" className={labelStyle}>Login</label>
-                            <input type="text" id="login" value={login} className={`${inputStyle} bg-zinc-200 cursor-not-allowed`} readOnly />
+                            <label htmlFor="login" className={labelStyle}>Login <span className="text-red-500">*</span></label>
+                            <input type="text" id="login" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required disabled={isSubmitting} />
                         </div>
                         <div>
-                            <button 
-                                type="button" 
-                                onClick={handlePasswordReset} 
-                                className="w-full py-2 px-4 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors"
-                                disabled={isSubmitting}
-                            >
-                                Enviar link para redefinir senha
-                            </button>
+                            <label htmlFor="newPassword" className={labelStyle}>Nova Senha (opcional)</label>
+                            <input type="password" id="newPassword" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputStyle} placeholder="Deixe em branco para não alterar" disabled={isSubmitting}/>
                         </div>
                     </div>
                 </fieldset>
@@ -280,8 +274,12 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     <div><label htmlFor="fullName" className={labelStyle}>Nome Completo <span className="text-red-500">*</span></label><input type="text" id="fullName" value={fullName} onChange={e => setFullName(e.target.value)} className={inputStyle} required disabled={isSubmitting} /></div>
                     <div><label htmlFor="phone" className={labelStyle}>Celular <span className="text-red-500">*</span></label><input type="tel" id="phone" value={phone} onChange={e => setPhone(phoneMask(e.target.value))} className={inputStyle} required disabled={isSubmitting} /></div>
                     <div><span className={labelStyle}>Disciplinas</span>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 p-3 bg-zinc-50 rounded-lg">{disciplineOptions.map(d => (<label key={d} className="flex items-center gap-2"><input type="checkbox" checked={selectedDisciplines.includes(d)} onChange={e => handleDisciplineChange(d, e.target.checked)} className="h-4 w-4 rounded text-secondary focus:ring-secondary" disabled={isSubmitting}/><span>{d}</span></label>))}</div>
-                        <div className="flex items-center gap-2 mt-2"><input type="text" value={otherDiscipline} onChange={e => setOtherDiscipline(e.target.value)} className={inputStyle} placeholder="Outra disciplina..." disabled={isSubmitting}/><button type="button" onClick={handleAddOtherDiscipline} className="py-2 px-3 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300" disabled={isSubmitting}>Adicionar</button></div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 p-3 bg-zinc-50 rounded-lg">{allDisciplines.map(d => (<label key={d} className="flex items-center gap-2"><input type="checkbox" checked={selectedDisciplines.includes(d)} onChange={e => handleDisciplineChange(d, e.target.checked)} className="h-4 w-4 rounded text-secondary focus:ring-secondary" disabled={isSubmitting}/><span>{d}</span></label>))}</div>
+                        <div className="flex items-center gap-2 mt-2">
+                            <input type="text" value={otherDiscipline} onChange={e => setOtherDiscipline(e.target.value)} className={inputStyle} placeholder="Outra disciplina..." disabled={isSubmitting}/>
+                            <button type="button" onClick={handleAddOtherDiscipline} className="py-2 px-3 bg-zinc-200 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-300" disabled={isSubmitting}>Adicionar</button>
+                            {disciplineAdded && <span className="text-sm text-green-600 font-semibold animate-fade-in-fast">Adicionada!</span>}
+                        </div>
                     </div>
                 </div>
             </fieldset>
@@ -311,6 +309,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">{isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Professor')}</button>
                 </div>
             </form>
+            <style>{`.animate-fade-in-fast { animation: fadeIn 0.3s ease-out; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );
 };

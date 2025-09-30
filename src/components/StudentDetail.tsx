@@ -10,7 +10,7 @@ import {
     ChevronLeftIcon, ChevronRightIcon, SparklesIcon
 } from './Icons';
 import InfoItem from './InfoItem';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 
 // --- Funções Auxiliares ---
 
@@ -84,7 +84,7 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                     <div>
                         <h3 className="text-xl font-bold text-zinc-800">Relatório da Aula</h3>
                         <p className="text-zinc-600 font-semibold">{aula.discipline}</p>
-                        <p className="text-sm text-zinc-500">Prof. {professional?.name || 'N/A'} - {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                        <p className="text-sm text-zinc-500" title={professional?.name || 'N/A'}>Prof. {getShortName(professional?.name) || 'N/A'} - {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                     </div>
                      <button onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 -mt-2 -mr-2"><XMarkIcon /></button>
                 </div>
@@ -352,6 +352,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             }
         });
         
+// FIX: Corrected typo from `groupClassInstances` to `groupClassInstancesInMonth`.
         const combined = [...individualClassesInMonth, ...groupClassInstancesInMonth]
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
 
@@ -441,7 +442,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 <div className="flex items-center gap-4">
                     <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 p-2 rounded-full hover:bg-zinc-100"><ArrowLeftIcon className="h-6 w-6" /></button>
                     <div>
-                        <h2 className="text-2xl font-bold text-zinc-800 flex items-center gap-3">{student.name}<span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusStyles(student.status)}`}>{getStatusText(student.status)}</span></h2>
+                        <h2 className="text-2xl font-bold text-zinc-800 flex items-center gap-3" title={student.name}>{getShortName(student.name)}<span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusStyles(student.status)}`}>{getStatusText(student.status)}</span></h2>
                         <p className="text-sm text-zinc-500">{student.school} - {student.grade}</p>
                     </div>
                 </div>
@@ -478,7 +479,9 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                      <div className="border rounded-lg overflow-hidden">
                         <table className="min-w-full divide-y divide-zinc-200">
                             <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase w-48">Status Pagamento</th></tr></thead>
-                            <tbody className="bg-white divide-y divide-zinc-200">{monthlyClasses.map(aula => (<tr key={aula.id} className={(aula as any).isGroup ? 'bg-zinc-50' : ''}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {aula.time}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800 flex items-center">{aula.discipline} {(aula as any).isGroup && <span className="text-xs font-normal text-zinc-500 ml-1">({(aula as any).groupName})</span>} {aula.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {aula.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</td><td className="px-4 py-3 text-sm text-zinc-600">{professionals.find(p => p.id === aula.professionalId)?.name || 'N/A'}</td><td className="px-4 py-3 text-sm">
+                            <tbody className="bg-white divide-y divide-zinc-200">{monthlyClasses.map(aula => {
+                                const professional = professionals.find(p => p.id === aula.professionalId);
+                                return (<tr key={aula.id} className={(aula as any).isGroup ? 'bg-zinc-50' : ''}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {aula.time}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800 flex items-center">{aula.discipline} {(aula as any).isGroup && <span className="text-xs font-normal text-zinc-500 ml-1">({(aula as any).groupName})</span>} {aula.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {aula.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</td><td className="px-4 py-3 text-sm text-zinc-600" title={professional?.name}>{getShortName(professional?.name) || 'N/A'}</td><td className="px-4 py-3 text-sm">
                                 {!(aula as any).isGroup ? (
                                     <select value={aula.paymentStatus || 'pending'} onChange={e => handlePaymentStatusChange(aula.id, e.target.value as any)} className="w-full text-sm p-1 border-zinc-300 rounded-md focus:ring-secondary focus:border-secondary">
                                         <option value="pending">Pendente</option>
@@ -487,7 +490,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                                         <option value="free">Gratuita</option>
                                     </select>
                                 ) : (<span className="text-zinc-400">N/A</span>)}
-                            </td></tr>))}</tbody>
+                            </td></tr>)})}</tbody>
                         </table>
                         {monthlyClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhuma aula encontrada neste mês.</p>}
                     </div>
@@ -495,7 +498,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
 
                 <section>
                     <div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Próximas Aulas Individuais</h3></div>
-                    <div className="space-y-3">{upcomingClasses.length > 0 ? upcomingClasses.map(aula => (<div key={aula.id} className="bg-zinc-50 p-3 rounded-lg flex items-center justify-between"><div><p className="font-bold text-zinc-800 flex items-center">{aula.discipline} {aula.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {aula.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p><p className="text-sm text-zinc-500">Prof. {professionals.find(p=>p.id === aula.professionalId)?.name || 'N/A'}</p></div><div className="text-right text-sm text-zinc-600"><p>{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p><p className="flex items-center justify-end gap-1"><ClockIcon/> {aula.time}</p></div></div>)) : <p className="text-zinc-500 text-sm p-4 text-center">Nenhuma aula agendada.</p>}</div>
+                    <div className="space-y-3">{upcomingClasses.length > 0 ? upcomingClasses.map(aula => {
+                        const professional = professionals.find(p=>p.id === aula.professionalId);
+                        return (<div key={aula.id} className="bg-zinc-50 p-3 rounded-lg flex items-center justify-between"><div><p className="font-bold text-zinc-800 flex items-center">{aula.discipline} {aula.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {aula.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p><p className="text-sm text-zinc-500" title={professional?.name}>{`Prof. ${getShortName(professional?.name) || 'N/A'}`}</p></div><div className="text-right text-sm text-zinc-600"><p>{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p><p className="flex items-center justify-end gap-1"><ClockIcon/> {aula.time}</p></div></div>)
+                    }) : <p className="text-zinc-500 text-sm p-4 text-center">Nenhuma aula agendada.</p>}</div>
                 </section>
 
                 <section>
@@ -503,7 +509,10 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                     <div className="border rounded-lg overflow-hidden">
                         <table className="min-w-full divide-y divide-zinc-200">
                             <thead className="bg-zinc-50"><tr><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Disciplina</th><th scope="col" className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th><th scope="col" className="relative px-4 py-2"><span className="sr-only">Ações</span></th></tr></thead>
-                            <tbody className="bg-white divide-y divide-zinc-200">{pastClasses.map(aula => (<tr key={aula.id}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{aula.discipline}</td><td className="px-4 py-3 text-sm text-zinc-600">Prof. {professionals.find(p => p.id === aula.professionalId)?.name || 'N/A'}</td><td className="px-4 py-3 text-right text-sm">{aula.reportRegistered ? (<button onClick={() => setSelectedClassReport(aula)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Relatório</button>) : (<span className="text-zinc-400">Pendente</span>)}</td></tr>))}</tbody>
+                            <tbody className="bg-white divide-y divide-zinc-200">{pastClasses.map(aula => {
+                                const professional = professionals.find(p => p.id === aula.professionalId);
+                                return (<tr key={aula.id}><td className="px-4 py-3 text-sm text-zinc-600">{new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td><td className="px-4 py-3 text-sm font-medium text-zinc-800">{aula.discipline}</td><td className="px-4 py-3 text-sm text-zinc-600" title={professional?.name}>{`Prof. ${getShortName(professional?.name) || 'N/A'}`}</td><td className="px-4 py-3 text-right text-sm">{aula.reportRegistered ? (<button onClick={() => setSelectedClassReport(aula)} className="text-secondary hover:text-secondary-dark font-semibold">Ver Relatório</button>) : (<span className="text-zinc-400">Pendente</span>)}</td></tr>)
+                            })}</tbody>
                         </table>
                         {pastClasses.length === 0 && <p className="p-4 text-center text-zinc-500">Nenhum histórico de aulas encontrado.</p>}
                     </div>

@@ -16,9 +16,9 @@ import {
     Cog6ToothIcon, ArrowRightOnRectangleIcon, ArchiveBoxIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
     BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon, CurrencyDollarIcon,
-    Bars3Icon
+    Bars3Icon, ArrowPathIcon
 } from './Icons';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 
 // --- Modais de Perfil ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
@@ -251,8 +251,8 @@ const DashboardContent: React.FC = () => {
                                 <div key={c.id} className="flex items-center gap-4 text-sm">
                                     <div className="flex items-center gap-2 font-semibold text-secondary w-20"><ClockIcon className="h-4 w-4" /> {c.time}</div>
                                     <div className="flex-grow">
-                                        <p className="font-bold text-zinc-800">{student?.name || 'Aluno não encontrado'}</p>
-                                        <p className="text-zinc-500">{c.discipline} com {professional?.name || 'Prof. não encontrado'}</p>
+                                        <p className="font-bold text-zinc-800" title={student?.name || 'Aluno não encontrado'}>{getShortName(student?.name) || 'Aluno não encontrado'}</p>
+                                        <p className="text-zinc-500">{c.discipline} com <span title={professional?.name}>{getShortName(professional?.name) || 'Prof. não encontrado'}</span></p>
                                     </div>
                                 </div>
                             );
@@ -268,7 +268,7 @@ const DashboardContent: React.FC = () => {
                                 <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
                                     <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="font-bold text-amber-800">{student?.name || 'Aluno não encontrado'}</p>
+                                        <p className="font-bold text-amber-800" title={student?.name || 'Aluno não encontrado'}>{getShortName(student?.name) || 'Aluno não encontrado'}</p>
                                         <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                                     </div>
                                 </div>
@@ -283,7 +283,7 @@ const DashboardContent: React.FC = () => {
                             <div key={b.id} className="flex items-start gap-3 text-sm p-2 bg-pink-50/50 rounded-md">
                                 <BirthdayIcon className="h-5 w-5 text-pink-500 flex-shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="font-bold text-pink-800">{b.name}</p>
+                                    <p className="font-bold text-pink-800" title={b.name}>{getShortName(b.name)}</p>
                                     <p className="text-pink-700">Dia {b.day} {b.age !== null ? `— completando ${b.age + 1} anos` : ''}</p>
                                 </div>
                             </div>
@@ -305,6 +305,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const userRole = currentUser.role?.toLowerCase() || '';
@@ -353,7 +354,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'pricing': return <PricingView onBack={() => setView('dashboard')} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
-            default: return <DashboardContent />;
+            default: return <DashboardContent key={refreshKey} />;
         }
     };
 
@@ -394,6 +395,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                             <Bars3Icon className="h-6 w-6" />
                         </button>
                         <h2 className="text-xl md:text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
+                         <button 
+                            onClick={() => setRefreshKey(k => k + 1)} 
+                            className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors" 
+                            title="Atualizar dados"
+                        >
+                            <ArrowPathIcon className="h-5 w-5" />
+                        </button>
                     </div>
                     <div className="relative" ref={menuRef}>
                         <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">

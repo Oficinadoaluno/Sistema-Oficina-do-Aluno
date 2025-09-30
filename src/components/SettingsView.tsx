@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon } from './Icons';
 import { ToastContext } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { getShortName } from '../utils/sanitizeFirestore';
 
 
 // --- Reusable Components ---
@@ -127,7 +128,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             acc[cls.professionalId] = (acc[cls.professionalId] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
-        const classesByProfData = Object.entries(profClassCounts).map(([profId, Aulas]) => ({ name: professionalMap.get(profId) || 'Professor desconhecido', Aulas })).sort((a, b) => b.Aulas - a.Aulas);
+        const classesByProfData = Object.entries(profClassCounts).map(([profId, Aulas]) => ({ name: getShortName(professionalMap.get(profId)) || 'Professor desconhecido', Aulas })).sort((a, b) => b.Aulas - a.Aulas);
 
         const locationCounts = classesInMonth.reduce((acc, cls: ScheduledClass) => {
             const loc = cls.location || 'presencial';
@@ -170,7 +171,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     
     const getPaymentDescription = (tx: Transaction): string => {
         if (tx.description) return tx.description;
-        if (tx.professionalId) return `Pagamento para ${professionalMap.get(tx.professionalId) || 'Professor'} (${tx.month || tx.category || 'N/A'})`;
+        if (tx.professionalId) return `Pagamento para ${getShortName(professionalMap.get(tx.professionalId)) || 'Professor'} (${tx.month || tx.category || 'N/A'})`;
         if (tx.sourceDest) return `Pagamento para ${tx.sourceDest}`;
         return `Pagamento (${tx.category || 'Geral'})`;
     };
@@ -249,7 +250,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <ul className="space-y-2">
                                     {reportMetrics.topStudentsData.map((s, i) => (
                                         <li key={s.studentName || i} className="flex justify-between items-center text-sm p-2 rounded-md even:bg-zinc-50">
-                                            <span className="font-medium text-zinc-800">{i + 1}. {s.studentName}</span>
+                                            <span className="font-medium text-zinc-800" title={s.studentName}>{i + 1}. {getShortName(s.studentName)}</span>
                                             <span className="font-bold text-secondary">{s.hours} h</span>
                                         </li>
                                     ))}
@@ -337,7 +338,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <div className="border rounded-lg overflow-hidden">
                                      <table className="min-w-full divide-y divide-zinc-200">
                                         <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Aulas Concluídas</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
-                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.profRemunerations.map(p => (<tr key={p.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800">{p.name}</td><td className="px-4 py-3 text-sm text-zinc-600 text-center">{p.classCount}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {p.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.profRemunerations.map(p => (<tr key={p.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800" title={p.name}>{getShortName(p.name)}</td><td className="px-4 py-3 text-sm text-zinc-600 text-center">{p.classCount}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {p.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
                                     </table>
                                 </div>
                             </div>
@@ -346,7 +347,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <div className="border rounded-lg overflow-hidden">
                                      <table className="min-w-full divide-y divide-zinc-200">
                                         <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
-                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.collabRemunerations.map(c => (<tr key={c.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800">{c.name}</td><td className="px-4 py-3 text-sm text-zinc-600 capitalize">{c.remunerationType || 'N/A'}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {c.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.collabRemunerations.map(c => (<tr key={c.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800" title={c.name}>{getShortName(c.name)}</td><td className="px-4 py-3 text-sm text-zinc-600 capitalize">{c.remunerationType || 'N/A'}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {c.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
                                     </table>
                                 </div>
                             </div>

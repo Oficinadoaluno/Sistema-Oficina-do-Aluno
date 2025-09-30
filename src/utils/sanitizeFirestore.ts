@@ -86,3 +86,17 @@ export function sanitizeFirestore<T>(obj: T): T {
   }
   return newObj as T;
 }
+
+/**
+ * Retorna o primeiro e o último nome de um nome completo.
+ * @param fullName O nome completo.
+ * @returns O nome abreviado ou 'N/A' se o nome for nulo.
+ */
+export const getShortName = (fullName?: string): string => {
+  if (!fullName) return 'N/A';
+  const names = fullName.trim().split(/\s+/);
+  if (names.length <= 1) {
+    return fullName;
+  }
+  return `${names[0]} ${names[names.length - 1]}`;
+};

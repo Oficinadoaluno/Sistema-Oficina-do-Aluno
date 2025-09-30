@@ -5,7 +5,7 @@ import 'firebase/compat/firestore';
 import { Student, ClassPackage, ScheduledClass, Collaborator } from '../types';
 import { ToastContext } from '../App';
 import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from './Icons';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
@@ -230,9 +230,9 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
     const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName'>, pkgToEdit: ClassPackage | null) => {
         const isEditing = !!pkgToEdit;
         try {
+            const batch = db.batch();
             if (isEditing) {
                 const packageRef = db.collection('classPackages').doc(pkgToEdit.id);
-                const batch = db.batch();
                 let newTransactionId = pkgToEdit.transactionId;
 
                 const oldValue = pkgToEdit.valuePaid || 0;
@@ -256,23 +256,26 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
 
                 const packageUpdateData = { ...formData, transactionId: newTransactionId };
                 batch.update(packageRef, sanitizeFirestore(packageUpdateData as any));
-                await batch.commit();
                 showToast('Pacote atualizado com sucesso!', 'success');
 
             } else { // Creating new package
                 const student = students.find(s => s.id === formData.studentId);
                 if (!student) throw new Error("Aluno não encontrado");
 
+                const newPackageRef = db.collection('classPackages').doc();
                 let transactionId: string | undefined = undefined;
+
                 if (formData.valuePaid && formData.valuePaid > 0) {
-                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.valuePaid, studentId: formData.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${student.name}`, registeredById: currentUser.id };
-                    const newTxRef = await db.collection('transactions').add(sanitizeFirestore(transactionData as any));
+                    const newTxRef = db.collection('transactions').doc();
                     transactionId = newTxRef.id;
+                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.valuePaid, studentId: formData.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${student.name}`, registeredById: currentUser.id };
+                    batch.set(newTxRef, sanitizeFirestore(transactionData as any));
                 }
                 const dataToSave = { ...formData, studentName: student.name, status: 'active' as const, transactionId };
-                await db.collection('classPackages').add(sanitizeFirestore(dataToSave));
+                batch.set(newPackageRef, sanitizeFirestore(dataToSave as any));
                 showToast('Pacote registrado com sucesso!', 'success');
             }
+            await batch.commit();
         } catch (error) {
             console.error("Error saving package:", error);
             showToast("Ocorreu um erro ao salvar o pacote.", "error");
@@ -365,7 +368,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                         <tbody className="bg-white divide-y divide-zinc-200">
                             {filteredPackages.map(pkg => (
                                 <tr key={pkg.id} className="hover:bg-zinc-50">
-                                    <td className="px-6 py-4 font-medium">{pkg.studentName}</td>
+                                    <td className="px-6 py-4 font-medium" title={pkg.studentName}>{getShortName(pkg.studentName)}</td>
                                     <td className="px-6 py-4 text-sm text-zinc-600">{pkg.usedHours.toFixed(1)} de {pkg.totalHours}</td>
                                     <td className="px-6 py-4">
                                         <div className="w-full bg-zinc-200 rounded-full h-2.5">

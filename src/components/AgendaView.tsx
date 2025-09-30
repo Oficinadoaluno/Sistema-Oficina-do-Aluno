@@ -5,7 +5,7 @@ import {
     ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon
 } from './Icons';
 import { ToastContext } from '../App';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 import InfoItem from './InfoItem';
 
 // --- Constants & Types ---
@@ -67,7 +67,7 @@ const ClassReportModal: React.FC<ClassReportModalProps> = ({ aula, onClose, prof
                     <div>
                         <h3 className="text-xl font-bold text-zinc-800">Relatório da Aula</h3>
                         <p className="text-zinc-600 font-semibold">{aula.discipline}</p>
-                        <p className="text-sm text-zinc-500">Prof. {professional?.name || 'N/A'} - {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                        <p className="text-sm text-zinc-500" title={professional?.name || 'N/A'}>Prof. {getShortName(professional?.name) || 'N/A'} - {new Date(aula.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                     </div>
                      <button onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100 -mt-2 -mr-2"><XMarkIcon /></button>
                 </div>
@@ -249,7 +249,7 @@ const ScheduleClassModal: React.FC<{
                                 id="student-search"
                                 type="text"
                                 className={inputStyle}
-                                value={studentId ? selectedStudentName : studentSearch}
+                                value={studentId ? getShortName(selectedStudentName) : studentSearch}
                                 onChange={(e) => {
                                     setStudentSearch(e.target.value);
                                     setStudentId('');
@@ -259,6 +259,7 @@ const ScheduleClassModal: React.FC<{
                                 placeholder="Pesquisar aluno..."
                                 autoComplete="off"
                                 required
+                                title={selectedStudentName}
                             />
                             {isStudentDropdownOpen && (
                                 <ul className="absolute z-20 w-full bg-white border border-zinc-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
@@ -448,7 +449,7 @@ const AgendaEvent: React.FC<{
                 }}
                 className={`absolute p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}
             >
-                <p className="font-bold text-xs truncate">{student?.name}</p>
+                <p className="font-bold text-xs truncate" title={student?.name}>{getShortName(student?.name)}</p>
                 <p className="text-[10px] truncate">{cls.discipline}</p>
             </button>
         );
@@ -819,8 +820,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         <div className="grid min-w-[1200px]" style={{ gridTemplateColumns: `60px repeat(${professorsToShow.length}, 1fr)` }}>
                             <div className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm"></div>
                             {professorsToShow.map(prof => (
-                                <div key={prof.id} className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l">
-                                    {prof.name}
+                                <div key={prof.id} className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l" title={prof.name}>
+                                    {getShortName(prof.name)}
                                 </div>
                             ))}
                             <div className="col-start-1 col-end-2 row-start-2 row-end-auto">
@@ -913,8 +914,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                     {filteredMonthlyClasses.map(cls => (
                                         <tr key={cls.id} className={`${cls.status === 'completed' ? 'bg-green-50' : ''} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
                                             <td className="px-4 py-3 text-sm">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}<span className="text-zinc-500"> às {cls.time}</span></td>
-                                            <td className="px-4 py-3 font-medium">{studentsMap.get(cls.studentId)?.name || 'Aluno desc.'}</td>
-                                            <td className="px-4 py-3 text-sm">{professionals.find(p => p.id === cls.professionalId)?.name || 'Prof. desc.'}</td>
+                                            <td className="px-4 py-3 font-medium" title={studentsMap.get(cls.studentId)?.name}>{getShortName(studentsMap.get(cls.studentId)?.name) || 'Aluno desc.'}</td>
+                                            <td className="px-4 py-3 text-sm" title={professionals.find(p => p.id === cls.professionalId)?.name}>{getShortName(professionals.find(p => p.id === cls.professionalId)?.name) || 'Prof. desc.'}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <div className="flex items-center gap-2">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusStyles[cls.status].bg} ${statusStyles[cls.status].text}`}>{statusStyles[cls.status].label}</span>
@@ -937,7 +938,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                    <div key={cls.id} className={`border rounded-lg p-3 space-y-2 ${cls.status === 'completed' ? 'bg-green-50' : 'bg-zinc-50'} ${cls.status === 'canceled' ? 'bg-red-50 opacity-80' : ''}`}>
                                        <div className="flex justify-between items-start">
                                            <div>
-                                               <p className="font-bold text-zinc-800">{student?.name}</p>
+                                               <p className="font-bold text-zinc-800" title={student?.name}>{getShortName(student?.name)}</p>
                                                <p className="text-sm text-zinc-600">{cls.discipline}</p>
                                            </div>
                                            <div className="flex flex-col items-end gap-1">
@@ -945,7 +946,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                                                {(cls.paymentStatus === 'pending' || !cls.paymentStatus) && cls.status !== 'canceled' && (<span className="text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" title="Pagamento Pendente">Pgto. Pendente</span>)}
                                            </div>
                                        </div>
-                                       <div className="text-sm text-zinc-500 border-t pt-2"><p>Prof: {professional?.name}</p><p>Data: {new Date(cls.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {cls.time}</p></div>
+                                       <div className="text-sm text-zinc-500 border-t pt-2"><p title={professional?.name}>Prof: {getShortName(professional?.name)}</p><p>Data: {new Date(cls.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {cls.time}</p></div>
                                        <div className="text-right">{cls.reportRegistered ? (<button onClick={() => setClassToShowReport(cls)} className="font-semibold text-secondary hover:underline text-sm">Ver Relatório</button>) : (<button onClick={(e) => handleClassClick(cls, e)} className="font-semibold text-secondary hover:underline text-sm">{cls.status === 'completed' ? 'Detalhes' : 'Editar'}</button>)}</div>
                                    </div>
                                );

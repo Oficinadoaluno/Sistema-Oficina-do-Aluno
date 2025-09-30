@@ -62,7 +62,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
                 // FIX: Add sanitization for schedule.days to handle legacy data formats,
                 // preventing a crash if `days` is not an object.
                 const sanitizedDays: { [key in DayOfWeek]?: { start: string; end: string } } = {};
-                if (groupToEdit.schedule.days) {
+                if (groupToEdit.schedule.days && typeof groupToEdit.schedule.days === 'object') {
                     for (const day in groupToEdit.schedule.days) {
                         const schedule = (groupToEdit.schedule.days as any)[day];
                         if (typeof schedule === 'string') {

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import { Student } from '../types';
 import { ArrowLeftIcon } from './Icons';
 import { db } from '../firebase';
@@ -29,71 +29,35 @@ const AddStudentForm: React.FC<AddStudentFormProps> = ({ onCancel, onSaveSuccess
     const [cpfError, setCpfError] = useState('');
 
     // Common fields
-    const [status, setStatus] = useState<Student['status']>('prospeccao');
-    const [fullName, setFullName] = useState('');
-    const [objective, setObjective] = useState('');
+    const [status, setStatus] = useState<Student['status']>(studentToEdit?.status || 'prospeccao');
+    const [fullName, setFullName] = useState(studentToEdit?.name || '');
+    const [objective, setObjective] = useState(studentToEdit?.objective || '');
 
     // Simplified form field
-    const [guardianName, setGuardianName] = useState('');
+    const [guardianName, setGuardianName] = useState(studentToEdit?.guardian || '');
     
     // Full form fields
-    const [birthDate, setBirthDate] = useState('');
-    const [school, setSchool] = useState('');
-    const [schoolUnit, setSchoolUnit] = useState('');
-    const [grade, setGrade] = useState('');
+    const [birthDate, setBirthDate] = useState(studentToEdit?.birthDate || '');
+    const [school, setSchool] = useState(studentToEdit?.school || '');
+    const [schoolUnit, setSchoolUnit] = useState(studentToEdit?.schoolUnit || '');
+    const [grade, setGrade] = useState(studentToEdit?.grade || '');
     const [otherGrade, setOtherGrade] = useState('');
-    const [neurodiversity, setNeurodiversity] = useState('');
-    const [phone, setPhone] = useState('');
-    const [email, setEmail] = useState('');
-    const [schoolLogin, setSchoolLogin] = useState('');
-    const [schoolPassword, setSchoolPassword] = useState('');
-    const [didacticMaterial, setDidacticMaterial] = useState('');
-    const [medications, setMedications] = useState('');
-    const [motherName, setMotherName] = useState('');
-    const [fatherName, setFatherName] = useState('');
-    const [financialGuardian, setFinancialGuardian] = useState<Student['financialGuardian']>('mae');
-    const [otherGuardianName, setOtherGuardianName] = useState('');
-    const [guardianAddress, setGuardianAddress] = useState('');
-    const [guardianPhone, setGuardianPhone] = useState('');
-    const [guardianMobile, setGuardianMobile] = useState('');
-    const [guardianEmail, setGuardianEmail] = useState('');
-    const [guardianCpf, setGuardianCpf] = useState('');
-
-    useEffect(() => {
-        if (studentToEdit) {
-            setStatus(studentToEdit.status || 'prospeccao');
-            setFullName(studentToEdit.name || '');
-            setBirthDate(studentToEdit.birthDate || '');
-            setSchool(studentToEdit.school || '');
-            setSchoolUnit(studentToEdit.schoolUnit || '');
-            setGrade(studentToEdit.grade || '');
-            setNeurodiversity(studentToEdit.neurodiversity || '');
-            setObjective(studentToEdit.objective || '');
-            setPhone(phoneMask(studentToEdit.phone || ''));
-            setEmail(studentToEdit.email || '');
-            setSchoolLogin(studentToEdit.schoolLogin || '');
-            setSchoolPassword(studentToEdit.schoolPassword || '');
-            setDidacticMaterial(studentToEdit.didacticMaterial || '');
-            setMedications(studentToEdit.medications || '');
-            setMotherName(studentToEdit.motherName || '');
-            setFatherName(studentToEdit.fatherName || '');
-            setFinancialGuardian(studentToEdit.financialGuardian || 'mae');
-            setOtherGuardianName(studentToEdit.otherGuardianName || '');
-            setGuardianAddress(studentToEdit.guardianAddress || '');
-            setGuardianPhone(phoneMask(studentToEdit.guardianPhone || ''));
-            setGuardianMobile(phoneMask(studentToEdit.guardianMobile || ''));
-            setGuardianEmail(studentToEdit.guardianEmail || '');
-            setGuardianCpf(studentToEdit.guardianCpf || '');
-            // For simplified form context
-            setGuardianName(studentToEdit.guardian || '');
-        } else {
-            // Reset form for new entry
-            setStatus('prospeccao');
-            setFullName('');
-            setObjective('');
-            setGuardianName('');
-        }
-    }, [studentToEdit]);
+    const [neurodiversity, setNeurodiversity] = useState(studentToEdit?.neurodiversity || '');
+    const [phone, setPhone] = useState(phoneMask(studentToEdit?.phone || ''));
+    const [email, setEmail] = useState(studentToEdit?.email || '');
+    const [schoolLogin, setSchoolLogin] = useState(studentToEdit?.schoolLogin || '');
+    const [schoolPassword, setSchoolPassword] = useState(studentToEdit?.schoolPassword || '');
+    const [didacticMaterial, setDidacticMaterial] = useState(studentToEdit?.didacticMaterial || '');
+    const [medications, setMedications] = useState(studentToEdit?.medications || '');
+    const [motherName, setMotherName] = useState(studentToEdit?.motherName || '');
+    const [fatherName, setFatherName] = useState(studentToEdit?.fatherName || '');
+    const [financialGuardian, setFinancialGuardian] = useState<Student['financialGuardian']>(studentToEdit?.financialGuardian || 'mae');
+    const [otherGuardianName, setOtherGuardianName] = useState(studentToEdit?.otherGuardianName || '');
+    const [guardianAddress, setGuardianAddress] = useState(studentToEdit?.guardianAddress || '');
+    const [guardianPhone, setGuardianPhone] = useState(phoneMask(studentToEdit?.guardianPhone || ''));
+    const [guardianMobile, setGuardianMobile] = useState(phoneMask(studentToEdit?.guardianMobile || ''));
+    const [guardianEmail, setGuardianEmail] = useState(studentToEdit?.guardianEmail || '');
+    const [guardianCpf, setGuardianCpf] = useState(studentToEdit?.guardianCpf || '');
 
 
     const handleSubmit = async (e: React.FormEvent) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
-import { ArrowLeftIcon, EnvelopeIcon, ArrowTopRightOnSquareIcon } from './Icons';
+import { ArrowLeftIcon, ClipboardDocumentIcon, KeyIcon, ArrowTopRightOnSquareIcon, CheckIcon } from './Icons';
 import { sanitizeFirestore, validateCPF, phoneMask, onlyDigits } from '../utils/sanitizeFirestore';
 import { ToastContext } from '../App';
 import { db, auth } from '../firebase';
@@ -19,46 +19,71 @@ const checkboxInputStyle = "h-4 w-4 rounded text-secondary focus:ring-secondary"
 const PasswordResetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSendEmail: () => void;
-    professionalEmail: string;
-}> = ({ isOpen, onClose, onSendEmail, professionalEmail }) => {
+    userLogin: string;
+}> = ({ isOpen, onClose, userLogin }) => {
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
+    const [newPassword, setNewPassword] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    const generatePassword = () => {
+        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+        let pass = '';
+        for (let i = 0; i < 12; i++) {
+            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setNewPassword(pass);
+        setCopied(false);
+    };
+
+    const copyPassword = () => {
+        if (!newPassword) return;
+        navigator.clipboard.writeText(newPassword).then(() => {
+            setCopied(true);
+            showToast('Senha copiada para a área de transferência!', 'success');
+            setTimeout(() => setCopied(false), 2500);
+        });
+    };
+    
+    useEffect(() => {
+        if(isOpen) {
+            generatePassword();
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
+    
+    const firebaseUsersUrl = `https://console.firebase.google.com/project/${(window as any).__FIREBASE_CONFIG__?.projectId}/authentication/users`;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-zinc-800 mb-4">Redefinir Senha</h3>
+                <h3 className="text-xl font-bold text-zinc-800 mb-2">Definir Nova Senha Temporária</h3>
                 <p className="text-sm text-zinc-600 mb-4">
-                    Por motivos de segurança, a senha de um usuário não pode ser alterada diretamente aqui. Para dar um novo acesso, escolha uma das opções abaixo.
+                    Para redefinir a senha do usuário <strong className="text-zinc-800">{userLogin}</strong>, siga os passos abaixo.
                 </p>
 
                 <div className="space-y-4">
                     <div className="border rounded-lg p-4">
-                        <h4 className="font-semibold text-zinc-800">Opção 1: Enviar link por E-mail (Recomendado)</h4>
-                        <p className="text-sm text-zinc-500 mt-1">Um e-mail seguro será enviado para <span className="font-semibold text-zinc-700">{professionalEmail}</span> para que o usuário possa criar uma nova senha.</p>
-                        <button
-                            type="button"
-                            onClick={onSendEmail}
-                            className="mt-3 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors text-sm flex items-center gap-2"
-                        >
-                            <EnvelopeIcon className="h-5 w-5" />
-                            Enviar E-mail de Redefinição
-                        </button>
+                        <h4 className="font-semibold text-zinc-800">Passo 1: Gerar e Copiar a Nova Senha</h4>
+                        <div className="flex items-center gap-2 mt-2">
+                            <input type="text" value={newPassword} readOnly className={`${inputStyle} bg-zinc-200 font-mono`} />
+                            <button type="button" onClick={generatePassword} title="Gerar nova senha" className="p-2 bg-zinc-200 text-zinc-700 rounded-lg hover:bg-zinc-300"><KeyIcon className="h-5 w-5"/></button>
+                            <button type="button" onClick={copyPassword} title="Copiar senha" className="p-2 bg-secondary text-white rounded-lg hover:bg-secondary-dark flex items-center gap-1.5 px-3">
+                                {copied ? <CheckIcon className="h-5 w-5" /> : <ClipboardDocumentIcon className="h-5 w-5" />}
+                                <span className="text-sm font-semibold">{copied ? 'Copiado!' : 'Copiar'}</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="border rounded-lg p-4">
-                        <h4 className="font-semibold text-zinc-800">Opção 2: Redefinição Manual via Painel Firebase</h4>
+                        <h4 className="font-semibold text-zinc-800">Passo 2: Redefinir no Painel do Firebase</h4>
                         <p className="text-sm text-zinc-500 mt-1">
-                           Para definir uma senha temporária, você pode usar o painel do Firebase. Clique no botão abaixo, encontre o usuário e selecione "Redefinir senha".
+                            Clique no botão abaixo para abrir o painel de autenticação. Encontre o usuário, clique nos três pontos (⋮) ao final da linha e selecione "Redefinir senha". Cole a senha gerada acima.
                         </p>
-                         <a
-                            href={`https://console.firebase.google.com/project/${(window as any).__FIREBASE_CONFIG__?.projectId}/authentication/users`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-3 inline-flex items-center gap-2 py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300 transition-colors text-sm"
-                        >
+                        <a href={firebaseUsersUrl} target="_blank" rel="noopener noreferrer"
+                           className="mt-3 inline-flex items-center gap-2 py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300 transition-colors text-sm">
                             <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                            Abrir Painel do Firebase
+                            Abrir Painel de Autenticação
                         </a>
                     </div>
                 </div>
@@ -158,29 +183,6 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 ? prev.filter(p => p !== panel)
                 : [...prev, panel]
         );
-    };
-
-    const handleSendPasswordReset = async () => {
-        if (!collaboratorToEdit?.login) {
-            showToast('Nenhum login associado a este colaborador.', 'error');
-            return;
-        }
-        const emailForAuth = collaboratorToEdit.login.includes('@')
-            ? collaboratorToEdit.login
-            : `${collaboratorToEdit.login}@oficinadoaluno.com.br`;
-
-        try {
-            await auth.sendPasswordResetEmail(emailForAuth);
-            showToast(`Email de redefinição de senha enviado para ${emailForAuth}.`, 'success');
-            setIsResetModalOpen(false);
-        } catch (error: any) {
-            console.error('Password reset error:', error);
-            if (error.code === 'auth/user-not-found') {
-                showToast('Este usuário não possui uma conta de login. Pode ter sido excluída.', 'error');
-            } else {
-                showToast('Erro ao enviar o email de redefinição.', 'error');
-            }
-        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -392,11 +394,10 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                 <PasswordResetModal
                     isOpen={isResetModalOpen}
                     onClose={() => setIsResetModalOpen(false)}
-                    onSendEmail={handleSendPasswordReset}
-                    professionalEmail={
+                    userLogin={
                         collaboratorToEdit.login?.includes('@')
                             ? collaboratorToEdit.login
-                            : `${collaboratorToEdit.login}@oficinadoaluno.com.br`
+                            : `${collaboratorToEdit.login}@sistema-oficinadoaluno.com`
                     }
                 />
             )}

@@ -42,6 +42,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
     const [recurringDays, setRecurringDays] = useState<{ [key in DayOfWeek]?: { start: string; end: string } }>({});
     const [singleDate, setSingleDate] = useState('');
     const [singleTime, setSingleTime] = useState('');
+    const [singleEndTime, setSingleEndTime] = useState('');
     const [color, setColor] = useState(pastelColors[0].name);
     
     // UI State for Student Selector
@@ -79,6 +80,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
                 setRecurringDays({});
                 setSingleDate(groupToEdit.schedule.date || '');
                 setSingleTime(groupToEdit.schedule.time || '');
+                setSingleEndTime(groupToEdit.schedule.endTime || '');
             }
         } else {
             // Reset form for new entry
@@ -91,6 +93,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
             setRecurringDays({});
             setSingleDate('');
             setSingleTime('');
+            setSingleEndTime('');
             setColor(pastelColors[0].name);
         }
     }, [groupToEdit, isOpen]);
@@ -146,7 +149,7 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
         
         const schedule = scheduleType === 'recurring' 
             ? { type: 'recurring' as const, days: recurringDays }
-            : { type: 'single' as const, date: singleDate, time: singleTime };
+            : { type: 'single' as const, date: singleDate, time: singleTime, endTime: singleEndTime };
             
         onSave({ name, description, studentIds: selectedStudentIds, professionalId: professionalId, schedule, discipline, color });
         onClose();
@@ -276,14 +279,18 @@ const AddClassGroupForm: React.FC<AddClassGroupFormProps> = ({ isOpen, onClose, 
                                 ))}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label htmlFor="singleDate" className={labelStyle}>Data</label>
                                     <input id="singleDate" type="date" value={singleDate} onChange={e => setSingleDate(e.target.value)} className={inputStyle} />
                                 </div>
                                 <div>
-                                    <label htmlFor="singleTime" className={labelStyle}>Horário</label>
+                                    <label htmlFor="singleTime" className={labelStyle}>Horário de Início</label>
                                     <input id="singleTime" type="time" value={singleTime} onChange={e => setSingleTime(e.target.value)} className={inputStyle} />
+                                </div>
+                                <div>
+                                    <label htmlFor="singleEndTime" className={labelStyle}>Horário de Término</label>
+                                    <input id="singleEndTime" type="time" value={singleEndTime} onChange={e => setSingleEndTime(e.target.value)} className={inputStyle} />
                                 </div>
                             </div>
                         )}

@@ -125,7 +125,11 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             </ul>
                         ) : group.schedule.type === 'single' ? (
                             <p className="text-zinc-700">
-                                Data única: {new Date(group.schedule.date || '').toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {group.schedule.time}
+                                Data única: {new Date(group.schedule.date || '').toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                                {group.schedule.time && group.schedule.endTime
+                                    ? ` das ${group.schedule.time} às ${group.schedule.endTime}`
+                                    : (group.schedule.time ? ` às ${group.schedule.time}` : '')
+                                }
                             </p>
                         ) : (
                             <p className="text-zinc-500">Nenhum horário definido.</p>

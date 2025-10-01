@@ -1041,8 +1041,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                     }
                 } else if (group.schedule.type === 'single' && group.schedule.date === dateStr) {
                      groupInstances.push({
-                        id: `group-${group.id}-${dateStr}`, isGroup: true, group,
-                        date: dateStr, time: group.schedule.time,
+                        id: `group-${group.id}-${dateStr}`, isGroup: true, group, date: dateStr, 
+                        time: group.schedule.time, endTime: group.schedule.endTime,
                         discipline: group.name, student: { name: `${group.studentIds.length} alunos` }
                     });
                 }
@@ -1190,7 +1190,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-sm font-semibold">{new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
-                                                    <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end"><ClockIcon/> {c.time}</p>
+                                                    <p className="text-sm text-zinc-500 flex items-center gap-1 justify-end">
+                                                        <ClockIcon/>
+                                                        {c.time}
+                                                        {c.endTime ? ` - ${c.endTime}` : ''}
+                                                    </p>
                                                 </div>
                                             </button>
                                         );

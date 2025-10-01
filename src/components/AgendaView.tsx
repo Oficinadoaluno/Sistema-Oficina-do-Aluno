@@ -707,7 +707,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                     if (duration > 0) return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: timeInfo.start, professionalId: group.professionalId, duration }];
                 }
             } else if (group.schedule.type === 'single' && group.schedule.date === dateStr && group.schedule.time) {
-                return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration: 90 }];
+                const duration = group.schedule.endTime ? timeToMinutes(group.schedule.endTime) - timeToMinutes(group.schedule.time) : 90;
+                if (duration > 0) {
+                    return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration }];
+                }
             }
             return [];
         });
@@ -747,7 +750,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         if(duration > 0) return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: timeInfo.start, professionalId: group.professionalId, duration }];
                     }
                 } else if (group.schedule.type === 'single' && group.schedule.date === dateStr && group.schedule.time) {
-                    return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration: 90 }];
+                    const duration = group.schedule.endTime ? timeToMinutes(group.schedule.endTime) - timeToMinutes(group.schedule.time) : 90;
+                    if (duration > 0) {
+                        return [{ id: `group-${group.id}-${dateStr}`, classType: 'group', group, date: dateStr, time: group.schedule.time, professionalId: group.professionalId, duration }];
+                    }
                 }
                 return [];
             });

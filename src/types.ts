@@ -173,6 +173,7 @@ export interface ClassGroupSchedule {
     // For single
     date?: string;
     time?: string;
+    endTime?: string;
 }
 
 export interface ClassGroup {

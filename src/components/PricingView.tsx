@@ -291,13 +291,14 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Ensured service.pricingTiers is an array before mapping to prevent runtime errors with malformed Firestore data. */}
-                                                            {Array.isArray(service.pricingTiers) &&
-                                                                service.pricingTiers.map(tier => (
+                                                            {/* FIX: Replaced logical AND (&&) with a ternary operator for conditional rendering to ensure proper type narrowing for `service.pricingTiers`, resolving a TypeScript error where `.map` was being called on an 'unknown' type. */}
+                                                            {Array.isArray(service.pricingTiers)
+                                                                ? service.pricingTiers.map(tier => (
                                                                     <p key={tier.quantity}>
                                                                         {tier.quantity > 1 ? `${tier.quantity} un.` : '1 un.'}: {formatPrice(tier.pricePerUnit)} / un.
                                                                     </p>
                                                                 ))
+                                                                : null
                                                             }
                                                         </div>
                                                         {service.discountPercentage && <p className="text-xs text-green-700 font-semibold mt-1">{service.discountPercentage}% de desconto para Pix/Dinheiro</p>}

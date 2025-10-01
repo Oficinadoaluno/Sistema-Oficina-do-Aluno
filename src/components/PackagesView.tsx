@@ -95,6 +95,10 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
         return activeStudents.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()));
     }, [studentSearch, students]);
 
+    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
+
+    if (!isOpen) return null;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!studentId || !totalHours) return;
@@ -108,10 +112,6 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
         }, packageToEdit);
         onClose();
     };
-
-    if (!isOpen) return null;
-    
-    const selectedStudentName = useMemo(() => students.find(s => s.id === studentId)?.name || '', [studentId, students]);
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">

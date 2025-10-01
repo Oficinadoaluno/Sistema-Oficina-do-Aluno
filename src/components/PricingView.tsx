@@ -48,7 +48,7 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
 
     const addTier = () => setPricingTiers([...pricingTiers, { quantity: '', pricePerUnit: '' }]);
     const removeTier = (index: number) => {
-        if (pricingTiers[index].quantity === 1) return; // Cannot remove the base unit
+        if (index === 0) return; // Cannot remove the base unit (index 0 is always quantity 1)
         setPricingTiers(pricingTiers.filter((_, i) => i !== index));
     };
 
@@ -103,13 +103,13 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
                                 <div key={index} className="flex items-end gap-2">
                                     <div className="flex-1">
                                         <label htmlFor={`tier-qty-${index}`} className="text-xs text-zinc-500">Quantidade</label>
-                                        <input id={`tier-qty-${index}`} type="number" value={tier.quantity} onChange={e => handleTierChange(index, 'quantity', e.target.value)} className={inputStyle} min="1" disabled={tier.quantity === 1} />
+                                        <input id={`tier-qty-${index}`} type="number" value={tier.quantity} onChange={e => handleTierChange(index, 'quantity', e.target.value)} className={inputStyle} min="1" disabled={index === 0} />
                                     </div>
                                      <div className="flex-1">
                                         <label htmlFor={`tier-price-${index}`} className="text-xs text-zinc-500">Preço por Unidade (R$)</label>
                                         <input id={`tier-price-${index}`} type="number" step="0.01" value={tier.pricePerUnit} onChange={e => handleTierChange(index, 'pricePerUnit', e.target.value)} className={inputStyle} />
                                     </div>
-                                    <button type="button" onClick={() => removeTier(index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:opacity-50" disabled={tier.quantity === 1}>
+                                    <button type="button" onClick={() => removeTier(index)} className="p-2 text-red-500 hover:bg-red-100 rounded-md disabled:opacity-50" disabled={index === 0}>
                                         <TrashIcon />
                                     </button>
                                 </div>
@@ -277,8 +277,8 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Add defensive check for pricingTiers to prevent crash on map if data is missing */}
-                                                            {(service.pricingTiers || []).map(tier => (
+                                                            {/* FIX: Add defensive check for pricingTiers to prevent crash on map if data is missing or not an array. */}
+                                                            {(Array.isArray(service.pricingTiers) ? service.pricingTiers : []).map(tier => (
                                                                 <p key={tier.quantity}>
                                                                     {tier.quantity > 1 ? `${tier.quantity} un.` : '1 un.'}: {formatPrice(tier.pricePerUnit)} / un.
                                                                 </p>

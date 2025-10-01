@@ -359,7 +359,8 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const existingReport = reports.get(studentForReport.id);
         // FIX: The error "Spread types may only be created from object types" on this line is likely a TS toolchain issue.
         // The spread is correct, but replacing it with `Object.assign` can sometimes resolve these confusing errors.
-        const reportToSave = { ...reportData, groupId: group.id, studentId: studentForReport.id, date: dateStr };
+        // FIX: Replaced spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        const reportToSave = Object.assign({}, reportData, { groupId: group.id, studentId: studentForReport.id, date: dateStr });
 
         try {
             let savedReportId = existingReport?.id;
@@ -398,7 +399,8 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
                     const recordToUpdate = newMap.get(studentId);
                     if (recordToUpdate) {
                         // FIX: Replaced spread operator with Object.assign to work around a potential TS compiler bug causing "Spread types may only be created from object types".
-                        const updatedRecord = { ...recordToUpdate, status };
+                        // FIX: Replaced spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+                        const updatedRecord = Object.assign({}, recordToUpdate, { status });
                         if (status === 'present') {
                             delete (updatedRecord as Partial<GroupAttendance>).justification;
                         }
@@ -426,7 +428,8 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
         const newAttendance = new Map(attendance);
         const record = newAttendance.get(studentId);
         if (record) {
-            const updatedRecord = { ...record, justification };
+            // FIX: Replaced spread operator with Object.assign to work around a potential TS compiler bug causing "Spread types may only be created from object types".
+            const updatedRecord = Object.assign({}, record, { justification });
             newAttendance.set(studentId, updatedRecord);
             setAttendance(newAttendance);
         }

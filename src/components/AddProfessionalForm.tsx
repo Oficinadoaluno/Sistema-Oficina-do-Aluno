@@ -1,7 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Professional } from '../types';
-import { ArrowLeftIcon } from './Icons';
-// FIX: Import the 'auth' object from firebase to handle user creation.
+import { ArrowLeftIcon, EnvelopeIcon, ArrowTopRightOnSquareIcon } from './Icons';
 import { db, auth } from '../firebase';
 import { ToastContext } from './../App';
 import { sanitizeFirestore, onlyDigits, phoneMask, validateCPF } from '../utils/sanitizeFirestore';
@@ -16,11 +15,71 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const initialDisciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
 
+
+const PasswordResetModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSendEmail: () => void;
+    professionalEmail: string;
+}> = ({ isOpen, onClose, onSendEmail, professionalEmail }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-zinc-800 mb-4">Redefinir Senha</h3>
+                <p className="text-sm text-zinc-600 mb-4">
+                    Por motivos de segurança, a senha de um professor não pode ser alterada diretamente aqui. Para dar um novo acesso, escolha uma das opções abaixo.
+                </p>
+
+                <div className="space-y-4">
+                    <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold text-zinc-800">Opção 1: Enviar link por E-mail (Recomendado)</h4>
+                        <p className="text-sm text-zinc-500 mt-1">Um e-mail seguro será enviado para <span className="font-semibold text-zinc-700">{professionalEmail}</span> para que o professor possa criar uma nova senha.</p>
+                        <button
+                            type="button"
+                            onClick={onSendEmail}
+                            className="mt-3 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors text-sm flex items-center gap-2"
+                        >
+                            <EnvelopeIcon className="h-5 w-5" />
+                            Enviar E-mail de Redefinição
+                        </button>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold text-zinc-800">Opção 2: Redefinição Manual via Painel Firebase</h4>
+                        <p className="text-sm text-zinc-500 mt-1">
+                           Para definir uma senha temporária, você pode usar o painel do Firebase. Clique no botão abaixo, encontre o usuário e selecione "Redefinir senha".
+                        </p>
+                         <a
+                            href={`https://console.firebase.google.com/project/${(window as any).__FIREBASE_CONFIG__?.projectId}/authentication/users`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300 transition-colors text-sm"
+                        >
+                            <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                            Abrir Painel do Firebase
+                        </a>
+                    </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const isEditing = !!professionalToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [cpfError, setCpfError] = useState('');
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
     
     // Common fields
     const [fullName, setFullName] = useState('');
@@ -115,6 +174,7 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
         try {
             await auth.sendPasswordResetEmail(emailForAuth);
             showToast(`Email de redefinição de senha enviado para ${emailForAuth}.`, 'success');
+            setIsResetModalOpen(false);
         } catch (error: any) {
             console.error('Password reset error:', error);
             if (error.code === 'auth/user-not-found') {
@@ -263,11 +323,11 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                             <label className={labelStyle}>Senha</label>
                             <button
                                 type="button"
-                                onClick={handleSendPasswordReset}
+                                onClick={() => setIsResetModalOpen(true)}
                                 disabled={isSubmitting}
                                 className="w-full py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors"
                             >
-                                Enviar email de redefinição de senha
+                                Redefinir Senha...
                             </button>
                         </div>
                     </div>
@@ -319,6 +379,20 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">{isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Professor')}</button>
                 </div>
             </form>
+
+            {isEditing && professionalToEdit && (
+                <PasswordResetModal
+                    isOpen={isResetModalOpen}
+                    onClose={() => setIsResetModalOpen(false)}
+                    onSendEmail={handleSendPasswordReset}
+                    professionalEmail={
+                        professionalToEdit.login?.includes('@')
+                            ? professionalToEdit.login
+                            : `${professionalToEdit.login}@oficinadoaluno.com.br`
+                    }
+                />
+            )}
+
             <style>{`.animate-fade-in-fast { animation: fadeIn 0.3s ease-out; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );

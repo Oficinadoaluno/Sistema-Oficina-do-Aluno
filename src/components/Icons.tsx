@@ -49,7 +49,9 @@ import {
   BuildingOffice2Icon as HeroBuildingOffice2Icon,
   AcademicCapIcon as HeroAcademicCapIcon,
   Bars3Icon as HeroBars3Icon,
-  ArrowPathIcon as HeroArrowPathIcon
+  ArrowPathIcon as HeroArrowPathIcon,
+  EnvelopeIcon as HeroEnvelopeIcon,
+  ArrowTopRightOnSquareIcon as HeroArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline';
 import {
   CheckBadgeIcon as HeroCheckBadgeIcon,
@@ -269,4 +271,12 @@ export const Bars3Icon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className =
 
 export const ArrowPathIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
     <HeroArrowPathIcon className={className} {...props} />
+);
+
+export const EnvelopeIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+    <HeroEnvelopeIcon className={className} {...props} />
+);
+
+export const ArrowTopRightOnSquareIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (
+    <HeroArrowTopRightOnSquareIcon className={className} {...props} />
 );

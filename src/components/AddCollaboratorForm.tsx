@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Collaborator, AdminPermissions, SystemPanel } from '../types';
-import { ArrowLeftIcon } from './Icons';
+import { ArrowLeftIcon, EnvelopeIcon, ArrowTopRightOnSquareIcon } from './Icons';
 import { sanitizeFirestore, validateCPF, phoneMask, onlyDigits } from '../utils/sanitizeFirestore';
 import { ToastContext } from '../App';
+import { db, auth } from '../firebase';
 
 interface AddCollaboratorFormProps {
     onBack: () => void;
@@ -14,6 +15,64 @@ const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-l
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 const checkboxLabelStyle = "flex items-center gap-2 text-sm text-zinc-700 cursor-pointer";
 const checkboxInputStyle = "h-4 w-4 rounded text-secondary focus:ring-secondary";
+
+const PasswordResetModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSendEmail: () => void;
+    professionalEmail: string;
+}> = ({ isOpen, onClose, onSendEmail, professionalEmail }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-zinc-800 mb-4">Redefinir Senha</h3>
+                <p className="text-sm text-zinc-600 mb-4">
+                    Por motivos de segurança, a senha de um usuário não pode ser alterada diretamente aqui. Para dar um novo acesso, escolha uma das opções abaixo.
+                </p>
+
+                <div className="space-y-4">
+                    <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold text-zinc-800">Opção 1: Enviar link por E-mail (Recomendado)</h4>
+                        <p className="text-sm text-zinc-500 mt-1">Um e-mail seguro será enviado para <span className="font-semibold text-zinc-700">{professionalEmail}</span> para que o usuário possa criar uma nova senha.</p>
+                        <button
+                            type="button"
+                            onClick={onSendEmail}
+                            className="mt-3 py-2 px-4 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors text-sm flex items-center gap-2"
+                        >
+                            <EnvelopeIcon className="h-5 w-5" />
+                            Enviar E-mail de Redefinição
+                        </button>
+                    </div>
+
+                    <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold text-zinc-800">Opção 2: Redefinição Manual via Painel Firebase</h4>
+                        <p className="text-sm text-zinc-500 mt-1">
+                           Para definir uma senha temporária, você pode usar o painel do Firebase. Clique no botão abaixo, encontre o usuário e selecione "Redefinir senha".
+                        </p>
+                         <a
+                            href={`https://console.firebase.google.com/project/${(window as any).__FIREBASE_CONFIG__?.projectId}/authentication/users`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300 transition-colors text-sm"
+                        >
+                            <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                            Abrir Painel do Firebase
+                        </a>
+                    </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSave, collaboratorToEdit }) => {
     const isEditing = !!collaboratorToEdit;
@@ -39,6 +98,7 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
     const [fixedSalary, setFixedSalary] = useState<number | ''>('');
     const [commissionPercentage, setCommissionPercentage] = useState<number | ''>('');
     const [cpfError, setCpfError] = useState('');
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
     useEffect(() => {
         if (collaboratorToEdit) {
@@ -100,6 +160,29 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
         );
     };
 
+    const handleSendPasswordReset = async () => {
+        if (!collaboratorToEdit?.login) {
+            showToast('Nenhum login associado a este colaborador.', 'error');
+            return;
+        }
+        const emailForAuth = collaboratorToEdit.login.includes('@')
+            ? collaboratorToEdit.login
+            : `${collaboratorToEdit.login}@oficinadoaluno.com.br`;
+
+        try {
+            await auth.sendPasswordResetEmail(emailForAuth);
+            showToast(`Email de redefinição de senha enviado para ${emailForAuth}.`, 'success');
+            setIsResetModalOpen(false);
+        } catch (error: any) {
+            console.error('Password reset error:', error);
+            if (error.code === 'auth/user-not-found') {
+                showToast('Este usuário não possui uma conta de login. Pode ter sido excluída.', 'error');
+            } else {
+                showToast('Erro ao enviar o email de redefinição.', 'error');
+            }
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setCpfError('');
@@ -109,26 +192,13 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
             return;
         }
 
+        if (!isEditing && password.length < 6) {
+            showToast('A senha temporária deve ter pelo menos 6 caracteres.', 'error');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-             if (isEditing && collaboratorToEdit) {
-                const loginChanged = login !== collaboratorToEdit.login;
-                const passwordChanged = password.trim().length > 0;
-
-                if (passwordChanged && password.trim().length < 6) {
-                    showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                if (loginChanged || passwordChanged) {
-                    showToast(
-                        'Por segurança, a alteração de login ou senha de um usuário existente não é permitida diretamente. Os outros dados foram salvos.',
-                        'info'
-                    );
-                }
-            }
-
             const collaboratorData = {
                 name,
                 role,
@@ -224,14 +294,32 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                     <fieldset>
                         <legend className="text-lg font-semibold text-zinc-700 mb-2">Acesso ao Sistema</legend>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label htmlFor="collaboratorLogin" className={labelStyle}>Login de Acesso <span className="text-red-500">*</span></label>
-                                <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required />
-                            </div>
-                            <div>
-                                <label htmlFor="collaboratorPassword" className={labelStyle}>{isEditing ? 'Nova Senha (Opcional)' : 'Senha Temporária *'}</label>
-                                <input id="collaboratorPassword" type="password" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} placeholder={isEditing ? 'Deixe em branco para não alterar' : 'Mínimo 6 caracteres'} />
-                            </div>
+                            {isEditing ? (
+                                <>
+                                    <div>
+                                        <label htmlFor="collaboratorLogin" className={labelStyle}>Login de Acesso</label>
+                                        <input id="collaboratorLogin" type="text" value={login} className={`${inputStyle} bg-zinc-200`} disabled />
+                                        <p className="text-xs text-zinc-500 mt-1">O login não pode ser alterado após a criação.</p>
+                                    </div>
+                                    <div>
+                                        <label className={labelStyle}>Senha</label>
+                                        <button type="button" onClick={() => setIsResetModalOpen(true)} className="w-full py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">
+                                            Redefinir Senha...
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label htmlFor="collaboratorLogin" className={labelStyle}>Login de Acesso <span className="text-red-500">*</span></label>
+                                        <input id="collaboratorLogin" type="text" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="collaboratorPassword" className={labelStyle}>Senha Temporária *</label>
+                                        <input id="collaboratorPassword" type="password" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} required placeholder="Mínimo 6 caracteres" />
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="space-y-2 p-3 bg-zinc-50 rounded-lg">
                             <h4 className="font-medium text-zinc-600">Painéis de Acesso</h4>
@@ -299,6 +387,20 @@ const AddCollaboratorForm: React.FC<AddCollaboratorFormProps> = ({ onBack, onSav
                     </button>
                 </footer>
             </form>
+
+            {isEditing && collaboratorToEdit && (
+                <PasswordResetModal
+                    isOpen={isResetModalOpen}
+                    onClose={() => setIsResetModalOpen(false)}
+                    onSendEmail={handleSendPasswordReset}
+                    professionalEmail={
+                        collaboratorToEdit.login?.includes('@')
+                            ? collaboratorToEdit.login
+                            : `${collaboratorToEdit.login}@oficinadoaluno.com.br`
+                    }
+                />
+            )}
+
              <style>{`
                 @keyframes fade-in-fast {
                     from { opacity: 0; }

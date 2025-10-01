@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { ToastContext } from '../App';
 import { 
     ArrowLeftIcon, KeyIcon, CalendarDaysIcon, UserMinusIcon, 
-    UserPlusIcon, PencilIcon
+    UserPlusIcon, PencilIcon, TrashIcon
 } from './Icons';
 
 const formatPhoneForDisplay = (phone?: string): string => {
@@ -25,8 +25,8 @@ const InfoItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
     return (<div><p className="text-xs text-zinc-500 font-medium uppercase">{label}</p><p className="text-zinc-800">{value}</p></div>);
 };
 
-interface ManageProfessionalModalProps { isOpen: boolean; onClose: () => void; onInactivate: () => void; professional: Professional; onEdit: () => void; }
-const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpen, onClose, onInactivate, professional, onEdit }) => {
+interface ManageProfessionalModalProps { isOpen: boolean; onClose: () => void; onInactivate: () => void; professional: Professional; onEdit: () => void; onDelete: () => void; }
+const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpen, onClose, onInactivate, professional, onEdit, onDelete }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
@@ -35,6 +35,7 @@ const ManageProfessionalModal: React.FC<ManageProfessionalModalProps> = ({ isOpe
                  <div className="mt-6 border-t pt-4 space-y-2">
                      <button onClick={onEdit} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-secondary-dark hover:bg-secondary/10"><PencilIcon /><span>Editar Dados Cadastrais</span></button>
                     {professional.status !== 'inativo' && (<button onClick={() => { onInactivate(); onClose(); }} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-red-600 hover:bg-red-50"><UserMinusIcon /><span>Inativar Professor</span></button>)}
+                    <button onClick={() => { onDelete(); onClose(); }} className="w-full text-left text-sm flex items-center gap-3 py-2 px-3 rounded-lg text-red-700 font-bold hover:bg-red-50"><TrashIcon /><span>Excluir Permanentemente</span></button>
                 </div>
                 <div className="mt-6 flex justify-end gap-3"><button onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Fechar</button></div>
             </div>
@@ -60,6 +61,21 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
                 showToast("Você não tem permissão para alterar o status do professor.", "error");
             } else {
                 showToast("Ocorreu um erro ao atualizar o status.", "error");
+            }
+        }
+    };
+
+    const handleDeleteProfessional = async () => {
+        const confirmationMessage = `Você tem certeza que deseja excluir permanentemente o professor "${professional.name}"?\n\nEsta ação não pode ser desfeita e removerá todos os seus dados do sistema.\n\nIMPORTANTE: Esta ação NÃO exclui o login do professor. Para remover o acesso, você deve excluir o usuário no painel de Autenticação do Firebase.`;
+
+        if (window.confirm(confirmationMessage)) {
+            try {
+                await db.collection("professionals").doc(professional.id).delete();
+                showToast('Professor excluído com sucesso.', 'success');
+                onBack(); // Go back to the list
+            } catch (error: any) {
+                console.error("Error deleting professional:", error);
+                showToast("Ocorreu um erro ao excluir o professor.", "error");
             }
         }
     };
@@ -105,7 +121,14 @@ const ProfessionalDetail: React.FC<ProfessionalDetailProps> = ({ professional, o
                 <section><div className="flex items-center gap-3 mb-4"><CalendarDaysIcon className="h-6 w-6 text-secondary" /><h3 className="text-xl font-semibold text-zinc-700">Disponibilidade Semanal</h3></div><WeeklyAvailabilityComponent initialAvailability={professional.availability || {}} onSave={handleSaveAvailability} /></section>
             </main>
         </div>
-        <ManageProfessionalModal isOpen={isAccessModalOpen} onClose={() => setIsAccessModalOpen(false)} onInactivate={() => updateStatus('inativo')} professional={professional} onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} />
+        <ManageProfessionalModal 
+            isOpen={isAccessModalOpen} 
+            onClose={() => setIsAccessModalOpen(false)} 
+            onInactivate={() => updateStatus('inativo')} 
+            professional={professional} 
+            onEdit={() => { setIsAccessModalOpen(false); onEdit(); }} 
+            onDelete={handleDeleteProfessional}
+        />
         <style>{`@keyframes fade-in-fast{from{opacity:0}to{opacity:1}}.animate-fade-in-fast{animation:fade-in-fast .2s ease-out forwards}@keyframes fade-in-down{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}.animate-fade-in-down{animation:fade-in-down .2s ease-out forwards}`}</style>
         </>
     );

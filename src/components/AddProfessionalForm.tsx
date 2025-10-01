@@ -3,7 +3,7 @@ import { Professional } from '../types';
 import { ArrowLeftIcon } from './Icons';
 // FIX: Import the 'auth' object from firebase to handle user creation.
 import { db, auth } from '../firebase';
-import { ToastContext } from '../App';
+import { ToastContext } from './../App';
 import { sanitizeFirestore, onlyDigits, phoneMask, validateCPF } from '../utils/sanitizeFirestore';
 
 interface AddProfessionalFormProps {
@@ -29,7 +29,6 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
     const [otherDiscipline, setOtherDiscipline] = useState('');
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
-    const [newPassword, setNewPassword] = useState(''); // For editing existing user
     
     // UI state for disciplines
     const [allDisciplines, setAllDisciplines] = useState(initialDisciplineOptions);
@@ -73,7 +72,6 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setFixedSalary(professionalToEdit.fixedSalary || '');
             setLogin(professionalToEdit.login || '');
             setPassword('');
-            setNewPassword('');
         } else {
              // Reset form for new entry
             setFullName('');
@@ -82,7 +80,6 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setOtherDiscipline('');
             setLogin('');
             setPassword('');
-            setNewPassword('');
         }
     }, [professionalToEdit]);
 
@@ -106,6 +103,29 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
         setOtherDiscipline('');
     };
 
+    const handleSendPasswordReset = async () => {
+        if (!professionalToEdit?.login) {
+            showToast('Nenhum login associado a este professor.', 'error');
+            return;
+        }
+        const emailForAuth = professionalToEdit.login.includes('@')
+            ? professionalToEdit.login
+            : `${professionalToEdit.login}@oficinadoaluno.com.br`;
+
+        try {
+            await auth.sendPasswordResetEmail(emailForAuth);
+            showToast(`Email de redefinição de senha enviado para ${emailForAuth}.`, 'success');
+        } catch (error: any) {
+            console.error('Password reset error:', error);
+            if (error.code === 'auth/user-not-found') {
+                showToast('Este usuário não possui uma conta de login. Pode ter sido excluída.', 'error');
+            } else {
+                showToast('Erro ao enviar o email de redefinição.', 'error');
+            }
+        }
+    };
+
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -120,32 +140,15 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             return;
         }
 
-        if (isEditing) {
-            if (newPassword && newPassword.length < 6) {
-                showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
-                return;
-            }
-        } else { // New user
-            if (password.length < 6) {
-                showToast('A senha temporária deve ter pelo menos 6 caracteres.', 'error');
-                return;
-            }
+        if (!isEditing && password.length < 6) {
+            showToast('A senha temporária deve ter pelo menos 6 caracteres.', 'error');
+            return;
         }
         
         setIsSubmitting(true);
         
         try {
             if (isEditing && professionalToEdit) {
-                const loginChanged = login !== professionalToEdit.login;
-                const passwordChanged = newPassword.trim().length > 0;
-
-                if (loginChanged || passwordChanged) {
-                    showToast(
-                        'Por segurança, a alteração de login ou senha de um usuário existente não é permitida diretamente. Os outros dados foram salvos.',
-                        'info'
-                    );
-                }
-
                 const professionalData = {
                     name: fullName,
                     disciplines: selectedDisciplines,
@@ -164,7 +167,6 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     hourlyRateIndividual: Number(hourlyRateIndividual) || undefined,
                     hourlyRateGroup: Number(hourlyRateGroup) || undefined,
                     fixedSalary: Number(fixedSalary) || undefined,
-                    login,
                     availability: professionalToEdit?.availability || {},
                 };
 
@@ -251,14 +253,22 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                 </fieldset>
                 <fieldset>
                     <legend className="text-lg font-semibold text-zinc-700 border-b pb-2 mb-4">Acesso ao Sistema</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 items-end">
+                    <div className="space-y-4">
                         <div>
-                            <label htmlFor="login" className={labelStyle}>Login <span className="text-red-500">*</span></label>
-                            <input type="text" id="login" value={login} onChange={e => setLogin(e.target.value)} className={inputStyle} required disabled={isSubmitting} />
+                            <label htmlFor="login" className={labelStyle}>Login</label>
+                            <input type="text" id="login" value={login} className={`${inputStyle} bg-zinc-200`} disabled />
+                            <p className="text-xs text-zinc-500 mt-1">O login não pode ser alterado após a criação.</p>
                         </div>
                         <div>
-                            <label htmlFor="newPassword" className={labelStyle}>Nova Senha (opcional)</label>
-                            <input type="password" id="newPassword" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputStyle} placeholder="Deixe em branco para não alterar" disabled={isSubmitting}/>
+                            <label className={labelStyle}>Senha</label>
+                            <button
+                                type="button"
+                                onClick={handleSendPasswordReset}
+                                disabled={isSubmitting}
+                                className="w-full py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors"
+                            >
+                                Enviar email de redefinição de senha
+                            </button>
                         </div>
                     </div>
                 </fieldset>

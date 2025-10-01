@@ -1,15 +1,18 @@
 
 
-import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { Collaborator, Student, Professional, Transaction, ScheduledClass } from '../types';
-import { db } from '../firebase';
-import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon } from './Icons';
+import React, { useState, useMemo, useEffect, useContext, useRef } from 'react';
+import { Collaborator, Student, Professional, Transaction, ScheduledClass, PaymentMethod } from '../types';
+// FIX: Import the 'auth' object from firebase to handle user authentication.
+import { db, auth } from '../firebase';
+import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon, PlusIcon, XMarkIcon, PencilIcon } from './Icons';
 import { ToastContext } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { getShortName } from '../utils/sanitizeFirestore';
+import { getShortName, sanitizeFirestore } from '../utils/sanitizeFirestore';
 
 
 // --- Reusable Components ---
+const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
+const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
 const TabButton: React.FC<{
     label: string;
@@ -45,7 +48,160 @@ const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = (
     </div>
 );
 
-type SettingsTab = 'reports' | 'incomeRecords' | 'paymentRecords' | 'remunerations';
+const IncomeFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    students: Student[];
+    currentUser: Collaborator;
+    transactionToEdit: Transaction | null;
+}> = ({ isOpen, onClose, students, currentUser, transactionToEdit }) => {
+    const { showToast } = useContext(ToastContext);
+    const isEditing = !!transactionToEdit;
+
+    const [studentId, setStudentId] = useState('');
+    const [amount, setAmount] = useState<number | ''>('');
+    const [discount, setDiscount] = useState<number | ''>('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
+    const [description, setDescription] = useState('');
+    const [status, setStatus] = useState<'pago' | 'pendente'>('pago');
+    const [dueDate, setDueDate] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            if (transactionToEdit) {
+                setStudentId(transactionToEdit.studentId || '');
+                setAmount(transactionToEdit.amount + (transactionToEdit.discount || 0)); // Show gross amount
+                setDiscount(transactionToEdit.discount || '');
+                setPaymentDate(transactionToEdit.date);
+                setPaymentMethod(transactionToEdit.paymentMethod);
+                setDescription(transactionToEdit.description || '');
+                setStatus(transactionToEdit.status || 'pago');
+                setDueDate(transactionToEdit.dueDate || '');
+            } else {
+                setStudentId('');
+                setAmount('');
+                setDiscount('');
+                setPaymentDate(new Date().toISOString().split('T')[0]);
+                setPaymentMethod('pix');
+                setDescription('');
+                setStatus('pago');
+                setDueDate('');
+            }
+        }
+    }, [transactionToEdit, isOpen]);
+
+
+    const finalAmount = useMemo(() => (Number(amount) || 0) - (Number(discount) || 0), [amount, discount]);
+
+    if (!isOpen) return null;
+
+    const handleSave = async () => {
+        if (!amount || finalAmount < 0) {
+            showToast('Valor inválido.', 'error');
+            return;
+        }
+
+        const transactionData = {
+            type: 'credit' as const,
+            date: paymentDate,
+            amount: finalAmount,
+            discount: Number(discount) || undefined,
+            studentId: studentId || undefined,
+            description: description || `Recebimento de ${students.find(s => s.id === studentId)?.name || 'diverso'}`,
+            paymentMethod,
+            status,
+            dueDate: status === 'pendente' ? dueDate : undefined,
+            registeredById: isEditing ? transactionToEdit.registeredById : currentUser.id,
+        };
+
+        try {
+            if (isEditing) {
+                await db.collection('transactions').doc(transactionToEdit.id).update(sanitizeFirestore(transactionData as any));
+                showToast('Recebimento atualizado com sucesso!', 'success');
+            } else {
+                await db.collection('transactions').add(sanitizeFirestore(transactionData as any));
+                showToast('Recebimento registrado com sucesso!', 'success');
+            }
+            onClose();
+        } catch (error) {
+            console.error(error);
+            showToast('Erro ao salvar recebimento.', 'error');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
+                <header className="flex justify-between items-start p-4 border-b">
+                    <h3 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Recebimento' : 'Registrar Novo Recebimento'}</h3>
+                    <button onClick={onClose} className="p-2 -mt-1 -mr-1 rounded-full text-zinc-400 hover:bg-zinc-100"><XMarkIcon /></button>
+                </header>
+                <main className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="student" className={labelStyle}>Aluno (Opcional)</label>
+                            <select id="student" value={studentId} onChange={e => setStudentId(e.target.value)} className={inputStyle}>
+                                <option value="">Recebimento Avulso</option>
+                                {students.filter(s => s.status === 'matricula').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="paymentDate" className={labelStyle}>Data do Recebimento</label>
+                            <input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputStyle} required />
+                        </div>
+                        <div>
+                            <label htmlFor="amount" className={labelStyle}>Valor Bruto (R$)</label>
+                            <input id="amount" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} required />
+                        </div>
+                        <div>
+                            <label htmlFor="discount" className={labelStyle}>Desconto (R$)</label>
+                            <input id="discount" type="number" step="0.01" value={discount} onChange={e => setDiscount(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-zinc-600">Valor Final: <span className="font-bold text-lg text-secondary">{finalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                    </div>
+                    <div>
+                        <label htmlFor="paymentMethod" className={labelStyle}>Forma de Pagamento</label>
+                        <select id="paymentMethod" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)} className={inputStyle} required>
+                            <option value="pix">Pix</option>
+                            <option value="cartao">Cartão</option>
+                            <option value="dinheiro">Dinheiro</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="description" className={labelStyle}>Descrição</label>
+                        <textarea id="description" rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputStyle} placeholder="Ex: Pagamento de material, etc." />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="status" className={labelStyle}>Status</label>
+                            <select id="status" value={status} onChange={e => setStatus(e.target.value as any)} className={inputStyle}>
+                                <option value="pago">Pago</option>
+                                <option value="pendente">Pendente</option>
+                            </select>
+                        </div>
+                        {status === 'pendente' && (
+                             <div className="animate-fade-in-fast">
+                                <label htmlFor="dueDate" className={labelStyle}>Prazo de Pagamento</label>
+                                <input id="dueDate" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputStyle} />
+                            </div>
+                        )}
+                    </div>
+                </main>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 rounded-lg">Cancelar</button>
+                    <button type="button" onClick={handleSave} className="py-2 px-6 bg-secondary text-white rounded-lg">Salvar Recebimento</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
+
+type SettingsTab = 'reports' | 'incomeRecords' | 'remunerations';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -65,10 +221,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     // UI state
     const [monthOffset, setMonthOffset] = useState(0);
     const [lastYearClasses, setLastYearClasses] = useState<number | ''>('');
+    const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+    const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+    const [currentUser, setCurrentUser] = useState<Collaborator | null>(null);
 
     // Fetch data from Firestore
     useEffect(() => {
-        const unsubCollaborators = db.collection("collaborators").onSnapshot(snap => setCollaborators(snap.docs.map(d => ({id: d.id, ...d.data()})) as Collaborator[]), (err) => showToast("Erro ao buscar colaboradores.", "error"));
+        const unsubCollaborators = db.collection("collaborators").onSnapshot(snap => {
+            const collabs = snap.docs.map(d => ({id: d.id, ...d.data()})) as Collaborator[];
+            setCollaborators(collabs);
+            const loggedInUser = auth.currentUser;
+            if (loggedInUser) {
+                setCurrentUser(collabs.find(c => c.id === loggedInUser.uid) || null);
+            }
+        }, (err) => showToast("Erro ao buscar colaboradores.", "error"));
         const unsubStudents = db.collection("students").onSnapshot(snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]), (err) => showToast("Erro ao buscar alunos.", "error"));
         const unsubProfessionals = db.collection("professionals").onSnapshot(snap => setProfessionals(snap.docs.map(d => ({id: d.id, ...d.data()})) as Professional[]), (err) => showToast("Erro ao buscar profissionais.", "error"));
         const unsubTransactions = db.collection("transactions").orderBy("date", "desc").onSnapshot(snap => setTransactions(snap.docs.map(d => ({id: d.id, ...d.data()})) as Transaction[]), (err) => showToast("Erro ao buscar registros.", "error"));
@@ -81,7 +247,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const professionalMap = useMemo(() => new Map(professionals.map(p => [p.id, p.name])), [professionals]);
     const collaboratorMap = useMemo(() => new Map(collaborators.map(c => [c.id, c.name])), [collaborators]);
 
-    const { monthName, reportMetrics, incomeRecords, paymentRecords, remunerationsData } = useMemo(() => {
+    const { monthName, reportMetrics, incomeRecords, remunerationsData } = useMemo(() => {
         const targetDate = new Date();
         targetDate.setDate(1);
         targetDate.setUTCHours(0, 0, 0, 0);
@@ -90,7 +256,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const targetYear = targetDate.getFullYear();
         const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-        // FIX: Replaced generic data filter with specific functions to ensure correct type inference.
         const getFilteredClasses = (data: ScheduledClass[]) =>
             data.filter(item => {
                 const itemDate = new Date(item.date);
@@ -143,15 +308,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         }, {} as Record<string, number>);
         const locationData = [{ name: 'Online', value: locationCounts.online || 0 }, { name: 'Presencial', value: locationCounts.presencial || 0 }];
         
-        // --- Income & Payment Records ---
+        // --- Income & Remunerations ---
         const transactionsInMonth = getFilteredTransactions(transactions);
         const incomeTransactions = transactionsInMonth.filter(tx => tx.type === 'credit' || tx.type === 'monthly');
         const totalIncome = incomeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-        const paymentTransactions = transactionsInMonth.filter(tx => tx.type === 'payment');
-        const totalPayments = paymentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
-
-        // --- Remunerations ---
         const profRemunerations = professionals.map(prof => {
             const profClassesInMonth = classesInMonth.filter(c => c.professionalId === prof.id);
             const totalHours = profClassesInMonth.reduce((sum, c: ScheduledClass) => sum + (c.duration / 60), 0);
@@ -159,11 +320,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             return { ...prof, classCount: profClassesInMonth.length, earnings };
         });
 
-        const monthlyRevenue = totalIncome;
         const collabRemunerations = collaborators.map(collab => {
             let earnings = 0;
-            if (collab.remunerationType === 'fixed') earnings = collab.fixedSalary || 0;
-            else if (collab.remunerationType === 'commission') earnings = monthlyRevenue * ((collab.commissionPercentage || 0) / 100);
+            if (collab.remunerationType === 'fixed') {
+                earnings = collab.fixedSalary || 0;
+            } else if (collab.remunerationType === 'commission') {
+                const collaboratorRevenue = incomeTransactions
+                    .filter(tx => tx.registeredById === collab.id)
+                    .reduce((sum, tx) => sum + tx.amount, 0);
+                earnings = collaboratorRevenue * ((collab.commissionPercentage || 0) / 100);
+            }
             return { ...collab, earnings };
         });
 
@@ -175,27 +341,33 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 disciplineData, topStudentsData, classesByProfData, locationData
             },
             incomeRecords: { incomeTransactions, totalIncome },
-            paymentRecords: { paymentTransactions, totalPayments },
             remunerationsData: { profRemunerations, collabRemunerations }
         };
     }, [transactions, monthOffset, professionals, scheduledClasses, collaborators, students, studentMap, professionalMap]);
     
-    const getTransactionDescription = (tx: Transaction, type: 'income' | 'payment'): string => {
+    const handleOpenIncomeModal = (tx: Transaction | null) => {
+        setTransactionToEdit(tx);
+        setIsIncomeModalOpen(true);
+    };
+
+    const handleCloseIncomeModal = () => {
+        setTransactionToEdit(null);
+        setIsIncomeModalOpen(false);
+    }
+
+    const getTransactionDescription = (tx: Transaction): string => {
         if (tx.description) return tx.description;
-        if (type === 'income') {
-             const studentName = tx.studentId ? getShortName(studentMap.get(tx.studentId)) : null;
-             if (studentName) return `Recebimento de ${studentName}`;
-             return `Recebimento avulso`;
-        }
-        if (tx.professionalId) return `Pagamento para ${getShortName(professionalMap.get(tx.professionalId)) || 'Professor'} (${tx.month || tx.category || 'N/A'})`;
-        if (tx.sourceDest) return `Pagamento para ${tx.sourceDest}`;
-        return `Pagamento (${tx.category || 'Geral'})`;
+        const studentName = tx.studentId ? getShortName(studentMap.get(tx.studentId)) : null;
+        if (studentName) return `Recebimento de ${studentName}`;
+        return `Recebimento avulso`;
     };
     
     const PIE_COLORS = ['#0e7490', '#F39B53', '#34d399', '#f59e0b'];
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view space-y-6">
+            {currentUser && <IncomeFormModal isOpen={isIncomeModalOpen} onClose={handleCloseIncomeModal} students={students} currentUser={currentUser} transactionToEdit={transactionToEdit} />}
+
             <header className="flex items-center gap-4">
                 <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 transition-colors">
                     <ArrowLeftIcon className="h-6 w-6" />
@@ -207,7 +379,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 <nav className="-mb-px flex space-x-6">
                     <TabButton label="Relatórios" icon={ChartPieIcon} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
                     <TabButton label="Recebimentos" icon={BanknotesIcon} isActive={activeTab === 'incomeRecords'} onClick={() => setActiveTab('incomeRecords')} />
-                    <TabButton label="Pagamentos" icon={BanknotesIcon} isActive={activeTab === 'paymentRecords'} onClick={() => setActiveTab('paymentRecords')} />
                     <TabButton label="Remunerações" icon={CurrencyDollarIcon} isActive={activeTab === 'remunerations'} onClick={() => setActiveTab('remunerations')} />
                 </nav>
             </div>
@@ -303,17 +474,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                  {activeTab === 'incomeRecords' && (
                      <section>
                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-semibold text-zinc-700">Registros de Recebimentos</h3>
+                            <div className='flex items-center gap-4'>
+                                <h3 className="text-xl font-semibold text-zinc-700">Registros de Recebimentos</h3>
+                                <button onClick={() => handleOpenIncomeModal(null)} className="flex items-center gap-1.5 text-sm bg-secondary text-white font-semibold py-1.5 px-3 rounded-lg hover:bg-secondary-dark"><PlusIcon className="h-4 w-4" /> Registrar Novo</button>
+                            </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
                                 <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
                                 <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-1 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon className="h-5 w-5" /></button>
                             </div>
                         </div>
-                         <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-4">
-                             <h4 className="text-sm font-medium text-green-800">Total de Recebimentos no Mês</h4>
-                             <p className="text-2xl font-bold text-green-700">R$ {incomeRecords.totalIncome.toFixed(2).replace('.', ',')}</p>
-                         </div>
                         <div className="border rounded-lg overflow-hidden">
                             <table className="min-w-full divide-y divide-zinc-200">
                                 <thead className="bg-zinc-50">
@@ -322,59 +492,30 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Descrição</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Registrado Por</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor</th>
+                                        <th className="relative px-4 py-2"><span className="sr-only">Ações</span></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-zinc-200">
                                     {incomeRecords.incomeTransactions.map(tx => (
                                         <tr key={tx.id}>
                                             <td className="px-4 py-3 text-sm text-zinc-600">{new Date(tx.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getTransactionDescription(tx, 'income')}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getTransactionDescription(tx)}</td>
                                             <td className="px-4 py-3 text-sm text-zinc-600">{collaboratorMap.get(tx.registeredById) || 'Sistema'}</td>
                                             <td className="px-4 py-3 text-sm font-bold text-right text-green-600">+ R$ {tx.amount.toFixed(2).replace('.', ',')}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button onClick={() => handleOpenIncomeModal(tx)} className="text-secondary hover:underline text-sm font-semibold"><PencilIcon className="h-4 w-4 inline -mt-1"/> Editar</button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
+                                <tfoot className='bg-zinc-50'>
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-2 text-right font-bold text-zinc-700">Total no Mês:</td>
+                                        <td className="px-4 py-2 text-right font-bold text-lg text-green-700">R$ {incomeRecords.totalIncome.toFixed(2).replace('.', ',')}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                             {incomeRecords.incomeTransactions.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhum recebimento registrado neste mês.</p>}
-                        </div>
-                    </section>
-                 )}
-                 {activeTab === 'paymentRecords' && (
-                    <section>
-                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-semibold text-zinc-700">Registros de Pagamentos</h3>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
-                                <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
-                                <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-1 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon className="h-5 w-5" /></button>
-                            </div>
-                        </div>
-                         <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-4">
-                             <h4 className="text-sm font-medium text-red-800">Total de Pagamentos no Mês</h4>
-                             <p className="text-2xl font-bold text-red-700">R$ {paymentRecords.totalPayments.toFixed(2).replace('.', ',')}</p>
-                         </div>
-                        <div className="border rounded-lg overflow-hidden">
-                            <table className="min-w-full divide-y divide-zinc-200">
-                                <thead className="bg-zinc-50">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Descrição</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Registrado Por</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-zinc-200">
-                                    {paymentRecords.paymentTransactions.map(tx => (
-                                        <tr key={tx.id}>
-                                            <td className="px-4 py-3 text-sm text-zinc-600">{new Date(tx.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getTransactionDescription(tx, 'payment')}</td>
-                                            <td className="px-4 py-3 text-sm text-zinc-600">{collaboratorMap.get(tx.registeredById) || 'Sistema'}</td>
-                                            <td className="px-4 py-3 text-sm font-bold text-right text-red-600">- R$ {tx.amount.toFixed(2).replace('.', ',')}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {paymentRecords.paymentTransactions.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhum pagamento registrado neste mês.</p>}
                         </div>
                     </section>
                  )}

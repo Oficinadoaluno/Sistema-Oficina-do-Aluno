@@ -6,7 +6,7 @@ import ClassGroupView from './ClassGroupView';
 import SettingsView from './SettingsView';
 import PackagesView from './PackagesView';
 import PricingView from './PricingView';
-import { Collaborator, Student, Professional, ScheduledClass, Transaction } from '../types'; 
+import { Collaborator, Student, Professional, ScheduledClass, Transaction, PaymentMethod } from '../types'; 
 import { db, auth } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -16,11 +16,11 @@ import {
     Cog6ToothIcon, ArrowRightOnRectangleIcon, ArchiveBoxIcon,
     IdentificationIcon, LockClosedIcon, CalendarDaysIcon, ChartPieIcon,
     BirthdayIcon, AlertIcon, ClockIcon, BanknotesIcon, CurrencyDollarIcon,
-    Bars3Icon, ArrowPathIcon
+    Bars3Icon, ArrowPathIcon, XMarkIcon
 } from './Icons';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 
-// --- Modais de Perfil ---
+// --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 
@@ -122,6 +122,125 @@ const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> =
     );
 };
 
+const BillClassModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    classData: ScheduledClass | null;
+    student: Student | null;
+    professional: Professional | null;
+    currentUser: Collaborator;
+}> = ({ isOpen, onClose, classData, student, professional, currentUser }) => {
+    const { showToast } = useContext(ToastContext);
+    const [paymentDate, setPaymentDate] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
+    const [discount, setDiscount] = useState<number | ''>('');
+
+    const calculatedAmount = useMemo(() => {
+        if (!classData || !professional) return 0;
+        const hourlyRate = professional.hourlyRateIndividual || 70; // Fallback rate
+        return (classData.duration / 60) * hourlyRate;
+    }, [classData, professional]);
+
+    const finalAmount = useMemo(() => {
+        const total = calculatedAmount - (Number(discount) || 0);
+        return total > 0 ? total : 0;
+    }, [calculatedAmount, discount]);
+
+    useEffect(() => {
+        if (isOpen && classData) {
+            setPaymentDate(new Date().toISOString().split('T')[0]);
+            setPaymentMethod('pix');
+            setDiscount('');
+        }
+    }, [isOpen, classData]);
+
+    if (!isOpen || !classData || !student || !professional) return null;
+
+    const handleSave = async () => {
+        const batch = db.batch();
+
+        // 1. Create transaction
+        const transactionData = {
+            type: 'credit' as const,
+            date: paymentDate,
+            amount: finalAmount,
+            studentId: student.id,
+            description: `Pagamento aula de ${classData.discipline} (${new Date(classData.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}) para ${student.name}`,
+            registeredById: currentUser.id,
+            classId: classData.id,
+            paymentMethod,
+            discount: Number(discount) || undefined,
+            status: 'pago' as const,
+        };
+        const newTxRef = db.collection('transactions').doc();
+        batch.set(newTxRef, sanitizeFirestore(transactionData as any));
+
+        // 2. Update class
+        const classRef = db.collection('scheduledClasses').doc(classData.id);
+        batch.update(classRef, { paymentStatus: 'paid', transactionId: newTxRef.id });
+
+        try {
+            await batch.commit();
+            showToast('Pagamento registrado com sucesso!', 'success');
+            onClose();
+        } catch (error) {
+            console.error("Error billing class:", error);
+            showToast('Erro ao registrar pagamento.', 'error');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
+                <header className="flex justify-between items-start p-4 border-b">
+                    <div>
+                        <h3 className="text-xl font-bold text-zinc-800">Registrar Pagamento de Aula</h3>
+                        <p className="text-zinc-600">{student.name}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 -mt-1 -mr-1 rounded-full text-zinc-400 hover:bg-zinc-100"><XMarkIcon /></button>
+                </header>
+                <main className="p-4 space-y-4">
+                    <div className="bg-zinc-50 p-3 rounded-md grid grid-cols-2 gap-2 text-sm">
+                        <div><p className="text-xs text-zinc-500">Aula</p><p className="font-medium text-zinc-800">{classData.discipline}</p></div>
+                        <div><p className="text-xs text-zinc-500">Data da Aula</p><p className="font-medium text-zinc-800">{new Date(classData.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p></div>
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="paymentDate" className={labelStyle}>Data do Pagamento</label>
+                            <input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputStyle} required />
+                        </div>
+                        <div>
+                            <label htmlFor="paymentMethod" className={labelStyle}>Forma de Pagamento</label>
+                            <select id="paymentMethod" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)} className={inputStyle} required>
+                                <option value="pix">Pix</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="outro">Outro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="calculatedAmount" className={labelStyle}>Valor Calculado (R$)</label>
+                            <input id="calculatedAmount" type="text" value={calculatedAmount.toFixed(2)} className={`${inputStyle} bg-zinc-200`} readOnly />
+                        </div>
+                        <div>
+                            <label htmlFor="discount" className={labelStyle}>Desconto (R$)</label>
+                            <input id="discount" type="number" step="0.01" value={discount} onChange={e => setDiscount(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
+                        </div>
+                    </div>
+                    <div className="bg-secondary/10 p-3 rounded-lg mt-2 text-center">
+                        <p className="text-sm font-medium text-secondary-dark">VALOR FINAL</p>
+                        <p className="text-3xl font-bold text-secondary-dark">{finalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                </main>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 rounded-lg">Cancelar</button>
+                    <button type="button" onClick={handleSave} className="py-2 px-6 bg-secondary text-white rounded-lg">Confirmar Pagamento</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
 // --- Card de métrica reutilizável ---
 const MetricCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
     <div className="bg-white p-4 rounded-lg shadow-sm border flex items-start gap-4">
@@ -153,7 +272,7 @@ const robustCalculateAge = (birthDateString?: string): number | null => {
 };
 
 // --- Componente de Conteúdo do Dashboard ---
-const DashboardContent: React.FC = () => {
+const DashboardContent: React.FC<{ onBillClass: (cls: ScheduledClass) => void }> = ({ onBillClass }) => {
     const [loading, setLoading] = useState(true);
     const [students, setStudents] = useState<Student[]>([]);
     const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -271,13 +390,13 @@ const DashboardContent: React.FC = () => {
                         {classesToBill.length > 0 ? classesToBill.map(c => {
                             const student = students.find(s => s.id === c.studentId);
                             return (
-                                <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
+                                <button key={c.id} onClick={() => onBillClass(c)} className="w-full text-left flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md hover:bg-amber-100 transition-colors">
                                     <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                                     <div>
                                         <p className="font-bold text-amber-800" title={student?.name || 'Aluno não encontrado'}>{student?.name || 'Aluno não encontrado'}</p>
                                         <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                                     </div>
-                                </div>
+                                </button>
                             );
                         }) : <p className="text-zinc-500 text-center py-4">Nenhuma aula pendente de faturamento.</p>}
                     </div>
@@ -314,6 +433,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const menuRef = useRef<HTMLDivElement>(null);
+    const [classToBill, setClassToBill] = useState<ScheduledClass | null>(null);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [professionals, setProfessionals] = useState<Professional[]>([]);
+
+    useEffect(() => {
+        const unsubStudents = db.collection("students").onSnapshot(snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]));
+        const unsubProfs = db.collection("professionals").onSnapshot(snap => setProfessionals(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]));
+        return () => { unsubStudents(); unsubProfs(); };
+    }, []);
 
     const userRole = currentUser.role?.toLowerCase() || '';
     const canAccessSettings = userRole.includes('diretor');
@@ -328,6 +456,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    const handleBillClass = (cls: ScheduledClass) => {
+        setClassToBill(cls);
+    };
 
     const navItems = [
         { id: 'dashboard', label: 'Painel', icon: ChartPieIcon, canAccess: true },
@@ -361,7 +493,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
             case 'pricing': return <PricingView onBack={() => setView('dashboard')} />;
             case 'settings': return <SettingsView onBack={() => setView('dashboard')} />;
             case 'dashboard':
-            default: return <DashboardContent key={refreshKey} />;
+            default: return <DashboardContent key={refreshKey} onBillClass={handleBillClass} />;
         }
     };
 
@@ -437,6 +569,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
 
             <UserProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={currentUser} />
             <ChangePasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} />
+            <BillClassModal
+                isOpen={!!classToBill}
+                onClose={() => setClassToBill(null)}
+                classData={classToBill}
+                student={students.find(s => s.id === classToBill?.studentId) || null}
+                professional={professionals.find(p => p.id === classToBill?.professionalId) || null}
+                currentUser={currentUser}
+            />
 
             <style>{`
                 @keyframes fade-in-view { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

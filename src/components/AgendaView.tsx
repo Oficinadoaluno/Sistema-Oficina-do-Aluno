@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useContext } from 'react';
 import { Student, Professional, ScheduledClass, DayOfWeek, ClassGroup, ClassPackage } from '../types';
 import { db } from '../firebase';
 import { 
-    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon
+    ArrowLeftIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, ExclamationTriangleIcon, UsersIcon, BuildingOffice2Icon, ComputerDesktopIcon, TrashIcon
 } from './Icons';
 import { ToastContext } from '../App';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
@@ -118,12 +118,13 @@ const ScheduleClassModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSchedule: (newClass: Omit<ScheduledClass, 'id' | 'report'>) => Promise<void>;
+    onDelete: (classId: string, transactionId?: string) => Promise<void>;
     classToEdit: Partial<ScheduledClass> | null;
     students: Student[];
     professionals: Professional[];
     allDisciplines: string[];
     allPackages: (ClassPackage & { usedHours: number })[];
-}> = ({ isOpen, onClose, onSchedule, classToEdit, students, professionals, allDisciplines, allPackages }) => {
+}> = ({ isOpen, onClose, onSchedule, onDelete, classToEdit, students, professionals, allDisciplines, allPackages }) => {
     
     const isEditing = !!classToEdit?.id;
 
@@ -143,6 +144,7 @@ const ScheduleClassModal: React.FC<{
     const [packageId, setPackageId] = useState<string | undefined>(undefined);
     const [studentSearch, setStudentSearch] = useState('');
     const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
+    const [pendingPaymentWarning, setPendingPaymentWarning] = useState(false);
     const studentDropdownRef = useRef<HTMLDivElement>(null);
 
      useEffect(() => {
@@ -182,6 +184,41 @@ const ScheduleClassModal: React.FC<{
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (!studentId) {
+            setPendingPaymentWarning(false);
+            return;
+        }
+        const checkPendingPayments = async () => {
+            try {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const pendingClassesQuery = db.collection('scheduledClasses')
+                    .where('studentId', '==', studentId)
+                    .where('date', '<', todayStr)
+                    .where('paymentStatus', '==', 'pending');
+
+                const pendingTransactionsQuery = db.collection('transactions')
+                    .where('studentId', '==', studentId)
+                    .where('status', '==', 'pendente');
+
+                const [classesSnap, transactionsSnap] = await Promise.all([
+                    pendingClassesQuery.get(),
+                    pendingTransactionsQuery.get()
+                ]);
+
+                if (!classesSnap.empty || !transactionsSnap.empty) {
+                    setPendingPaymentWarning(true);
+                } else {
+                    setPendingPaymentWarning(false);
+                }
+            } catch (error) {
+                console.error("Error checking pending payments:", error);
+            }
+        };
+        checkPendingPayments();
+    }, [studentId]);
+
 
     const finalDiscipline = discipline === 'Outro' ? customDiscipline : discipline;
 
@@ -231,6 +268,12 @@ const ScheduleClassModal: React.FC<{
         });
         onClose();
     };
+    
+    const handleDelete = () => {
+        if (classToEdit?.id) {
+            onDelete(classToEdit.id, classToEdit.transactionId);
+        }
+    }
 
     if (!isOpen) return null;
 
@@ -242,6 +285,12 @@ const ScheduleClassModal: React.FC<{
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
                 <main className="flex-grow overflow-y-auto p-6 space-y-4">
+                    {pendingPaymentWarning && (
+                        <div className="p-3 bg-amber-100 border-l-4 border-amber-500 text-amber-800 flex items-center gap-2 font-semibold text-sm rounded-r-md">
+                            <ExclamationTriangleIcon className="h-5 w-5"/>
+                            <span>Atenção: Este aluno possui pendências financeiras.</span>
+                        </div>
+                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="relative" ref={studentDropdownRef}>
                             <label htmlFor="student-search" className={labelStyle}>Aluno</label>
@@ -400,9 +449,23 @@ const ScheduleClassModal: React.FC<{
                         </div>
                      )}
                 </main>
-                <footer className="flex justify-end items-center gap-4 p-4 border-t">
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{isEditing ? 'Salvar Alterações' : 'Agendar Aula'}</button>
+                <footer className="flex justify-between items-center gap-4 p-4 border-t">
+                    <div>
+                        {isEditing && (
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                className="flex items-center gap-2 py-2 px-4 bg-red-50 text-red-700 font-semibold rounded-lg hover:bg-red-100 transition-colors"
+                            >
+                                <TrashIcon />
+                                Excluir Aula
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors">Cancelar</button>
+                        <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105">{isEditing ? 'Salvar Alterações' : 'Agendar Aula'}</button>
+                    </div>
                 </footer>
             </form>
         </div>
@@ -707,14 +770,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         targetDate.setDate(1);
         targetDate.setMonth(targetDate.getMonth() + monthOffset);
         
+        const targetMonth = targetDate.getUTCMonth();
+        const targetYear = targetDate.getUTCFullYear();
         const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
         
-        const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-
         const classesInMonth = scheduledClasses.filter(c => {
-            const classDate = new Date(c.date);
-            return classDate >= monthStart && classDate <= monthEnd;
+            const classDate = new Date(c.date); // 'YYYY-MM-DD' -> UTC date object
+            return classDate.getUTCFullYear() === targetYear && classDate.getUTCMonth() === targetMonth;
         });
 
         const filtered = classesInMonth.filter(c => {
@@ -754,6 +816,30 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         }
     };
     
+    const handleDeleteClass = async (classId: string, transactionId?: string) => {
+        if (!window.confirm("Tem certeza que deseja excluir esta aula? Esta ação não pode ser desfeita.")) {
+            return;
+        }
+        try {
+            const batch = db.batch();
+            const classRef = db.collection('scheduledClasses').doc(classId);
+            batch.delete(classRef);
+
+            if (transactionId) {
+                const txRef = db.collection('transactions').doc(transactionId);
+                batch.delete(txRef);
+            }
+            
+            await batch.commit();
+            showToast('Aula excluída com sucesso.', 'success');
+            setIsModalOpen(false);
+            setClassToEdit(null);
+        } catch (error) {
+            console.error("Error deleting class:", error);
+            showToast('Erro ao excluir a aula.', 'error');
+        }
+    };
+
     const openScheduleModal = (partialData: Partial<ScheduledClass>) => {
         setClassToEdit(partialData);
         setIsModalOpen(true);
@@ -961,6 +1047,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setClassToEdit(null); }}
                 onSchedule={handleScheduleClass}
+                onDelete={handleDeleteClass}
                 classToEdit={classToEdit}
                 students={students}
                 professionals={professionals}

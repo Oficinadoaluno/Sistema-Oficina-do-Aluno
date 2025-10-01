@@ -202,7 +202,7 @@ const ScheduleClassModal: React.FC<{
     }, [professionalId, date, time, professionals]);
     
     const filteredStudents = useMemo(() => {
-        const activeStudents = students.filter(s => s.status === 'matricula');
+        const activeStudents = students.filter(s => s.status === 'matricula' || s.status === 'prospeccao');
         if (!studentSearch) {
             return activeStudents;
         }
@@ -579,7 +579,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
             snap => setScheduledClasses(snap.docs.map(d => ({id: d.id, ...d.data()})) as ScheduledClass[]),
             createErrorHandler("aulas")
         );
-        const unsubStudents = db.collection("students").onSnapshot(
+        const unsubStudents = db.collection("students").orderBy("name").onSnapshot(
             snap => setStudents(snap.docs.map(d => ({id: d.id, ...d.data()})) as Student[]),
             createErrorHandler("alunos")
         );

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { db } from '../firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
-import { Student, ClassPackage, ScheduledClass, Collaborator } from '../types';
+import { Student, ClassPackage, ScheduledClass, Collaborator, PaymentMethod } from '../types';
 import { ToastContext } from '../App';
 import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from './Icons';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
@@ -47,7 +47,7 @@ const ConfirmationModal: React.FC<{
 interface PackageFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, packageToEdit: ClassPackage | null) => Promise<void>;
+    onSave: (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, packageToEdit: ClassPackage | null, paymentMethod: PaymentMethod) => Promise<void>;
     students: Student[];
     packageToEdit: ClassPackage | null;
 }
@@ -58,6 +58,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [totalValue, setTotalValue] = useState<number | ''>('');
     const [amountPaid, setAmountPaid] = useState<number | ''>('');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
     const [pendingAmountDueDate, setPendingAmountDueDate] = useState('');
     const [observations, setObservations] = useState('');
 
@@ -72,6 +73,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
             setPurchaseDate(packageToEdit.purchaseDate);
             setTotalValue(packageToEdit.totalValue || '');
             setAmountPaid(packageToEdit.amountPaid || 0);
+            setPaymentMethod('pix'); // Default, can be improved to fetch from transaction if needed
             setPendingAmountDueDate(packageToEdit.pendingAmountDueDate || '');
             setObservations(packageToEdit.observations || '');
         } else {
@@ -80,6 +82,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
             setPurchaseDate(new Date().toISOString().split('T')[0]);
             setTotalValue('');
             setAmountPaid('');
+            setPaymentMethod('pix');
             setPendingAmountDueDate('');
             setObservations('');
         }
@@ -128,7 +131,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
             amountPaid: finalAmountPaid,
             paymentStatus,
             pendingAmountDueDate: paymentStatus !== 'paid' ? pendingAmountDueDate : undefined,
-        }, packageToEdit);
+        }, packageToEdit, paymentMethod);
         onClose();
     };
 
@@ -175,6 +178,17 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
                         <label htmlFor="amountPaid" className={labelStyle}>Valor Pago na Inscrição (R$)</label>
                         <input id="amountPaid" type="number" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
                     </div>
+                    {Number(amountPaid) > 0 && (
+                        <div className="animate-fade-in-fast">
+                            <label htmlFor="paymentMethod" className={labelStyle}>Forma de Pagamento <span className="text-red-500">*</span></label>
+                            <select id="paymentMethod" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)} className={inputStyle} required>
+                                <option value="pix">Pix</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="outro">Outro</option>
+                            </select>
+                        </div>
+                    )}
                     {(Number(amountPaid) < Number(totalValue)) && (
                         <div className="animate-fade-in-fast">
                             <label htmlFor="pendingAmountDueDate" className={labelStyle}>Previsão de Pagamento do Restante</label>
@@ -256,7 +270,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         setIsModalOpen(false);
     };
 
-    const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, pkgToEdit: ClassPackage | null) => {
+    const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, pkgToEdit: ClassPackage | null, paymentMethod: PaymentMethod) => {
         const isEditing = !!pkgToEdit;
         try {
             const batch = db.batch();
@@ -270,9 +284,9 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                 if (oldValue !== newValue) {
                     if (newValue > 0 && oldValue > 0 && pkgToEdit.transactionId) {
                         const txRef = db.collection('transactions').doc(pkgToEdit.transactionId);
-                        batch.update(txRef, { amount: newValue, date: formData.purchaseDate });
+                        batch.update(txRef, { amount: newValue, date: formData.purchaseDate, paymentMethod });
                     } else if (newValue > 0 && oldValue === 0) {
-                        const txData = { type: 'credit' as const, date: formData.purchaseDate, amount: newValue, studentId: pkgToEdit.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${pkgToEdit.studentName}`, registeredById: currentUser.id };
+                        const txData = { type: 'credit' as const, date: formData.purchaseDate, amount: newValue, studentId: pkgToEdit.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${pkgToEdit.studentName}`, registeredById: currentUser.id, paymentMethod };
                         const newTxRef = db.collection('transactions').doc();
                         batch.set(newTxRef, sanitizeFirestore(txData as any));
                         newTransactionId = newTxRef.id;
@@ -281,6 +295,10 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                         batch.delete(txRef);
                         newTransactionId = undefined;
                     }
+                } else if (newValue > 0 && pkgToEdit.transactionId) {
+                    // Update payment method even if amount is the same
+                    const txRef = db.collection('transactions').doc(pkgToEdit.transactionId);
+                    batch.update(txRef, { paymentMethod });
                 }
 
                 const packageUpdateData = { ...formData, transactionId: newTransactionId };
@@ -297,7 +315,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                 if (formData.amountPaid && formData.amountPaid > 0) {
                     const newTxRef = db.collection('transactions').doc();
                     transactionId = newTxRef.id;
-                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.amountPaid, studentId: formData.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${student.name}`, registeredById: currentUser.id };
+                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.amountPaid, studentId: formData.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${student.name}`, registeredById: currentUser.id, paymentMethod };
                     batch.set(newTxRef, sanitizeFirestore(transactionData as any));
                 }
                 const dataToSave = { ...formData, studentName: student.name, status: 'active' as const, transactionId };

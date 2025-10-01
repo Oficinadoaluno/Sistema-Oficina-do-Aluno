@@ -40,8 +40,24 @@ const WeeklyAvailabilityComponent: React.FC<WeeklyAvailabilityProps> = ({ initia
 
         setAvailability(prev => ({
             ...prev,
-            [day]: newDayAvailability,
+            [day]: newDayAvailability.length > 0 ? newDayAvailability : undefined,
         }));
+        setIsDirty(true);
+    };
+
+    const handleToggleDay = (day: DayOfWeek) => {
+        const dayAvailability = availability[day] || [];
+        const allSelected = dayAvailability.length === timeSlots.length;
+        
+        setAvailability(prev => {
+            const newAvailability = { ...prev };
+            if (allSelected) {
+                delete newAvailability[day];
+            } else {
+                newAvailability[day] = [...timeSlots];
+            }
+            return newAvailability;
+        });
         setIsDirty(true);
     };
 
@@ -57,9 +73,29 @@ const WeeklyAvailabilityComponent: React.FC<WeeklyAvailabilityProps> = ({ initia
                     <thead>
                         <tr>
                             <th className="p-2 border-b-2 text-sm font-semibold text-zinc-600 text-left w-24">Horário</th>
-                            {days.map(day => (
-                                <th key={day.key} className="p-2 border-b-2 text-sm font-semibold text-zinc-600 text-center">{day.label}</th>
-                            ))}
+                            {days.map(day => {
+                                const dayAvailability = availability[day.key] || [];
+                                const allSelected = dayAvailability.length === timeSlots.length;
+                                const someSelected = dayAvailability.length > 0;
+                                return (
+                                <th key={day.key} className="p-2 border-b-2 text-sm font-semibold text-zinc-600 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <span>{day.label}</span>
+                                        <input
+                                            type="checkbox"
+                                            className="h-3 w-3 mt-1 rounded-sm text-secondary focus:ring-secondary cursor-pointer"
+                                            onChange={() => handleToggleDay(day.key)}
+                                            ref={el => {
+                                                if (el) {
+                                                    el.checked = allSelected;
+                                                    el.indeterminate = someSelected && !allSelected;
+                                                }
+                                            }}
+                                            aria-label={`Selecionar todos os horários para ${day.label}`}
+                                        />
+                                    </div>
+                                </th>
+                            )})}
                         </tr>
                     </thead>
                     <tbody>

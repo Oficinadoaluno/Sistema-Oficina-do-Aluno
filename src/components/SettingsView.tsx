@@ -45,7 +45,7 @@ const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = (
     </div>
 );
 
-type SettingsTab = 'reports' | 'paymentRecords' | 'remunerations';
+type SettingsTab = 'reports' | 'incomeRecords' | 'paymentRecords' | 'remunerations';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -81,7 +81,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     const professionalMap = useMemo(() => new Map(professionals.map(p => [p.id, p.name])), [professionals]);
     const collaboratorMap = useMemo(() => new Map(collaborators.map(c => [c.id, c.name])), [collaborators]);
 
-    const { monthName, reportMetrics, paymentRecords, remunerationsData } = useMemo(() => {
+    const { monthName, reportMetrics, incomeRecords, paymentRecords, remunerationsData } = useMemo(() => {
         const targetDate = new Date();
         targetDate.setDate(1);
         targetDate.setUTCHours(0, 0, 0, 0);
@@ -90,16 +90,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         const targetYear = targetDate.getFullYear();
         const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-        const getFilteredData = <T extends Transaction | ScheduledClass>(data: T[]) => 
+        // FIX: Replaced generic data filter with specific functions to ensure correct type inference.
+        const getFilteredClasses = (data: ScheduledClass[]) =>
             data.filter(item => {
-                if (!item.date) return false;
+                const itemDate = new Date(item.date);
+                return itemDate.getUTCMonth() === targetMonth && itemDate.getUTCFullYear() === targetYear;
+            });
+        
+        const getFilteredTransactions = (data: Transaction[]) =>
+            data.filter(item => {
                 const itemDate = new Date(item.date);
                 return itemDate.getUTCMonth() === targetMonth && itemDate.getUTCFullYear() === targetYear;
             });
         
         // --- Reports Tab ---
         const completedClasses = scheduledClasses.filter(c => c.status === 'completed');
-        const classesInMonth = getFilteredData(completedClasses);
+        const classesInMonth = getFilteredClasses(completedClasses);
         
         const totalDuration = completedClasses.reduce((sum, cls: ScheduledClass) => sum + (cls.duration || 0), 0);
         const avgClassDuration = completedClasses.length > 0 ? (totalDuration / completedClasses.length).toFixed(0) : 0;
@@ -137,9 +143,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         }, {} as Record<string, number>);
         const locationData = [{ name: 'Online', value: locationCounts.online || 0 }, { name: 'Presencial', value: locationCounts.presencial || 0 }];
         
-        // --- Payment Records ---
-        const paymentTransactions = getFilteredData(transactions).filter(tx => tx.type === 'payment');
-        const totalPayments = paymentTransactions.reduce((sum, tx) => 'amount' in tx ? sum + tx.amount : sum, 0);
+        // --- Income & Payment Records ---
+        const transactionsInMonth = getFilteredTransactions(transactions);
+        const incomeTransactions = transactionsInMonth.filter(tx => tx.type === 'credit' || tx.type === 'monthly');
+        const totalIncome = incomeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const paymentTransactions = transactionsInMonth.filter(tx => tx.type === 'payment');
+        const totalPayments = paymentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
 
         // --- Remunerations ---
         const profRemunerations = professionals.map(prof => {
@@ -149,7 +159,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             return { ...prof, classCount: profClassesInMonth.length, earnings };
         });
 
-        const monthlyRevenue = getFilteredData(transactions).filter(tx => tx.type === 'credit' || tx.type === 'monthly').reduce((sum, tx) => 'amount' in tx ? sum + tx.amount : sum, 0);
+        const monthlyRevenue = totalIncome;
         const collabRemunerations = collaborators.map(collab => {
             let earnings = 0;
             if (collab.remunerationType === 'fixed') earnings = collab.fixedSalary || 0;
@@ -164,13 +174,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 classesInMonthCount: classesInMonth.length,
                 disciplineData, topStudentsData, classesByProfData, locationData
             },
+            incomeRecords: { incomeTransactions, totalIncome },
             paymentRecords: { paymentTransactions, totalPayments },
             remunerationsData: { profRemunerations, collabRemunerations }
         };
     }, [transactions, monthOffset, professionals, scheduledClasses, collaborators, students, studentMap, professionalMap]);
     
-    const getPaymentDescription = (tx: Transaction): string => {
+    const getTransactionDescription = (tx: Transaction, type: 'income' | 'payment'): string => {
         if (tx.description) return tx.description;
+        if (type === 'income') {
+             const studentName = tx.studentId ? getShortName(studentMap.get(tx.studentId)) : null;
+             if (studentName) return `Recebimento de ${studentName}`;
+             return `Recebimento avulso`;
+        }
         if (tx.professionalId) return `Pagamento para ${getShortName(professionalMap.get(tx.professionalId)) || 'Professor'} (${tx.month || tx.category || 'N/A'})`;
         if (tx.sourceDest) return `Pagamento para ${tx.sourceDest}`;
         return `Pagamento (${tx.category || 'Geral'})`;
@@ -190,7 +206,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             <div className="border-b">
                 <nav className="-mb-px flex space-x-6">
                     <TabButton label="Relatórios" icon={ChartPieIcon} isActive={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
-                    <TabButton label="Registros de Pagamentos" icon={BanknotesIcon} isActive={activeTab === 'paymentRecords'} onClick={() => setActiveTab('paymentRecords')} />
+                    <TabButton label="Recebimentos" icon={BanknotesIcon} isActive={activeTab === 'incomeRecords'} onClick={() => setActiveTab('incomeRecords')} />
+                    <TabButton label="Pagamentos" icon={BanknotesIcon} isActive={activeTab === 'paymentRecords'} onClick={() => setActiveTab('paymentRecords')} />
                     <TabButton label="Remunerações" icon={CurrencyDollarIcon} isActive={activeTab === 'remunerations'} onClick={() => setActiveTab('remunerations')} />
                 </nav>
             </div>
@@ -283,6 +300,45 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         </div>
                     </section>
                 )}
+                 {activeTab === 'incomeRecords' && (
+                     <section>
+                         <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-semibold text-zinc-700">Registros de Recebimentos</h3>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
+                                <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
+                                <button onClick={() => setMonthOffset(monthOffset + 1)} disabled={monthOffset >= 0} className="p-1 rounded-full hover:bg-zinc-100 disabled:opacity-50"><ChevronRightIcon className="h-5 w-5" /></button>
+                            </div>
+                        </div>
+                         <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-4">
+                             <h4 className="text-sm font-medium text-green-800">Total de Recebimentos no Mês</h4>
+                             <p className="text-2xl font-bold text-green-700">R$ {incomeRecords.totalIncome.toFixed(2).replace('.', ',')}</p>
+                         </div>
+                        <div className="border rounded-lg overflow-hidden">
+                            <table className="min-w-full divide-y divide-zinc-200">
+                                <thead className="bg-zinc-50">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Data</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Descrição</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Registrado Por</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-zinc-200">
+                                    {incomeRecords.incomeTransactions.map(tx => (
+                                        <tr key={tx.id}>
+                                            <td className="px-4 py-3 text-sm text-zinc-600">{new Date(tx.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getTransactionDescription(tx, 'income')}</td>
+                                            <td className="px-4 py-3 text-sm text-zinc-600">{collaboratorMap.get(tx.registeredById) || 'Sistema'}</td>
+                                            <td className="px-4 py-3 text-sm font-bold text-right text-green-600">+ R$ {tx.amount.toFixed(2).replace('.', ',')}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {incomeRecords.incomeTransactions.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhum recebimento registrado neste mês.</p>}
+                        </div>
+                    </section>
+                 )}
                  {activeTab === 'paymentRecords' && (
                     <section>
                          <div className="flex items-center justify-between mb-4">
@@ -311,7 +367,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                     {paymentRecords.paymentTransactions.map(tx => (
                                         <tr key={tx.id}>
                                             <td className="px-4 py-3 text-sm text-zinc-600">{new Date(tx.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getPaymentDescription(tx)}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-zinc-800">{getTransactionDescription(tx, 'payment')}</td>
                                             <td className="px-4 py-3 text-sm text-zinc-600">{collaboratorMap.get(tx.registeredById) || 'Sistema'}</td>
                                             <td className="px-4 py-3 text-sm font-bold text-right text-red-600">- R$ {tx.amount.toFixed(2).replace('.', ',')}</td>
                                         </tr>

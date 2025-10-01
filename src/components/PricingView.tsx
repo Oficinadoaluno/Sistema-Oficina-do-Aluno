@@ -145,7 +145,7 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
     const [paymentMethod, setPaymentMethod] = useState<'cartao' | 'pix' | 'dinheiro'>('cartao');
     
     useEffect(() => {
-        const unsub = db.collection('services').orderBy('category').orderBy('name').onSnapshot(snap => {
+        const unsub = db.collection('services').orderBy('category').onSnapshot(snap => {
             const fetchedServices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Service[];
             setServices(fetchedServices);
             const categories = [...new Set(fetchedServices.map(s => s.category))];
@@ -250,10 +250,20 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
     };
     
     const formatPrice = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A';
-    const groupedServices = useMemo(() => services.reduce((acc, service) => {
-        (acc[service.category] = acc[service.category] || []).push(service);
-        return acc;
-    }, {} as Record<string, Service[]>), [services]);
+    
+    const groupedServices = useMemo(() => {
+        const groups = services.reduce((acc, service) => {
+            (acc[service.category] = acc[service.category] || []).push(service);
+            return acc;
+        }, {} as Record<string, Service[]>);
+    
+        // Sort services within each category alphabetically by name
+        for (const category in groups) {
+            groups[category].sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        return groups;
+    }, [services]);
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
@@ -281,7 +291,6 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Add a truthiness and array check for `service.pricingTiers` before mapping to prevent errors with malformed data. */}
                                                             {/* FIX: Ensured service.pricingTiers is an array before mapping to prevent runtime errors with malformed Firestore data. */}
                                                             {Array.isArray(service.pricingTiers) && service.pricingTiers.map(tier => (
                                                                 <p key={tier.quantity}>

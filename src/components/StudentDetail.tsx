@@ -442,7 +442,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
                 <div className="flex items-center gap-4">
                     <button onClick={onBack} className="text-zinc-500 hover:text-zinc-800 p-2 rounded-full hover:bg-zinc-100"><ArrowLeftIcon className="h-6 w-6" /></button>
                     <div>
-                        <h2 className="text-2xl font-bold text-zinc-800 flex items-center gap-3" title={student.name}>{getShortName(student.name)}<span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusStyles(student.status)}`}>{getStatusText(student.status)}</span></h2>
+                        <h2 className="text-2xl font-bold text-zinc-800 flex items-center gap-3" title={student.name}>{student.name}<span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusStyles(student.status)}`}>{getStatusText(student.status)}</span></h2>
                         <p className="text-sm text-zinc-500">{student.school} - {student.grade}</p>
                     </div>
                 </div>

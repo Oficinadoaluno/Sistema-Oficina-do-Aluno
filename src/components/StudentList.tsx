@@ -195,7 +195,7 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
                             <tbody className="bg-white divide-y divide-zinc-200">
                                 {filteredStudents.map((student) => (
                                     <tr key={student.id} className="hover:bg-zinc-50 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-zinc-900" title={student.name}>{getShortName(student.name)}</div></td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-zinc-900" title={student.name}>{student.name}</div></td>
                                         <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.guardian}</div></td>
                                         <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-zinc-600">{student.school}</div></td>
                                         <td className="px-6 py-4 whitespace-nowrap"><span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-secondary/10 text-secondary-dark">{student.grade}</span></td>
@@ -212,7 +212,7 @@ const StudentList: React.FC<StudentListProps> = ({ onBack: onBackToDashboard, cu
                             <div key={student.id} className="bg-zinc-50 border rounded-lg p-4">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold text-zinc-900" title={student.name}>{getShortName(student.name)}</p>
+                                        <p className="font-bold text-zinc-900" title={student.name}>{student.name}</p>
                                         <p className="text-sm text-zinc-600">Resp: {student.guardian}</p>
                                     </div>
                                     <button onClick={() => handleViewDetails(student)} className="text-secondary hover:text-secondary-dark font-semibold text-sm">Ver mais</button>

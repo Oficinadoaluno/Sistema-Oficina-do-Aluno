@@ -147,7 +147,7 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                             <tbody className="divide-y">
                                 {groupStudents.map(student => (
                                     <tr key={student.id} className="hover:bg-zinc-50">
-                                        <td className="px-4 py-3 font-medium text-zinc-800" title={student.name}>{getShortName(student.name)}</td>
+                                        <td className="px-4 py-3 font-medium text-zinc-800" title={student.name}>{student.name}</td>
                                         <td className="px-4 py-3">
                                             {student.hasMonthlyPlan ? (
                                                 <span className="flex items-center gap-2 text-sm text-cyan-700 font-semibold">

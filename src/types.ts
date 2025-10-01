@@ -135,11 +135,13 @@ export interface ClassPackage {
   studentName: string; // denormalized for easy display
   totalHours: number;
   purchaseDate: string; // YYYY-MM-DD
-  valuePaid?: number;
+  totalValue: number;
+  amountPaid: number;
+  paymentStatus: 'paid' | 'partial' | 'pending';
+  pendingAmountDueDate?: string;
   observations?: string;
   status: 'active' | 'completed' | 'canceled';
   transactionId?: string;
-  // usedClasses will be derived by querying scheduledClasses with this package's ID
 }
 
 // --- Agenda Types ---

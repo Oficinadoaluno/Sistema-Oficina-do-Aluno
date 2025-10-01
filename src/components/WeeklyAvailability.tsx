@@ -11,8 +11,12 @@ const days: { key: DayOfWeek; label: string }[] = [
     { key: 'domingo', label: 'Dom' },
 ];
 
-// 08:00 to 22:00
-const timeSlots = Array.from({ length: 15 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`); 
+// 08:00 to 21:30 in 30-minute increments
+const timeSlots = Array.from({ length: (22 - 8) * 2 }, (_, i) => {
+    const hour = Math.floor(i / 2) + 8;
+    const minute = (i % 2) * 30;
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+});
 
 interface WeeklyAvailabilityProps {
     initialAvailability: WeeklyAvailability;
@@ -65,14 +69,16 @@ const WeeklyAvailabilityComponent: React.FC<WeeklyAvailabilityProps> = ({ initia
                                 {days.map(day => {
                                     const isAvailable = availability[day.key]?.includes(time) || false;
                                     return (
-                                        <td key={day.key} className="border">
-                                            <button
-                                                onClick={() => handleSlotClick(day.key, time)}
-                                                className={`w-full h-6 transition-colors duration-150 ${isAvailable ? 'bg-secondary/80 hover:bg-secondary' : 'bg-white hover:bg-zinc-100'}`}
-                                                aria-label={`Marcar ${day.label} às ${time} como ${isAvailable ? 'indisponível' : 'disponível'}`}
-                                            >
-                                                &nbsp;
-                                            </button>
+                                        <td key={day.key} className="p-0 border align-middle text-center">
+                                            <label className="w-full h-full flex items-center justify-center p-1.5 cursor-pointer hover:bg-zinc-200/50 transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isAvailable}
+                                                    onChange={() => handleSlotClick(day.key, time)}
+                                                    className="h-4 w-4 rounded text-secondary focus:ring-secondary cursor-pointer"
+                                                    aria-label={`Disponibilidade para ${day.label} às ${time}`}
+                                                />
+                                            </label>
                                         </td>
                                     );
                                 })}

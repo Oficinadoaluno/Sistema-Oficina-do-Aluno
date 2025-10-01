@@ -14,13 +14,12 @@ import {
     ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, UserIcon as UserIconSolid, PlusIcon, XMarkIcon, TrashIcon, CheckCircleIcon,
     SparklesIcon, BookOpenIcon, Bars3Icon, ArrowPathIcon
 } from './Icons';
-import { sanitizeFirestore } from '../utils/sanitizeFirestore';
+import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
 
 // --- AI API Keys ---
+// FIX: Removed hardcoded API keys to use environment variables as per guidelines.
 // Key for generating student performance summaries after a report is filed.
-const AI_API_KEY_SUMMARY = "AIzaSyApZq6UnHHNaYwY5I5_WldrkQxF2zdq6oU";
 // Key for the creativity panel to generate teaching ideas.
-const AI_API_KEY_CREATIVITY = "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E";
 
 
 // A simple component to render markdown-like text from the AI
@@ -120,7 +119,8 @@ Observações: ${r.observations}
         ].filter(Boolean).join('\n');
 
         // 3. Call Gemini API
-        const ai = new GoogleGenAI({ apiKey: AI_API_KEY_SUMMARY });
+        // FIX: Use process.env.API_KEY for Gemini API initialization.
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo direto e objetivo em um único parágrafo curto (máximo de 5 frases). O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
@@ -189,7 +189,7 @@ const UpcomingClassDetailModal: React.FC<UpcomingClassDetailModalProps> = ({ isO
                     <section>
                         <h4 className="font-semibold text-zinc-700 mb-2">Aluno</h4>
                         <div className="bg-zinc-50 p-3 rounded-md grid grid-cols-2 gap-2 text-sm">
-                            <div><p className="text-xs text-zinc-500">Nome</p><p className="font-medium text-zinc-800">{student.name}</p></div>
+                            <div><p className="text-xs text-zinc-500">Nome</p><p className="font-medium text-zinc-800">{getShortName(student.name)}</p></div>
                             <div><p className="text-xs text-zinc-500">Colégio</p><p className="font-medium text-zinc-800">{student.school || 'N/A'}</p></div>
                             <div><p className="text-xs text-zinc-500">Série</p><p className="font-medium text-zinc-800">{student.grade || 'N/A'}</p></div>
                         </div>
@@ -270,7 +270,7 @@ const GroupStudentReportModal: React.FC<GroupStudentReportModalProps> = ({ isOpe
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <header className="p-4 border-b">
-                    <h3 className="font-bold text-zinc-800">Relatório de {student.name}</h3>
+                    <h3 className="font-bold text-zinc-800">Relatório de {getShortName(student.name)}</h3>
                     <p className="text-sm text-zinc-500">Data: {new Date(date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                 </header>
                 <main className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
@@ -471,7 +471,7 @@ const GroupSessionManager: React.FC<GroupSessionManagerProps> = ({ group, studen
                         const hasReport = reports.has(student.id);
                         return (
                             <tr key={student.id} className="hover:bg-zinc-50">
-                                <td className="px-4 py-2 font-medium">{student.name}</td>
+                                <td className="px-4 py-2 font-medium" title={student.name}>{getShortName(student.name)}</td>
                                 <td className="px-4 py-2"><div className="flex items-center gap-2 text-sm">{['present', 'absent'].map(s => <button key={s} onClick={() => handleAttendanceChange(student.id, s as any)} className={`px-2 py-0.5 rounded-full font-semibold ${studentAttendance?.status === s ? 'bg-secondary text-white' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}>{s === 'present' ? 'P' : 'F'}</button>)}</div></td>
                                 <td className="px-4 py-2 w-1/2">
                                     {studentAttendance?.status === 'present' && <button onClick={() => { setStudentForReport(student); setIsReportModalOpen(true); }} className={`text-sm font-semibold py-1 px-2 rounded-md ${hasReport ? 'bg-secondary/10 text-secondary-dark' : 'bg-zinc-100 text-zinc-600'}`}>{hasReport ? 'Ver/Editar Relatório' : 'Registrar Relatório'}</button>}
@@ -646,7 +646,7 @@ const MyClassesView: React.FC<{
                         {classesInMonth.map(cls => (
                             <tr key={cls.id}>
                                 <td className="px-4 py-3 text-sm text-zinc-600">{new Date(cls.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
-                                <td className="px-4 py-3 text-sm font-medium text-zinc-800">{students.get(cls.studentId)?.name || 'Aluno não encontrado'}</td>
+                                <td className="px-4 py-3 text-sm font-medium text-zinc-800" title={students.get(cls.studentId)?.name}>{getShortName(students.get(cls.studentId)?.name) || 'Aluno não encontrado'}</td>
                                 <td className="px-4 py-3 text-sm text-zinc-600">{cls.discipline}</td>
                                 <td className="px-4 py-3 text-right text-sm">
                                     <button onClick={() => handleOpenReportModal(cls)} className="text-secondary hover:text-secondary-dark font-semibold">
@@ -749,7 +749,8 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
 2.  **Atividade Prática:** Uma atividade concreta e rápida.
 3.  **Ponto de Conexão:** Como a abordagem ajuda o aluno com base em seu perfil.`;
             
-            const ai = new GoogleGenAI({ apiKey: AI_API_KEY_CREATIVITY });
+            // FIX: Use process.env.API_KEY for Gemini API initialization.
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -864,7 +865,7 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
                                         <div>
                                             <p className="font-bold text-zinc-800">{idea.discipline}: {idea.topic}</p>
                                             <p className="text-sm text-zinc-500">
-                                                Para: {idea.studentName} - {new Date(idea.createdAt.toDate()).toLocaleDateString('pt-BR')}
+                                                Para: {getShortName(idea.studentName)} - {new Date(idea.createdAt.toDate()).toLocaleDateString('pt-BR')}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-4">
@@ -1180,7 +1181,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                                 }
                                             }} className={`w-full text-left p-3 rounded-lg flex justify-between items-center transition-colors ${bgColor} ${hoverBgColor}`}>
                                                 <div>
-                                                    <p className="font-bold text-zinc-800">{isGroup ? c.discipline : student?.name || 'Carregando...'}</p>
+                                                    <p className="font-bold text-zinc-800" title={student?.name}>{isGroup ? c.discipline : getShortName(student?.name) || 'Carregando...'}</p>
                                                     <p className="text-sm text-zinc-600 flex items-center">
                                                         {isGroup ? `${c.group.studentIds.length} alunos` : c.discipline}
                                                         {!isGroup && c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>}
@@ -1204,7 +1205,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                                         return (
                                             <div key={c.id} className="bg-amber-50 p-3 rounded-lg flex justify-between items-center">
                                                 <div>
-                                                    <p className="font-bold text-amber-800">{student?.name || 'Carregando...'}</p>
+                                                    <p className="font-bold text-amber-800" title={student?.name}>{getShortName(student?.name) || 'Carregando...'}</p>
                                                     <p className="text-sm text-amber-700 flex items-center">{c.discipline} - {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} {c.location === 'online' && <span className="ml-2 text-xs font-semibold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Online</span>} {c.location === 'presencial' && <span className="ml-2 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">Presencial</span>}</p>
                                                 </div>
                                                 <button onClick={() => handleOpenReportModal(c)} className="bg-secondary text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-secondary-dark">Lançar Relatório</button>

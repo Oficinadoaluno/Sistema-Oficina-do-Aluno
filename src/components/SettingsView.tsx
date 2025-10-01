@@ -250,7 +250,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <ul className="space-y-2">
                                     {reportMetrics.topStudentsData.map((s, i) => (
                                         <li key={s.studentName || i} className="flex justify-between items-center text-sm p-2 rounded-md even:bg-zinc-50">
-                                            <span className="font-medium text-zinc-800" title={s.studentName}>{i + 1}. {getShortName(s.studentName)}</span>
+                                            <span className="font-medium text-zinc-800" title={s.studentName}>{i + 1}. {s.studentName}</span>
                                             <span className="font-bold text-secondary">{s.hours} h</span>
                                         </li>
                                     ))}

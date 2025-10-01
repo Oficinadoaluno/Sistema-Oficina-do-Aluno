@@ -160,23 +160,29 @@ const DashboardContent: React.FC = () => {
     const [scheduledClasses, setScheduledClasses] = useState<ScheduledClass[]>([]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [studentsSnap, profsSnap, classesSnap] = await Promise.all([
-                    db.collection("students").get(),
-                    db.collection("professionals").get(),
-                    db.collection("scheduledClasses").get(),
-                ]);
-                setStudents(studentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]);
-                setProfessionals(profsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]);
-                setScheduledClasses(classesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]);
-            } catch (error) {
-                console.error("Error fetching dashboard data:", error);
-            } finally {
-                setLoading(false);
-            }
+        setLoading(true);
+
+        const unsubStudents = db.collection("students").onSnapshot(snap => {
+            setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]);
+        }, err => console.error("Student listener error:", err));
+
+        const unsubProfs = db.collection("professionals").onSnapshot(snap => {
+            setProfessionals(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Professional[]);
+        }, err => console.error("Professionals listener error:", err));
+
+        const unsubClasses = db.collection("scheduledClasses").onSnapshot(snap => {
+            setScheduledClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]);
+            setLoading(false);
+        }, err => {
+            console.error("Classes listener error:", err);
+            setLoading(false);
+        });
+
+        return () => {
+            unsubStudents();
+            unsubProfs();
+            unsubClasses();
         };
-        fetchData();
     }, []);
 
     const activeStudentsCount = useMemo(() => {
@@ -251,7 +257,7 @@ const DashboardContent: React.FC = () => {
                                 <div key={c.id} className="flex items-center gap-4 text-sm">
                                     <div className="flex items-center gap-2 font-semibold text-secondary w-20"><ClockIcon className="h-4 w-4" /> {c.time}</div>
                                     <div className="flex-grow">
-                                        <p className="font-bold text-zinc-800" title={student?.name || 'Aluno não encontrado'}>{getShortName(student?.name) || 'Aluno não encontrado'}</p>
+                                        <p className="font-bold text-zinc-800" title={student?.name || 'Aluno não encontrado'}>{student?.name || 'Aluno não encontrado'}</p>
                                         <p className="text-zinc-500">{c.discipline} com <span title={professional?.name}>{getShortName(professional?.name) || 'Prof. não encontrado'}</span></p>
                                     </div>
                                 </div>
@@ -268,7 +274,7 @@ const DashboardContent: React.FC = () => {
                                 <div key={c.id} className="flex items-start gap-3 text-sm p-2 bg-amber-50/50 rounded-md">
                                     <BanknotesIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="font-bold text-amber-800" title={student?.name || 'Aluno não encontrado'}>{getShortName(student?.name) || 'Aluno não encontrado'}</p>
+                                        <p className="font-bold text-amber-800" title={student?.name || 'Aluno não encontrado'}>{student?.name || 'Aluno não encontrado'}</p>
                                         <p className="text-amber-700">{c.discipline} em {new Date(c.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                                     </div>
                                 </div>
@@ -283,7 +289,7 @@ const DashboardContent: React.FC = () => {
                             <div key={b.id} className="flex items-start gap-3 text-sm p-2 bg-pink-50/50 rounded-md">
                                 <BirthdayIcon className="h-5 w-5 text-pink-500 flex-shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="font-bold text-pink-800" title={b.name}>{getShortName(b.name)}</p>
+                                    <p className="font-bold text-pink-800" title={b.name}>{b.name}</p>
                                     <p className="text-pink-700">Dia {b.day} {b.age !== null ? `— completando ${b.age + 1} anos` : ''}</p>
                                 </div>
                             </div>
@@ -300,6 +306,7 @@ interface AdminDashboardProps { onLogout: () => void; currentUser: Collaborator;
 type View = 'dashboard' | 'students' | 'professionals' | 'classes' | 'calendar' | 'settings' | 'packages' | 'pricing';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }) => {
+    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const [view, setView] = useState<View>('dashboard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -396,7 +403,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                         </button>
                         <h2 className="text-xl md:text-2xl font-bold text-zinc-800">{pageTitles[view]}</h2>
                          <button 
-                            onClick={() => setRefreshKey(k => k + 1)} 
+                            onClick={() => {
+                                setRefreshKey(k => k + 1);
+                                showToast("Dados do painel atualizados.", "info");
+                            }} 
                             className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors" 
                             title="Atualizar dados"
                         >

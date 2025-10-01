@@ -47,7 +47,7 @@ const ConfirmationModal: React.FC<{
 interface PackageFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName'>, packageToEdit: ClassPackage | null) => Promise<void>;
+    onSave: (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, packageToEdit: ClassPackage | null) => Promise<void>;
     students: Student[];
     packageToEdit: ClassPackage | null;
 }
@@ -56,7 +56,9 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
     const [studentId, setStudentId] = useState('');
     const [totalHours, setTotalHours] = useState<number | ''>('');
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
-    const [valuePaid, setValuePaid] = useState<number | ''>('');
+    const [totalValue, setTotalValue] = useState<number | ''>('');
+    const [amountPaid, setAmountPaid] = useState<number | ''>('');
+    const [pendingAmountDueDate, setPendingAmountDueDate] = useState('');
     const [observations, setObservations] = useState('');
 
     const [studentSearch, setStudentSearch] = useState('');
@@ -68,13 +70,17 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
             setStudentId(packageToEdit.studentId);
             setTotalHours(packageToEdit.totalHours);
             setPurchaseDate(packageToEdit.purchaseDate);
-            setValuePaid(packageToEdit.valuePaid || '');
+            setTotalValue(packageToEdit.totalValue || '');
+            setAmountPaid(packageToEdit.amountPaid || 0);
+            setPendingAmountDueDate(packageToEdit.pendingAmountDueDate || '');
             setObservations(packageToEdit.observations || '');
         } else {
             setStudentId('');
             setTotalHours('');
             setPurchaseDate(new Date().toISOString().split('T')[0]);
-            setValuePaid('');
+            setTotalValue('');
+            setAmountPaid('');
+            setPendingAmountDueDate('');
             setObservations('');
         }
     }, [packageToEdit, isOpen]);
@@ -103,12 +109,25 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
         e.preventDefault();
         if (!studentId || !totalHours) return;
         
+        const finalTotalValue = Number(totalValue);
+        const finalAmountPaid = Number(amountPaid) || 0;
+
+        let paymentStatus: ClassPackage['paymentStatus'] = 'pending';
+        if (finalAmountPaid >= finalTotalValue && finalTotalValue > 0) {
+            paymentStatus = 'paid';
+        } else if (finalAmountPaid > 0 && finalAmountPaid < finalTotalValue) {
+            paymentStatus = 'partial';
+        }
+
         await onSave({
             studentId,
             totalHours: Number(totalHours),
             purchaseDate,
-            valuePaid: Number(valuePaid) || undefined,
-            observations
+            observations,
+            totalValue: finalTotalValue,
+            amountPaid: finalAmountPaid,
+            paymentStatus,
+            pendingAmountDueDate: paymentStatus !== 'paid' ? pendingAmountDueDate : undefined,
         }, packageToEdit);
         onClose();
     };
@@ -120,7 +139,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
                     <h2 className="text-xl font-bold text-zinc-800">{isEditing ? 'Editar Pacote' : 'Registrar Pacote de Aulas'}</h2>
                     <button type="button" onClick={onClose} className="p-2 rounded-full text-zinc-500 hover:bg-zinc-100"><XMarkIcon /></button>
                 </header>
-                <main className="p-6 space-y-4">
+                <main className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                     <div className="relative" ref={studentDropdownRef}>
                         <label htmlFor="student-search" className={labelStyle}>Aluno <span className="text-red-500">*</span></label>
                         <input
@@ -149,9 +168,19 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
                         <input id="purchaseDate" type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className={inputStyle} required />
                     </div>
                     <div>
-                        <label htmlFor="valuePaid" className={labelStyle}>Valor Pago (R$)</label>
-                        <input id="valuePaid" type="number" step="0.01" value={valuePaid} onChange={e => setValuePaid(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
+                        <label htmlFor="totalValue" className={labelStyle}>Valor Total do Pacote (R$)</label>
+                        <input id="totalValue" type="number" step="0.01" value={totalValue} onChange={e => setTotalValue(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
                     </div>
+                     <div>
+                        <label htmlFor="amountPaid" className={labelStyle}>Valor Pago na Inscrição (R$)</label>
+                        <input id="amountPaid" type="number" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} />
+                    </div>
+                    {(Number(amountPaid) < Number(totalValue)) && (
+                        <div className="animate-fade-in-fast">
+                            <label htmlFor="pendingAmountDueDate" className={labelStyle}>Previsão de Pagamento do Restante</label>
+                            <input id="pendingAmountDueDate" type="date" value={pendingAmountDueDate} onChange={e => setPendingAmountDueDate(e.target.value)} className={inputStyle} />
+                        </div>
+                    )}
                     <div>
                         <label htmlFor="observations" className={labelStyle}>Observações</label>
                         <textarea id="observations" value={observations} onChange={e => setObservations(e.target.value)} rows={2} className={inputStyle}></textarea>
@@ -227,7 +256,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         setIsModalOpen(false);
     };
 
-    const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName'>, pkgToEdit: ClassPackage | null) => {
+    const handleSavePackage = async (formData: Omit<ClassPackage, 'id' | 'status' | 'studentName' | 'transactionId'>, pkgToEdit: ClassPackage | null) => {
         const isEditing = !!pkgToEdit;
         try {
             const batch = db.batch();
@@ -235,15 +264,15 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                 const packageRef = db.collection('classPackages').doc(pkgToEdit.id);
                 let newTransactionId = pkgToEdit.transactionId;
 
-                const oldValue = pkgToEdit.valuePaid || 0;
-                const newValue = formData.valuePaid || 0;
+                const oldValue = pkgToEdit.amountPaid || 0;
+                const newValue = formData.amountPaid || 0;
 
                 if (oldValue !== newValue) {
                     if (newValue > 0 && oldValue > 0 && pkgToEdit.transactionId) {
                         const txRef = db.collection('transactions').doc(pkgToEdit.transactionId);
                         batch.update(txRef, { amount: newValue, date: formData.purchaseDate });
                     } else if (newValue > 0 && oldValue === 0) {
-                        const txData = { type: 'credit' as const, date: formData.purchaseDate, amount: newValue, studentId: pkgToEdit.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${pkgToEdit.studentName}`, registeredById: currentUser.id };
+                        const txData = { type: 'credit' as const, date: formData.purchaseDate, amount: newValue, studentId: pkgToEdit.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${pkgToEdit.studentName}`, registeredById: currentUser.id };
                         const newTxRef = db.collection('transactions').doc();
                         batch.set(newTxRef, sanitizeFirestore(txData as any));
                         newTransactionId = newTxRef.id;
@@ -265,10 +294,10 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                 const newPackageRef = db.collection('classPackages').doc();
                 let transactionId: string | undefined = undefined;
 
-                if (formData.valuePaid && formData.valuePaid > 0) {
+                if (formData.amountPaid && formData.amountPaid > 0) {
                     const newTxRef = db.collection('transactions').doc();
                     transactionId = newTxRef.id;
-                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.valuePaid, studentId: formData.studentId, description: `Compra de pacote de ${formData.totalHours} horas para ${student.name}`, registeredById: currentUser.id };
+                    const transactionData = { type: 'credit' as const, date: formData.purchaseDate, amount: formData.amountPaid, studentId: formData.studentId, description: `Pagamento pacote de ${formData.totalHours}h para ${student.name}`, registeredById: currentUser.id };
                     batch.set(newTxRef, sanitizeFirestore(transactionData as any));
                 }
                 const dataToSave = { ...formData, studentName: student.name, status: 'active' as const, transactionId };
@@ -362,17 +391,36 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Aluno</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Progresso (Horas)</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Progresso</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Status Pagamento</th>
                                 <th className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-zinc-200">
-                            {filteredPackages.map(pkg => (
+                            {filteredPackages.map(pkg => {
+                                const statusInfo = {
+                                    paid: { text: 'Pago', style: 'bg-green-100 text-green-800' },
+                                    partial: { text: 'Parcial', style: 'bg-amber-100 text-amber-800' },
+                                    pending: { text: 'Pendente', style: 'bg-red-100 text-red-800' }
+                                }[pkg.paymentStatus] || { text: 'N/A', style: 'bg-zinc-100 text-zinc-800' };
+                                return (
                                 <tr key={pkg.id} className="hover:bg-zinc-50">
-                                    <td className="px-6 py-4 font-medium" title={pkg.studentName}>{getShortName(pkg.studentName)}</td>
+                                    <td className="px-6 py-4 font-medium" title={pkg.studentName}>{pkg.studentName}</td>
                                     <td className="px-6 py-4 text-sm text-zinc-600">{pkg.usedHours.toFixed(1)} de {pkg.totalHours}</td>
                                     <td className="px-6 py-4">
                                         <div className="w-full bg-zinc-200 rounded-full h-2.5">
                                             <div className={`h-2.5 rounded-full ${pkg.remainingHours <= 3 ? 'bg-red-500' : 'bg-secondary'}`} style={{ width: `${(pkg.usedHours / pkg.totalHours) * 100}%` }}></div>
+                                        </div>
+                                    </td>
+                                     <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.style} self-start`}>
+                                                {statusInfo.text}
+                                            </span>
+                                            {(pkg.paymentStatus === 'partial' || pkg.paymentStatus === 'pending') && pkg.pendingAmountDueDate && (
+                                                <span className="text-xs text-zinc-500 mt-1">
+                                                    Vence: {new Date(pkg.pendingAmountDueDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right text-sm">
@@ -382,7 +430,8 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}

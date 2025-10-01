@@ -60,7 +60,7 @@ const AddServiceForm: React.FC<AddServiceFormProps> = ({ isOpen, onClose, onSave
             .map(t => ({ quantity: Number(t.quantity), pricePerUnit: Number(t.pricePerUnit) }));
         
         if (!validTiers.some(t => t.quantity === 1)) {
-            showToast('É obrigatório definir um preço para a quantidade 1 (preço unitário).', 'error');
+            showToast('É obrigatório definir um preço para la quantidade 1 (preço unitário).', 'error');
             return;
         }
 
@@ -179,7 +179,7 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
         const quantity = Number(desiredQuantity);
 
         if (!service || !quantity || quantity <= 0) {
-            return { combination: [], basePrice: 0, finalPrice: 0, discountedAmount: 0 };
+            return { combination: [], basePrice: 0, finalPrice: 0, discountedAmount: 0, pricePerUnit: 0 };
         }
 
         const sortedTiers = [...(service.pricingTiers || [])].sort((a, b) => b.quantity - a.quantity);
@@ -202,11 +202,15 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
             discountedAmount = totalCost * (service.discountPercentage / 100);
         }
 
+        const finalPrice = totalCost - discountedAmount;
+        const pricePerUnit = quantity > 0 ? finalPrice / quantity : 0;
+
         return {
             combination,
             basePrice: totalCost,
             discountedAmount,
-            finalPrice: totalCost - discountedAmount,
+            finalPrice,
+            pricePerUnit,
         };
 
     }, [selectedServiceId, desiredQuantity, services, paymentMethod]);
@@ -277,8 +281,9 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Add defensive check for pricingTiers to prevent crash on map if data is missing or not an array. */}
-                                                            {(Array.isArray(service.pricingTiers) ? service.pricingTiers : []).map(tier => (
+                                                            {/* FIX: Add a truthiness and array check for `service.pricingTiers` before mapping to prevent errors with malformed data. */}
+                                                            {/* FIX: Ensured service.pricingTiers is an array before mapping to prevent runtime errors with malformed Firestore data. */}
+                                                            {Array.isArray(service.pricingTiers) && service.pricingTiers.map(tier => (
                                                                 <p key={tier.quantity}>
                                                                     {tier.quantity > 1 ? `${tier.quantity} un.` : '1 un.'}: {formatPrice(tier.pricePerUnit)} / un.
                                                                 </p>
@@ -343,6 +348,9 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                             <div className="bg-secondary/10 p-3 rounded-lg mt-2 text-center">
                                 <p className="text-sm font-medium text-secondary-dark">VALOR FINAL</p>
                                 <p className="text-3xl font-bold text-secondary-dark">{formatPrice(calculationResult.finalPrice)}</p>
+                                {calculationResult.finalPrice > 0 && calculationResult.pricePerUnit > 0 && (
+                                    <p className="text-sm font-medium text-zinc-600 mt-1">({formatPrice(calculationResult.pricePerUnit)} por unidade)</p>
+                                )}
                             </div>
                         </div>
                      </div>

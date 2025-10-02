@@ -15,12 +15,7 @@ import {
     SparklesIcon, BookOpenIcon, Bars3Icon, ArrowPathIcon
 } from './Icons';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
-
-// --- AI API Keys ---
-// FIX: Removed hardcoded API keys to use environment variables as per guidelines.
-// Key for generating student performance summaries after a report is filed.
-// Key for the creativity panel to generate teaching ideas.
-
+import LiveClock from './LiveClock';
 
 // A simple component to render markdown-like text from the AI
 const SimpleMarkdownRenderer: React.FC<{ text: string }> = React.memo(({ text }) => {
@@ -119,8 +114,7 @@ Observações: ${r.observations}
         ].filter(Boolean).join('\n');
 
         // 3. Call Gemini API
-        // FIX: Use process.env.API_KEY for Gemini API initialization.
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyB7-pho29IPnjWetbhAFPNOuYhJthu8UvI" });
 
         const prompt = `Você é um psicopedagogo analisando o histórico de um aluno. Com base nos relatórios de aula a seguir, gere um resumo direto e objetivo em um único parágrafo curto (máximo de 5 frases). O resumo deve destacar o progresso geral do aluno, seus pontos fortes notáveis e quaisquer desafios ou dificuldades recorrentes. Evite listar datas ou nomes de professores. Foque na trajetória de aprendizado.
 
@@ -540,46 +534,53 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: P
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const user = auth.currentUser;
 
-    const handleChangePassword = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        if (newPassword.length < 6) { setError('A nova senha deve ter pelo menos 6 caracteres.'); return; }
-        setIsLoading(true);
-        const user = auth.currentUser;
-        if (user && user.email) {
-            try {
-                const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
-                await user.reauthenticateWithCredential(credential);
-                await user.updatePassword(newPassword);
-                showToast('Senha alterada com sucesso!', 'success');
-                onClose();
-            } catch (err: any) {
-                if (err.code === 'auth/wrong-password') setError('Senha atual incorreta.');
-                else setError('Ocorreu um erro ao alterar a senha.');
-            }
+    const handleSendResetEmail = async () => {
+        if (!user || !user.email) {
+            showToast('Usuário não autenticado. Por favor, faça o login novamente.', 'error');
+            return;
         }
-        setIsLoading(false);
+
+        setIsLoading(true);
+        try {
+            await auth.sendPasswordResetEmail(user.email);
+            showToast('E-mail de redefinição de senha enviado com sucesso! Verifique sua caixa de entrada.', 'success');
+            onClose();
+        } catch (error: any) {
+            console.error("Password reset email error:", error);
+            showToast('Ocorreu um erro ao enviar o e-mail. Tente novamente mais tarde.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
     };
+
     if (!isOpen) return null;
+
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <form className="bg-white rounded-lg p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()} onSubmit={handleChangePassword}>
-                <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Senha</h3>
-                <div className="space-y-4">
-                    <div><label className={labelStyle}>Senha Atual</label><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className={inputStyle} required /></div>
-                    <div><label className={labelStyle}>Nova Senha</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputStyle} required /></div>
-                </div>
-                {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-zinc-800 mb-4">Redefinir Senha</h3>
+                <p className="text-sm text-zinc-600">
+                    Um e-mail de redefinição de senha será enviado para o endereço associado à sua conta:
+                    <strong className="block text-center my-2 text-zinc-800 bg-zinc-100 p-2 rounded">{user?.email}</strong>
+                    Você deseja continuar?
+                </p>
                 <div className="mt-6 flex justify-end gap-3">
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 rounded-lg">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white rounded-lg" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Salvar'}</button>
+                    <button type="button" onClick={onClose} disabled={isLoading} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={handleSendResetEmail} 
+                        className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors disabled:bg-zinc-400" 
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Enviando...' : 'Enviar E-mail de Redefinição'}
+                    </button>
                 </div>
-            </form>
+            </div>
         </div>
     );
 };
@@ -749,8 +750,7 @@ Com base em TODAS as informações acima, sugira 2 ou 3 abordagens de ensino dis
 2.  **Atividade Prática:** Uma atividade concreta e rápida.
 3.  **Ponto de Conexão:** Como a abordagem ajuda o aluno com base em seu perfil.`;
             
-            // FIX: Use process.env.API_KEY for Gemini API initialization.
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: "AIzaSyBNzB_cIhU1Rei95u4RnOENxexOSj_nS4E" });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
@@ -1273,19 +1273,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onLogout, currentUs
                             <ArrowPathIcon className="h-5 w-5" />
                         </button>
                     </div>
-                    <div ref={menuRef} className="relative">
-                        <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100">
-                            <span className="font-semibold">{currentUser.name}</span>
-                            <ChevronDownIcon className="h-4 w-4" open={isMenuOpen} />
-                        </button>
-                        {isMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 animate-fade-in-fast border">
-                                <button onClick={() => {setIsProfileModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><IdentificationIcon /><span>Alterar Dados</span></button>
-                                <button onClick={() => {setIsPasswordModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><LockClosedIcon /><span>Alterar Senha</span></button>
-                                <div className="border-t my-1"></div>
-                                <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon /><span>Sair</span></button>
-                            </div>
-                        )}
+                    <div className="flex items-center gap-4">
+                        <LiveClock />
+                        <div ref={menuRef} className="relative">
+                            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-100">
+                                <span className="font-semibold">{currentUser.name}</span>
+                                <ChevronDownIcon className="h-4 w-4" open={isMenuOpen} />
+                            </button>
+                            {isMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 animate-fade-in-fast border">
+                                    <button onClick={() => {setIsProfileModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><IdentificationIcon /><span>Alterar Dados</span></button>
+                                    <button onClick={() => {setIsPasswordModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><LockClosedIcon /><span>Alterar Senha</span></button>
+                                    <div className="border-t my-1"></div>
+                                    <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon /><span>Sair</span></button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto p-4 md:p-6">

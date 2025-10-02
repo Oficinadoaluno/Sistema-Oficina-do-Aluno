@@ -6,6 +6,7 @@ import { Student, ClassPackage, ScheduledClass, Collaborator, PaymentMethod } fr
 import { ToastContext } from '../App';
 import { ArrowLeftIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon } from './Icons';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
+import PackageDetail from './PackageDetail';
 
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
 const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
@@ -209,7 +210,7 @@ const PackageFormModal: React.FC<PackageFormModalProps> = ({ isOpen, onClose, on
     );
 };
 
-type PackageWithUsage = ClassPackage & { usedHours: number; remainingHours: number };
+export type PackageWithUsage = ClassPackage & { usedHours: number; remainingHours: number };
 
 // --- Main Packages View ---
 interface PackagesViewProps { onBack: () => void; currentUser: Collaborator; }
@@ -227,6 +228,9 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
     const [packageToDelete, setPackageToDelete] = useState<ClassPackage | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const [view, setView] = useState<'list' | 'detail'>('list');
+    const [selectedPackage, setSelectedPackage] = useState<PackageWithUsage | null>(null);
+
     useEffect(() => {
         const unsubPackages = db.collection("classPackages").orderBy("purchaseDate", "desc").onSnapshot(
             snap => setPackages(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ClassPackage[]),
@@ -236,7 +240,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
             snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Student[]),
             err => { console.error(err); showToast("Erro ao carregar alunos.", "error"); }
         );
-        const unsubClasses = db.collection("scheduledClasses").where("packageId", "!=", null).onSnapshot(
+        const unsubClasses = db.collection("scheduledClasses").onSnapshot(
              snap => setScheduledClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ScheduledClass[]),
              err => { console.error(err); showToast("Erro ao carregar aulas vinculadas.", "error"); }
         );
@@ -259,6 +263,11 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
             p.studentName.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [packagesWithUsage, searchTerm]);
+    
+    const handleViewDetails = (pkg: PackageWithUsage) => {
+        setSelectedPackage(pkg);
+        setView('detail');
+    };
 
     const handleOpenModal = (pkg: ClassPackage | null = null) => {
         setPackageToEdit(pkg);
@@ -361,6 +370,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         } finally {
             setIsConfirmModalOpen(false);
             setPackageToDelete(null);
+            setView('list'); // Go back to list after deletion
         }
     };
 
@@ -368,6 +378,17 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
         setPackageToDelete(pkg);
         setIsConfirmModalOpen(true);
     };
+
+    if (view === 'detail' && selectedPackage) {
+        return <PackageDetail 
+                    package={selectedPackage}
+                    student={students.find(s => s.id === selectedPackage.studentId)}
+                    classesForPackage={scheduledClasses.filter(c => c.packageId === selectedPackage.id)}
+                    onBack={() => setView('list')}
+                    onEdit={() => handleOpenModal(selectedPackage)}
+                    onDelete={() => handleDeleteClick(selectedPackage)}
+                />
+    }
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col animate-fade-in-view">
@@ -421,7 +442,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                     pending: { text: 'Pendente', style: 'bg-red-100 text-red-800' }
                                 }[pkg.paymentStatus] || { text: 'N/A', style: 'bg-zinc-100 text-zinc-800' };
                                 return (
-                                <tr key={pkg.id} className="hover:bg-zinc-50">
+                                <tr key={pkg.id} className="hover:bg-zinc-50 cursor-pointer" onClick={() => handleViewDetails(pkg)}>
                                     <td className="px-6 py-4 font-medium" title={pkg.studentName}>{pkg.studentName}</td>
                                     <td className="px-6 py-4 text-sm text-zinc-600">{pkg.usedHours.toFixed(1)} de {pkg.totalHours}</td>
                                     <td className="px-6 py-4">
@@ -442,10 +463,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({ onBack: onBackToDashboard, 
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right text-sm">
-                                        <div className="flex items-center justify-end gap-4">
-                                            <button onClick={() => handleOpenModal(pkg)} className="text-secondary hover:text-secondary-dark font-semibold flex items-center gap-1"><PencilIcon className="h-4 w-4"/> Editar</button>
-                                            <button onClick={() => handleDeleteClick(pkg)} className="text-red-600 hover:text-red-800 font-semibold flex items-center gap-1"><TrashIcon className="h-4 w-4"/> Excluir</button>
-                                        </div>
+                                        <span className="text-secondary font-semibold">Ver Detalhes</span>
                                     </td>
                                 </tr>
                                 );

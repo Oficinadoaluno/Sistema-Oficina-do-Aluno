@@ -1,10 +1,8 @@
-
-
 import React, { useState, useMemo, useEffect, useContext, useRef } from 'react';
 import { Collaborator, Student, Professional, Transaction, ScheduledClass, PaymentMethod } from '../types';
 // FIX: Import the 'auth' object from firebase to handle user authentication.
 import { db, auth } from '../firebase';
-import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon, PlusIcon, XMarkIcon, PencilIcon } from './Icons';
+import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon, PlusIcon, XMarkIcon, PencilIcon, ExclamationTriangleIcon } from './Icons';
 import { ToastContext } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { getShortName, sanitizeFirestore } from '../utils/sanitizeFirestore';
@@ -345,6 +343,35 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         };
     }, [transactions, monthOffset, professionals, scheduledClasses, collaborators, students, studentMap, professionalMap]);
     
+    const inactiveStudents = useMemo(() => {
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        const activeStudents = students.filter(s => s.status === 'matricula');
+        
+        const completedClassesByStudent = scheduledClasses.reduce((acc, cls) => {
+            if (cls.status === 'completed') {
+                if (!acc[cls.studentId]) {
+                    acc[cls.studentId] = [];
+                }
+                acc[cls.studentId].push(new Date(cls.date));
+            }
+            return acc;
+        }, {} as Record<string, Date[]>);
+
+        return activeStudents.map(student => {
+            const studentClasses = completedClassesByStudent[student.id];
+            if (!studentClasses || studentClasses.length === 0) {
+                return { student, lastClassDate: null }; // No completed classes ever
+            }
+            const lastClassDate = new Date(Math.max(...studentClasses.map(d => d.getTime())));
+            return { student, lastClassDate };
+        }).filter(item => {
+            return !item.lastClassDate || item.lastClassDate < ninetyDaysAgo;
+        });
+    }, [students, scheduledClasses]);
+
+
     const handleOpenIncomeModal = (tx: Transaction | null) => {
         setTransactionToEdit(tx);
         setIsIncomeModalOpen(true);
@@ -401,6 +428,26 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             <MetricCard title="Média de Alunos/Semana" value={reportMetrics.avgWeeklyStudents} icon={UserGroupIcon} subValue="(no mês)" />
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-4 rounded-lg shadow-sm border lg:col-span-2">
+                                <h4 className="font-semibold text-zinc-700 mb-2 flex items-center gap-2"><ExclamationTriangleIcon className="h-5 w-5 text-amber-500" /> Alunos com Inatividade Prolongada ({'>'} 90 dias)</h4>
+                                {inactiveStudents.length > 0 ? (
+                                    <div className="max-h-48 overflow-y-auto">
+                                        <table className="min-w-full text-sm">
+                                            <thead className="bg-zinc-50"><tr><th className="px-3 py-1 text-left">Aluno</th><th className="px-3 py-1 text-left">Última Aula</th></tr></thead>
+                                            <tbody>
+                                                {inactiveStudents.map(({ student, lastClassDate }) => (
+                                                    <tr key={student.id} className="border-b">
+                                                        <td className="px-3 py-1 font-medium">{student.name}</td>
+                                                        <td className="px-3 py-1 text-zinc-600">{lastClassDate ? lastClassDate.toLocaleDateString('pt-BR') : 'Nenhuma aula concluída'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-zinc-500 text-center py-4">Nenhum aluno com inatividade prolongada encontrado.</p>
+                                )}
+                            </div>
                             <ChartContainer title={`Aulas no Mês vs Ano Anterior`}>
                                 <div className="flex flex-col h-full">
                                     <div className="flex items-center gap-2 mb-2">
@@ -510,19 +557,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 </tbody>
                                 <tfoot className='bg-zinc-50'>
                                     <tr>
-                                        <td colSpan={4} className="px-4 py-2 text-right font-bold text-zinc-700">Total no Mês:</td>
+                                        <td colSpan={3} className="px-4 py-2 text-right font-bold text-zinc-700">Total no Mês:</td>
                                         <td className="px-4 py-2 text-right font-bold text-lg text-green-700">R$ {incomeRecords.totalIncome.toFixed(2).replace('.', ',')}</td>
+                                        <td className="px-4 py-2"></td>
                                     </tr>
                                 </tfoot>
                             </table>
-                            {incomeRecords.incomeTransactions.length === 0 && <p className="p-6 text-center text-zinc-500">Nenhum recebimento registrado neste mês.</p>}
                         </div>
                     </section>
-                 )}
+                )}
                  {activeTab === 'remunerations' && (
                     <section>
-                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-semibold text-zinc-700">Previsão de Remunerações</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-semibold text-zinc-700">Remunerações</h3>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setMonthOffset(monthOffset - 1)} className="p-1 rounded-full hover:bg-zinc-100"><ChevronLeftIcon className="h-5 w-5" /></button>
                                 <span className="font-semibold text-zinc-800 capitalize w-32 text-center">{monthName}</span>
@@ -531,26 +578,54 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         </div>
                         <div className="space-y-6">
                             <div>
-                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Professores</h4>
+                                <h4 className="font-semibold text-zinc-700 mb-2">Professores</h4>
                                 <div className="border rounded-lg overflow-hidden">
-                                     <table className="min-w-full divide-y divide-zinc-200">
-                                        <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Aulas Concluídas</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
-                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.profRemunerations.map(p => (<tr key={p.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800" title={p.name}>{getShortName(p.name)}</td><td className="px-4 py-3 text-sm text-zinc-600 text-center">{p.classCount}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {p.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                    <table className="min-w-full divide-y divide-zinc-200">
+                                        <thead className="bg-zinc-50">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Professor</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Aulas no Mês</th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Remuneração Estimada</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-zinc-200">
+                                            {remunerationsData.profRemunerations.map(p => (
+                                                <tr key={p.id}>
+                                                    <td className="px-4 py-3 text-sm font-medium">{p.name}</td>
+                                                    <td className="px-4 py-3 text-sm">{p.classCount}</td>
+                                                    <td className="px-4 py-3 text-sm text-right font-semibold text-zinc-700">{p.earnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
                                     </table>
                                 </div>
                             </div>
-                             <div>
-                                <h4 className="text-lg font-semibold text-zinc-600 mb-2">Colaboradores</h4>
+                            <div>
+                                <h4 className="font-semibold text-zinc-700 mb-2">Colaboradores</h4>
                                 <div className="border rounded-lg overflow-hidden">
-                                     <table className="min-w-full divide-y divide-zinc-200">
-                                        <thead className="bg-zinc-50"><tr><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Nome</th><th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th><th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Valor Previsto</th></tr></thead>
-                                        <tbody className="bg-white divide-y divide-zinc-200">{remunerationsData.collabRemunerations.map(c => (<tr key={c.id}><td className="px-4 py-3 text-sm font-medium text-zinc-800" title={c.name}>{getShortName(c.name)}</td><td className="px-4 py-3 text-sm text-zinc-600 capitalize">{c.remunerationType || 'N/A'}</td><td className="px-4 py-3 text-sm font-semibold text-right text-zinc-700">R$ {c.earnings.toFixed(2).replace('.', ',')}</td></tr>))}</tbody>
+                                    <table className="min-w-full divide-y divide-zinc-200">
+                                        <thead className="bg-zinc-50">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Colaborador</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Tipo</th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Remuneração Estimada</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-zinc-200">
+                                            {remunerationsData.collabRemunerations.map(c => (
+                                                <tr key={c.id}>
+                                                    <td className="px-4 py-3 text-sm font-medium">{c.name}</td>
+                                                    <td className="px-4 py-3 text-sm capitalize">{c.remunerationType}</td>
+                                                    <td className="px-4 py-3 text-sm text-right font-semibold text-zinc-700">{c.earnings.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </section>
-                 )}
+                )}
             </main>
         </div>
     );

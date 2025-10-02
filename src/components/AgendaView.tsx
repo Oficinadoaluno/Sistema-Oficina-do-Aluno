@@ -12,7 +12,7 @@ import InfoItem from './InfoItem';
 const inputStyle = "w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow disabled:bg-zinc-200";
 const labelStyle = "block text-xs font-medium text-zinc-600 mb-1";
 const VIEW_START_HOUR = 8;
-const VIEW_END_HOUR = 22;
+const VIEW_END_HOUR = 23; // Extended to 23h to avoid layout overflow
 const SLOT_DURATION_MINUTES = 30;
 const CELL_HEIGHT_PX = 30; // Height of one 30-minute slot
 type ViewMode = 'day' | 'week' | 'month';
@@ -23,6 +23,30 @@ const timeToMinutes = (time: string): number => {
     if (isNaN(hours) || isNaN(minutes)) return 0;
     return hours * 60 + minutes;
 };
+
+// --- Color Utility ---
+const COLORS = [
+  { bg: 'bg-sky-100', border: 'border-sky-500', text: 'text-sky-800' },
+  { bg: 'bg-teal-100', border: 'border-teal-500', text: 'text-teal-800' },
+  { bg: 'bg-rose-100', border: 'border-rose-500', text: 'text-rose-800' },
+  { bg: 'bg-amber-100', border: 'border-amber-500', text: 'text-amber-800' },
+  { bg: 'bg-violet-100', border: 'border-violet-500', text: 'text-violet-800' },
+  { bg: 'bg-lime-100', border: 'border-lime-500', text: 'text-lime-800' },
+  { bg: 'bg-cyan-100', border: 'border-cyan-500', text: 'text-cyan-800' },
+  { bg: 'bg-pink-100', border: 'border-pink-500', text: 'text-pink-800' },
+  { bg: 'bg-orange-100', border: 'border-orange-500', text: 'text-orange-800' },
+];
+
+const getColorForString = (str: string) => {
+  if (!str) return COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash % COLORS.length);
+  return COLORS[index];
+};
+
 
 interface EventLayout {
     top: number;
@@ -494,12 +518,17 @@ const AgendaEvent: React.FC<{
     
     if (cls.classType === 'individual') {
         const student = studentsMap.get(cls.studentId);
-        const statusStyle = {
+        
+        const statusStyles = {
             canceled: 'bg-red-100 border-red-500 text-red-700 line-through',
             rescheduled: 'bg-zinc-100 border-zinc-500 text-zinc-500 italic',
-            scheduled: 'bg-cyan-100 border-cyan-500 text-cyan-800',
-            completed: 'bg-green-100 border-green-500 text-green-800'
-        }[cls.status];
+            completed: 'bg-green-100 border-green-500 text-green-800',
+        };
+
+        const disciplineColor = getColorForString(cls.discipline);
+        const baseStyle = `${disciplineColor.bg} ${disciplineColor.border} ${disciplineColor.text}`;
+        const finalStyle = statusStyles[cls.status as keyof typeof statusStyles] || baseStyle;
+
 
         return (
             <button
@@ -510,13 +539,15 @@ const AgendaEvent: React.FC<{
                     left: `${cls.layout?.left}%`,
                     width: `${cls.layout?.width}%`,
                 }}
-                className={`absolute p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${statusStyle}`}
+                className={`absolute p-1 rounded-md overflow-hidden text-left border-l-4 transition-shadow hover:shadow-lg hover:z-20 ${finalStyle}`}
             >
                 <p className="font-bold text-xs truncate" title={student?.name}>{getShortName(student?.name)}</p>
                 <p className="text-[10px] truncate">{cls.discipline}</p>
             </button>
         );
     } else { // Group class
+        const groupColor = cls.group.color ? pastelColors.find(c => c.name === cls.group.color) || {bg: 'bg-primary/20', border: 'border-primary'} : {bg: 'bg-primary/20', border: 'border-primary'};
+
         return (
             <div
                  style={{
@@ -525,7 +556,7 @@ const AgendaEvent: React.FC<{
                     left: `${cls.layout?.left}%`,
                     width: `${cls.layout?.width}%`,
                 }}
-                className="absolute p-1 rounded-md overflow-hidden text-left bg-primary/20 border-l-4 border-primary"
+                className={`absolute p-1 rounded-md overflow-hidden text-left ${groupColor.bg} border-l-4 ${groupColor.border}`}
             >
                 <p className="font-bold text-xs text-primary-dark truncate">{cls.group.name}</p>
                 <p className="text-[10px] truncate flex items-center gap-1"><UsersIcon className="h-3 w-3" /> {cls.group.studentIds.length} alunos</p>
@@ -607,6 +638,15 @@ interface AgendaViewProps {
     onBack: () => void;
 }
 
+const pastelColors = [
+    { name: 'sky', bg: 'bg-sky-50', border: 'border-sky-200' },
+    { name: 'teal', bg: 'bg-teal-50', border: 'border-teal-200' },
+    { name: 'rose', bg: 'bg-rose-50', border: 'border-rose-200' },
+    { name: 'amber', bg: 'bg-amber-50', border: 'border-amber-200' },
+    { name: 'violet', bg: 'bg-violet-50', border: 'border-violet-200' },
+    { name: 'lime', bg: 'bg-lime-50', border: 'border-lime-200' },
+  ];
+
 const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     const { showToast } = useContext(ToastContext);
 
@@ -621,7 +661,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     
     // UI State
     const [viewMode, setViewMode] = useState<ViewMode>('day');
-    const [currentDate, setCurrentDate] = useState(new Date());
+    const [currentDate, setCurrentDate] = useState(() => {
+        const d = new Date();
+        d.setUTCHours(0, 0, 0, 0);
+        return d;
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [classToEdit, setClassToEdit] = useState<Partial<ScheduledClass> | null>(null);
     const [classToShowReport, setClassToShowReport] = useState<ScheduledClass | null>(null);
@@ -778,7 +822,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
         
         const targetMonth = targetDate.getUTCMonth();
         const targetYear = targetDate.getUTCFullYear();
-        const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        const monthName = targetDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
         
         const classesInMonth = scheduledClasses.filter(c => {
             const classDate = new Date(c.date); // 'YYYY-MM-DD' -> UTC date object
@@ -797,10 +841,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
 
 
     const handleDateChange = (amount: number) => {
-        const newDate = new Date(currentDate);
-        const increment = viewMode === 'day' ? amount : amount * 7;
-        newDate.setDate(currentDate.getDate() + increment);
-        setCurrentDate(newDate);
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            const increment = viewMode === 'day' ? amount : amount * 7;
+            newDate.setUTCDate(newDate.getUTCDate() + increment);
+            return newDate;
+        });
     };
 
     const handleScheduleClass = async (newClassData: Omit<ScheduledClass, 'id'>) => {
@@ -857,10 +903,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
     };
 
     const currentTitle = useMemo(() => {
-        if (viewMode === 'day') return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        if (viewMode === 'day') return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
         if (viewMode === 'week') {
-            const start = weekDays[0].toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' });
-            const end = weekDays[6].toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', year: 'numeric' });
+            const start = weekDays[0].toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+            const end = weekDays[6].toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
             return `${start} - ${end}`;
         }
         return monthName;
@@ -897,7 +943,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                         ) : (
                             <>
                                 <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronLeftIcon /></button>
-                                <button onClick={() => setCurrentDate(new Date())} className="text-sm font-semibold text-secondary hover:underline">Hoje</button>
+                                <button onClick={() => setCurrentDate(() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d; })} className="text-sm font-semibold text-secondary hover:underline">Hoje</button>
                                 <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-zinc-100"><ChevronRightIcon /></button>
                             </>
                         )}
@@ -947,7 +993,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                             <div className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm"></div>
                             {weekDays.map(day => (
                                 <div key={day.toISOString()} className="sticky top-0 z-10 bg-white/70 backdrop-blur-sm p-2 text-center font-semibold text-zinc-700 border-b border-l">
-                                    <span className="text-xs text-zinc-500">{day.toLocaleDateString('pt-BR', { weekday: 'short' })}</span><br/>{day.getUTCDate()}
+                                    <span className="text-xs text-zinc-500">{day.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' })}</span><br/>{day.getUTCDate()}
                                 </div>
                             ))}
                              <div className="col-start-1 col-end-2 row-start-2 row-end-auto">
@@ -974,7 +1020,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ onBack }) => {
                 {viewMode === 'month' && (
                     <section>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                             <input type="date" value={currentDate.toISOString().split('T')[0]} onChange={e => setCurrentDate(new Date(e.target.value))} className={inputStyle} />
+                             <input type="date" value={currentDate.toISOString().split('T')[0]} onChange={e => setCurrentDate(new Date(e.target.value.replace(/-/g, '/')))} className={inputStyle} />
                             <select value={monthlyStudentFilter} onChange={e => setMonthlyStudentFilter(e.target.value)} className={inputStyle}>
                                 <option value="">Todos os Alunos</option>
                                 {students.filter(s => s.status === 'matricula').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

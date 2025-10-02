@@ -19,6 +19,7 @@ import {
     Bars3Icon, ArrowPathIcon, XMarkIcon
 } from './Icons';
 import { sanitizeFirestore, getShortName } from '../utils/sanitizeFirestore';
+import LiveClock from './LiveClock';
 
 // --- Modais ---
 const inputStyle = "w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow";
@@ -72,52 +73,53 @@ const UserProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; user: C
 
 const ChangePasswordModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const user = auth.currentUser;
 
-    const handleChangePassword = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        if (newPassword !== confirmPassword) { setError('A nova senha e a confirmação não correspondem.'); return; }
-        if (newPassword.length < 6) { setError('A nova senha deve ter pelo menos 6 caracteres.'); return; }
+    const handleSendResetEmail = async () => {
+        if (!user || !user.email) {
+            showToast('Usuário não autenticado. Por favor, faça o login novamente.', 'error');
+            return;
+        }
 
         setIsLoading(true);
-        const user = auth.currentUser;
-        if (user && user.email) {
-            try {
-                const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
-                await user.reauthenticateWithCredential(credential);
-                await user.updatePassword(newPassword);
-                showToast('Senha alterada com sucesso!', 'success');
-                onClose();
-            } catch (error: any) {
-                console.error("Password change error:", error);
-                if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') { setError('A senha atual está incorreta.'); } 
-                else { setError('Ocorreu um erro ao alterar a senha. Tente novamente.'); }
-            }
-        } else { setError('Usuário não encontrado. Por favor, faça login novamente.'); }
-        setIsLoading(false);
+        try {
+            await auth.sendPasswordResetEmail(user.email);
+            showToast('E-mail de redefinição de senha enviado com sucesso! Verifique sua caixa de entrada.', 'success');
+            onClose();
+        } catch (error: any) {
+            console.error("Password reset email error:", error);
+            showToast('Ocorreu um erro ao enviar o e-mail. Tente novamente mais tarde.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast">
-            <form className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()} onSubmit={handleChangePassword}>
-                <h3 className="text-xl font-bold text-zinc-800 mb-4">Alterar Senha</h3>
-                <div className="space-y-4">
-                    <div><label htmlFor="current-password" className={labelStyle}>Senha Atual</label><input id="current-password" type="password" className={inputStyle} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required /></div>
-                    <div><label htmlFor="new-password" className={labelStyle}>Nova Senha</label><input id="new-password" type="password" className={inputStyle} value={newPassword} onChange={e => setNewPassword(e.target.value)} required /></div>
-                    <div><label htmlFor="confirm-password" className={labelStyle}>Confirmar Nova Senha</label><input id="confirm-password" type="password" className={inputStyle} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required /></div>
-                </div>
-                {error && <p className="text-sm text-red-600 text-center mt-4">{error}</p>}
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-zinc-800 mb-4">Redefinir Senha</h3>
+                <p className="text-sm text-zinc-600">
+                    Um e-mail de redefinição de senha será enviado para o endereço associado à sua conta:
+                    <strong className="block text-center my-2 text-zinc-800 bg-zinc-100 p-2 rounded">{user?.email}</strong>
+                    Você deseja continuar?
+                </p>
                 <div className="mt-6 flex justify-end gap-3">
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">Cancelar</button>
-                    <button type="submit" className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Salvar'}</button>
+                    <button type="button" onClick={onClose} disabled={isLoading} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={handleSendResetEmail} 
+                        className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors disabled:bg-zinc-400" 
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Enviando...' : 'Enviar E-mail de Redefinição'}
+                    </button>
                 </div>
-            </form>
+            </div>
         </div>
     );
 };
@@ -133,23 +135,19 @@ const BillClassModal: React.FC<{
     const { showToast } = useContext(ToastContext);
     const [paymentDate, setPaymentDate] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
+    const [amount, setAmount] = useState<number | ''>('');
     const [discount, setDiscount] = useState<number | ''>('');
 
-    const calculatedAmount = useMemo(() => {
-        if (!classData || !professional) return 0;
-        const hourlyRate = professional.hourlyRateIndividual || 70; // Fallback rate
-        return (classData.duration / 60) * hourlyRate;
-    }, [classData, professional]);
-
     const finalAmount = useMemo(() => {
-        const total = calculatedAmount - (Number(discount) || 0);
+        const total = (Number(amount) || 0) - (Number(discount) || 0);
         return total > 0 ? total : 0;
-    }, [calculatedAmount, discount]);
+    }, [amount, discount]);
 
     useEffect(() => {
         if (isOpen && classData) {
             setPaymentDate(new Date().toISOString().split('T')[0]);
             setPaymentMethod('pix');
+            setAmount('');
             setDiscount('');
         }
     }, [isOpen, classData]);
@@ -157,6 +155,11 @@ const BillClassModal: React.FC<{
     if (!isOpen || !classData || !student || !professional) return null;
 
     const handleSave = async () => {
+        if (!amount || finalAmount <= 0) {
+            showToast('Por favor, insira um valor válido para o pagamento.', 'error');
+            return;
+        }
+
         const batch = db.batch();
 
         // 1. Create transaction
@@ -219,8 +222,8 @@ const BillClassModal: React.FC<{
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="calculatedAmount" className={labelStyle}>Valor Calculado (R$)</label>
-                            <input id="calculatedAmount" type="text" value={calculatedAmount.toFixed(2)} className={`${inputStyle} bg-zinc-200`} readOnly />
+                            <label htmlFor="amount" className={labelStyle}>Valor Cobrado (R$)</label>
+                            <input id="amount" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value === '' ? '' : Number(e.target.value))} className={inputStyle} required />
                         </div>
                         <div>
                             <label htmlFor="discount" className={labelStyle}>Desconto (R$)</label>
@@ -315,6 +318,7 @@ const DashboardContent: React.FC<{ onBillClass: (cls: ScheduledClass) => void }>
 
         return students
             .filter(student => {
+                if (student.status !== 'matricula') return false; // Only active students
                 if (!student.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(student.birthDate)) return false;
                 const [_year, month, _day] = student.birthDate.split('-').map(Number);
                 return (month - 1) === currentMonth;
@@ -545,19 +549,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, currentUser }
                             <ArrowPathIcon className="h-5 w-5" />
                         </button>
                     </div>
-                    <div className="relative" ref={menuRef}>
-                        <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">
-                            <span className="font-semibold">{currentUser.name}</span>
-                            <ChevronDownIcon className="h-4 w-4" open={isMenuOpen} />
-                        </button>
-                        {isMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 animate-fade-in-fast border">
-                                <button onClick={() => {setIsProfileModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><IdentificationIcon /><span>Alterar Dados</span></button>
-                                <button onClick={() => {setIsPasswordModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><LockClosedIcon /><span>Alterar Senha</span></button>
-                                <div className="border-t my-1"></div>
-                                <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon /><span>Sair</span></button>
-                            </div>
-                        )}
+                    <div className="flex items-center gap-4">
+                        <LiveClock />
+                        <div className="relative" ref={menuRef}>
+                            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 text-zinc-600 hover:text-zinc-800 p-2 rounded-lg hover:bg-zinc-100">
+                                <span className="font-semibold">{currentUser.name}</span>
+                                <ChevronDownIcon className="h-4 w-4" open={isMenuOpen} />
+                            </button>
+                            {isMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 animate-fade-in-fast border">
+                                    <button onClick={() => {setIsProfileModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><IdentificationIcon /><span>Alterar Dados</span></button>
+                                    <button onClick={() => {setIsPasswordModalOpen(true); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"><LockClosedIcon /><span>Alterar Senha</span></button>
+                                    <div className="border-t my-1"></div>
+                                    <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><ArrowRightOnRectangleIcon /><span>Sair</span></button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </header>
                 

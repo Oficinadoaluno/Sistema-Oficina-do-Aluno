@@ -291,7 +291,7 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Replaced logical AND (&&) with a ternary operator for conditional rendering to ensure proper type narrowing for `service.pricingTiers`, resolving a TypeScript error where `.map` was being called on an 'unknown' type. */}
+                                                            {/* FIX: Used Array.isArray as a type guard before calling .map on `service.pricingTiers` to prevent errors if the data from Firestore is missing or not an array. */}
                                                             {Array.isArray(service.pricingTiers)
                                                                 ? service.pricingTiers.map(tier => (
                                                                     <p key={tier.quantity}>

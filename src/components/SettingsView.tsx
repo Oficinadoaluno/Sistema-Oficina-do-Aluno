@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useContext, useRef } from 'react';
 import { Collaborator, Student, Professional, Transaction, ScheduledClass, PaymentMethod } from '../types';
-// FIX: Import the 'auth' object from firebase to handle user authentication.
 import { db, auth } from '../firebase';
 import { ArrowLeftIcon, UserGroupIcon, FunnelIcon, ChartPieIcon, BanknotesIcon, ChevronLeftIcon, ChevronRightIcon, CurrencyDollarIcon, ClockIcon, AcademicCapIcon, CalendarDaysIcon, PlusIcon, XMarkIcon, PencilIcon, ExclamationTriangleIcon } from './Icons';
 import { ToastContext } from '../App';

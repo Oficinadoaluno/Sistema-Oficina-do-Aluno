@@ -99,11 +99,10 @@ const ClassGroupDetail: React.FC<ClassGroupDetailProps> = ({ group, onBack, stud
                         {group.schedule.type === 'recurring' && group.schedule.days && Object.keys(group.schedule.days).length > 0 ? (
                             <ul className="space-y-1">
                                 {Object.entries(group.schedule.days).map(([day, schedule]) => {
-                                    // FIX: Replaced unsafe property access on 'schedule' with a type-safe block
-                                    // to correctly handle both legacy string formats and object-based schedules.
+                                    // This block safely handles both legacy string schedule and new object schedule
                                     const timeDisplay = (() => {
                                         if (typeof schedule === 'string') {
-                                            return schedule;
+                                            return schedule; // Legacy format
                                         }
                                         if (schedule && typeof schedule === 'object') {
                                             const s = schedule as { start?: string; end?: string };

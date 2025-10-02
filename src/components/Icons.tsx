@@ -59,9 +59,8 @@ import {
 } from '@heroicons/react/24/solid';
 
 export const LogoPlaceholder: React.FC = () => (
-  <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-    <span className="text-lg font-bold text-primary">OA</span>
-  </div>
+  // FIX: Cast `import.meta` to `any` to resolve TypeScript error `Property 'env' does not exist on type 'ImportMeta'`, following the existing pattern in the codebase.
+  <img src={`${(import.meta as any).env.BASE_URL}logo.png`} alt="Logo da Oficina do Aluno" className="h-10 w-10" />
 );
 
 export const UserIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className = "h-6 w-6", ...props }) => (

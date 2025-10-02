@@ -259,6 +259,7 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
     
         // Sort services within each category alphabetically by name
         for (const category in groups) {
+            // FIX: Replaced incorrect `map` with `sort` to correctly order services alphabetically.
             groups[category].sort((a, b) => a.name.localeCompare(b.name));
         }
 
@@ -291,15 +292,11 @@ const PricingView: React.FC<PricingViewProps> = ({ onBack }) => {
                                                     <div>
                                                         <p className="font-bold text-zinc-800">{service.name}</p>
                                                         <div className="text-sm text-zinc-600 mt-1 space-y-1">
-                                                            {/* FIX: Used Array.isArray as a type guard before calling .map on `service.pricingTiers` to prevent errors if the data from Firestore is missing or not an array. */}
-                                                            {Array.isArray(service.pricingTiers)
-                                                                ? service.pricingTiers.map(tier => (
-                                                                    <p key={tier.quantity}>
-                                                                        {tier.quantity > 1 ? `${tier.quantity} un.` : '1 un.'}: {formatPrice(tier.pricePerUnit)} / un.
-                                                                    </p>
-                                                                ))
-                                                                : null
-                                                            }
+                                                            {Array.isArray(service.pricingTiers) && service.pricingTiers.map(tier => (
+                                                                <p key={tier.quantity}>
+                                                                    {tier.quantity > 1 ? `${tier.quantity} un.` : '1 un.'}: {formatPrice(tier.pricePerUnit)} / un.
+                                                                </p>
+                                                            ))}
                                                         </div>
                                                         {service.discountPercentage && <p className="text-xs text-green-700 font-semibold mt-1">{service.discountPercentage}% de desconto para Pix/Dinheiro</p>}
                                                     </div>

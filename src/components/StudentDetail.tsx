@@ -352,7 +352,6 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onEdit, 
             }
         });
         
-// FIX: Corrected typo from `groupClassInstances` to `groupClassInstancesInMonth`.
         const combined = [...individualClassesInMonth, ...groupClassInstancesInMonth]
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
 

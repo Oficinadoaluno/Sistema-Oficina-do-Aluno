@@ -107,7 +107,7 @@ const ProfessionalList: React.FC<TeamManagementProps> = ({ onBack: onBackToDashb
                 const tempApp = firebase.initializeApp(firebase.app().options, creationAppName);
                 const tempAuth = tempApp.auth();
                 try {
-                    const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@sistema-oficinadoaluno.com`;
+                    const emailForAuth = collaboratorData.login.includes('@') ? collaboratorData.login : `${collaboratorData.login}@oficinadoaluno.com.br`;
                     const userCredential = await tempAuth.createUserWithEmailAndPassword(emailForAuth, password);
                     await db.collection("collaborators").doc(userCredential.user!.uid).set(collaboratorData);
                     showToast('Colaborador criado com sucesso!', 'success');

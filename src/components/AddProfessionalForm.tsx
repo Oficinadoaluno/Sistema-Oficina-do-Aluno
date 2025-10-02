@@ -17,95 +17,12 @@ const labelStyle = "block text-sm font-medium text-zinc-600 mb-1";
 const initialDisciplineOptions = ['Matemática', 'Física', 'Química', 'Biologia', 'Português', 'Redação', 'Inglês', 'História', 'Geografia', 'Filosofia', 'Sociologia'];
 
 
-const PasswordResetModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    userLogin: string;
-}> = ({ isOpen, onClose, userLogin }) => {
-    const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
-    const [newPassword, setNewPassword] = useState('');
-    const [copied, setCopied] = useState(false);
-
-    const generatePassword = () => {
-        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-        let pass = '';
-        for (let i = 0; i < 12; i++) {
-            pass += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        setNewPassword(pass);
-        setCopied(false);
-    };
-
-    const copyPassword = () => {
-        if (!newPassword) return;
-        navigator.clipboard.writeText(newPassword).then(() => {
-            setCopied(true);
-            showToast('Senha copiada para a área de transferência!', 'success');
-            setTimeout(() => setCopied(false), 2500);
-        });
-    };
-    
-    useEffect(() => {
-        if(isOpen) {
-            generatePassword();
-        }
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-    
-    const firebaseUsersUrl = `https://console.firebase.google.com/project/${(window as any).__FIREBASE_CONFIG__?.projectId}/authentication/users`;
-
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-zinc-800 mb-2">Definir Nova Senha Temporária</h3>
-                <p className="text-sm text-zinc-600 mb-4">
-                    Para redefinir a senha do usuário <strong className="text-zinc-800">{userLogin}</strong>, siga os passos abaixo.
-                </p>
-
-                <div className="space-y-4">
-                    <div className="border rounded-lg p-4">
-                        <h4 className="font-semibold text-zinc-800">Passo 1: Gerar e Copiar a Nova Senha</h4>
-                        <div className="flex items-center gap-2 mt-2">
-                            <input type="text" value={newPassword} readOnly className={`${inputStyle} bg-zinc-200 font-mono`} />
-                            <button type="button" onClick={generatePassword} title="Gerar nova senha" className="p-2 bg-zinc-200 text-zinc-700 rounded-lg hover:bg-zinc-300"><KeyIcon className="h-5 w-5"/></button>
-                            <button type="button" onClick={copyPassword} title="Copiar senha" className="p-2 bg-secondary text-white rounded-lg hover:bg-secondary-dark flex items-center gap-1.5 px-3">
-                                {copied ? <CheckIcon className="h-5 w-5" /> : <ClipboardDocumentIcon className="h-5 w-5" />}
-                                <span className="text-sm font-semibold">{copied ? 'Copiado!' : 'Copiar'}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="border rounded-lg p-4">
-                        <h4 className="font-semibold text-zinc-800">Passo 2: Redefinir no Painel do Firebase</h4>
-                        <p className="text-sm text-zinc-500 mt-1">
-                            Clique no botão abaixo para abrir o painel de autenticação. Encontre o usuário, clique nos três pontos (⋮) ao final da linha e selecione "Redefinir senha". Cole a senha gerada acima.
-                        </p>
-                        <a href={firebaseUsersUrl} target="_blank" rel="noopener noreferrer"
-                           className="mt-3 inline-flex items-center gap-2 py-2 px-4 bg-zinc-200 text-zinc-800 font-semibold rounded-lg hover:bg-zinc-300 transition-colors text-sm">
-                            <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                            Abrir Painel de Autenticação
-                        </a>
-                    </div>
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200">
-                        Fechar
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
 const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, professionalToEdit }) => {
     const { showToast } = useContext(ToastContext) as { showToast: (message: string, type?: 'success' | 'error' | 'info') => void; };
     const isEditing = !!professionalToEdit;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [cpfError, setCpfError] = useState('');
-    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [isSendingReset, setIsSendingReset] = useState(false);
     
     // Common fields
     const [fullName, setFullName] = useState('');
@@ -186,6 +103,25 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
             setTimeout(() => setDisciplineAdded(false), 2000);
         }
         setOtherDiscipline('');
+    };
+
+    const handleSendResetEmail = async () => {
+        if (!professionalToEdit || !professionalToEdit.login) return;
+
+        const emailForAuth = professionalToEdit.login.includes('@') 
+            ? professionalToEdit.login 
+            : `${professionalToEdit.login}@oficinadoaluno.com.br`;
+
+        setIsSendingReset(true);
+        try {
+            await auth.sendPasswordResetEmail(emailForAuth);
+            showToast(`E-mail de redefinição enviado para ${emailForAuth}.`, 'success');
+        } catch (error) {
+            console.error("Password reset error:", error);
+            showToast("Erro ao enviar e-mail de redefinição.", "error");
+        } finally {
+            setIsSendingReset(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -336,11 +272,11 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                             <label className={labelStyle}>Senha</label>
                             <button
                                 type="button"
-                                onClick={() => setIsResetModalOpen(true)}
-                                disabled={isSubmitting}
-                                className="w-full py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors"
+                                onClick={handleSendResetEmail}
+                                disabled={isSubmitting || isSendingReset}
+                                className="w-full py-2 px-4 bg-zinc-100 text-zinc-700 font-semibold rounded-lg hover:bg-zinc-200 transition-colors disabled:bg-zinc-300 disabled:cursor-not-allowed"
                             >
-                                Redefinir Senha...
+                                {isSendingReset ? 'Enviando e-mail...' : 'Enviar E-mail de Redefinição'}
                             </button>
                         </div>
                     </div>
@@ -392,18 +328,6 @@ const AddProfessionalForm: React.FC<AddProfessionalFormProps> = ({ onBack, profe
                     <button type="submit" disabled={isSubmitting} className="py-2 px-6 bg-secondary text-white font-semibold rounded-lg hover:bg-secondary-dark transition-colors transform hover:scale-105 disabled:bg-zinc-400 disabled:scale-100">{isSubmitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Professor')}</button>
                 </div>
             </form>
-
-            {isEditing && professionalToEdit && (
-                <PasswordResetModal
-                    isOpen={isResetModalOpen}
-                    onClose={() => setIsResetModalOpen(false)}
-                    userLogin={
-                        professionalToEdit.login?.includes('@')
-                            ? professionalToEdit.login
-                            : `${professionalToEdit.login}@oficinadoaluno.com.br`
-                    }
-                />
-            )}
 
             <style>{`.animate-fade-in-fast { animation: fadeIn 0.3s ease-out; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
